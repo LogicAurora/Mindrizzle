@@ -20,4 +20,9 @@ const vuetify = createVuetify({
   },
 })
 
+export const defaultThemes = {
+  light: { ...vuetify.theme.themes.value.light, colors: { ...vuetify.theme.themes.value.light.colors } },
+  dark: { ...vuetify.theme.themes.value.dark, colors: { ...vuetify.theme.themes.value.dark.colors } },
+}
+
 export default vuetify

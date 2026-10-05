@@ -5,6 +5,9 @@ import vuetify from './Vuetify.ts'
 import NoteSet from './Views/NoteSets.vue'
 import { routeTransition } from './utils/routeTransition.ts'
 import { loadEditorComponent } from './utils/editorRoute'
+import { getSetting } from './utils/settingsStore'
+import { APPEARANCE_SETTING_KEY, isAppearancePreference } from './utils/appearancePreference'
+import { defaultThemes } from './Vuetify.ts'
 
 const routes = [
   { path: '/', redirect: '/set' },
@@ -33,4 +36,26 @@ router.beforeEach((to, from) => {
   }
 })
 
-createApp(App).use(vuetify).use(router).mount('#app')
+async function mountApplication() {
+  try {
+    const preference = await getSetting<unknown>(APPEARANCE_SETTING_KEY)
+    if (isAppearancePreference(preference)) {
+      applySavedColors(vuetify.theme.themes.value.light.colors, defaultThemes.light.colors, preference.lightColors)
+      applySavedColors(vuetify.theme.themes.value.dark.colors, defaultThemes.dark.colors, preference.darkColors)
+      await vuetify.theme.change(preference.theme, true)
+    }
+  } catch (error) {
+    console.error('恢复外观设置失败：', error)
+  }
+
+  createApp(App).use(vuetify).use(router).mount('#app')
+}
+
+function applySavedColors(target: object, defaults: object, savedColors: Record<string, string | number>) {
+  const validColors = Object.fromEntries(
+    Object.entries(savedColors).filter(([name]) => Object.prototype.hasOwnProperty.call(defaults, name)),
+  )
+  Object.assign(target, validColors)
+}
+
+void mountApplication()

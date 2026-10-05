@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { argbFromHex, hexFromArgb, themeFromSourceColor } from '@material/material-color-utilities'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useTheme } from 'vuetify'
 import { mdiCheckCircle, mdiImageFilterHdr, mdiPaletteOutline } from '@mdi/js'
 import { isTauri } from '@tauri-apps/api/core'
 import { invokeCommand } from '../../utils/invoke'
+import { getSetting, setSetting } from '../../utils/settingsStore'
+import { APPEARANCE_SETTING_KEY, isAppearancePreference, type AppearancePreference } from '../../utils/appearancePreference'
+import { defaultThemes } from '../../Vuetify'
 
 type MaterialScheme = ReturnType<typeof themeFromSourceColor>['schemes']['light']
 type MaterialSchemeColors = ReturnType<MaterialScheme['toJSON']>
 type MaterialThemeName = 'light' | 'dark'
 type ThemeColorMode = 'wallpaper' | 'color'
-
 const MATERIAL_COLOR_ROLES = [
   ['primary', 'primary'],
   ['on-primary', 'onPrimary'],
@@ -44,10 +46,6 @@ const selectedTheme = computed(() => theme.isSystem.value ? 'system' : theme.nam
 const selectedThemeLabel = computed(() =>
   themeOptions.find((option) => option.themeName === selectedTheme.value)?.name ?? '跟随系统',
 )
-const defaultThemes = {
-  light: { ...theme.themes.value.light, colors: { ...theme.themes.value.light.colors } },
-  dark: { ...theme.themes.value.dark, colors: { ...theme.themes.value.dark.colors } },
-}
 const defaultPrimaryColor = String(defaultThemes.light.colors.primary)
 const selectedColorMode = ref<ThemeColorMode>('color')
 const primaryColor = ref(defaultPrimaryColor)
@@ -55,6 +53,7 @@ const isDefaultTheme = ref(true)
 const wallpaperError = ref('')
 const isLoadingWallpaper = ref(false)
 const canvasColor = ref<string | null>(null)
+const settingsError = ref('')
 const currentCanvasColor = computed(() =>
   canvasColor.value ?? String(theme.global.current.value.colors.background),
 )
@@ -64,6 +63,44 @@ function changeTheme(event: Event, themeName: string) {
   if (themeName === 'light' || themeName === 'dark') applySelectedColor(themeName)
   theme.setTransitionOrigin(target instanceof Element ? target : null)
   void theme.change(themeName, true)
+  saveAppearanceSettings(themeName)
+}
+
+async function loadAppearanceSettings() {
+  try {
+    const preference = await getSetting<AppearancePreference>(APPEARANCE_SETTING_KEY)
+    if (!preference || !isAppearancePreference(preference)) return
+    primaryColor.value = preference.primaryColor
+    isDefaultTheme.value = preference.isDefaultTheme
+    selectedColorMode.value = preference.colorMode
+    if (preference.isDefaultTheme) restoreDefaultThemes()
+    else applyPrimaryColor(preference.primaryColor)
+  } catch (error) {
+    settingsError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+function serializeThemeColors(colors: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(colors).map(([key, value]) => {
+      if (typeof value === 'string' || typeof value === 'number') return [key, value]
+      return [key, String(value)]
+    }),
+  ) as Record<string, string | number>
+}
+
+function saveAppearanceSettings(themeName = selectedTheme.value) {
+  const preference: AppearancePreference = {
+    theme: themeName as AppearancePreference['theme'],
+    primaryColor: primaryColor.value,
+    colorMode: selectedColorMode.value,
+    isDefaultTheme: isDefaultTheme.value,
+    lightColors: serializeThemeColors(theme.themes.value.light.colors as Record<string, unknown>),
+    darkColors: serializeThemeColors(theme.themes.value.dark.colors as Record<string, unknown>),
+  }
+  void setSetting(APPEARANCE_SETTING_KEY, preference).catch((error: unknown) => {
+    settingsError.value = error instanceof Error ? error.message : String(error)
+  })
 }
 
 function selectColorMode(mode: ThemeColorMode | null) {
@@ -76,9 +113,11 @@ function selectColorMode(mode: ThemeColorMode | null) {
   selectedColorMode.value = 'color'
   if (isDefaultTheme.value) {
     restoreDefaultThemes()
+    saveAppearanceSettings()
     return
   }
   applyPrimaryColor(primaryColor.value)
+  saveAppearanceSettings()
 }
 
 async function applyWallpaperColor() {
@@ -91,6 +130,7 @@ async function applyWallpaperColor() {
     isDefaultTheme.value = false
     selectedColorMode.value = 'wallpaper'
     applyPrimaryColor(color)
+    saveAppearanceSettings()
   } catch (error) {
     wallpaperError.value = error instanceof Error ? error.message : String(error)
   } finally {
@@ -107,12 +147,14 @@ function updatePrimaryColor(color: unknown) {
   isDefaultTheme.value = false
   selectedColorMode.value = 'color'
   applyPrimaryColor(color)
+  saveAppearanceSettings()
 }
 
 function resetPrimaryColor() {
   primaryColor.value = defaultPrimaryColor
   isDefaultTheme.value = true
   restoreDefaultThemes()
+  saveAppearanceSettings()
 }
 
 function applyPrimaryColor(color: string) {
@@ -152,6 +194,10 @@ function createGeneratedColors(scheme: MaterialSchemeColors, baseColors: typeof 
 
   return { ...baseColors, ...generatedColors }
 }
+
+onMounted(() => {
+  void loadAppearanceSettings()
+})
 
 </script>
 
@@ -233,6 +279,9 @@ function createGeneratedColors(scheme: MaterialSchemeColors, baseColors: typeof 
         </v-alert>
         <v-alert v-if="wallpaperError" class="mt-3" density="compact" type="warning" variant="tonal">
           {{ wallpaperError }}
+        </v-alert>
+        <v-alert v-if="settingsError" class="mt-3" density="compact" type="warning" variant="tonal">
+          设置保存失败：{{ settingsError }}
         </v-alert>
         <v-row v-if="selectedColorMode === 'color'" density="compact" class="mt-2">
           <v-col cols="12" sm="6">

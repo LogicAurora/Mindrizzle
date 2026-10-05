@@ -3,6 +3,7 @@ mod mdr_file_dir;
 mod mdr_file_op;
 mod mdr_file_struct;
 mod mdr_file_tar;
+mod settings_store;
 mod system_theme;
 mod utils;
 
@@ -97,6 +98,9 @@ pub fn run() {
             mdr_file_op::get_mdr_file_body,
             mdr_file_op::set_mdr_file_body,
             mdr_file_op::create_mdr_file,
+            settings_store::get_setting,
+            settings_store::set_setting,
+            settings_store::remove_setting,
             system_theme::get_wallpaper_primary_color
         ])
         .run(tauri::generate_context!())
