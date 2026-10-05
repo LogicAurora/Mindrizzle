@@ -251,7 +251,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
         :data-block-id="blockId"
         :class="{ 'popup-keep': popupKeep, 'forced-open': showPopup, 'ui-hidden': !showPopup }"
         @pointerenter="onPopupEnter"
-        @pointerleave="onPopupLeave($event); clearScrollbarHover()"
+        @pointerleave="onPopupLeave(); clearScrollbarHover()"
         @pointermove="onPopupPointerMove"
         @wheel="onPopupWheel"
       >

@@ -99,7 +99,7 @@ bunx vite build
 cd src-tauri && cargo check
 ```
 
-当前开发环境中，`bun run build` 会先运行 `vue-tsc --noEmit`，该步骤可能因 `vue-tsc` 与 TypeScript 的包导出兼容问题报 `ERR_PACKAGE_PATH_NOT_EXPORTED`。此时可分别运行上面的 TypeScript 检查与 Vite 构建命令；Tauri 打包配置也会调用 `bun run build`。
+`bun run build` 会依次运行 Vue/TypeScript 类型检查和 Vite 构建。项目使用 TypeScript 6.0.x，以兼容当前 `vue-tsc` 使用的编译器入口；升级 TypeScript 时也需要确认 `vue-tsc` 支持对应版本。Tauri 打包配置同样会调用 `bun run build`。
 
 修改 Rust 文件归档逻辑后，运行 Rust 测试：
 

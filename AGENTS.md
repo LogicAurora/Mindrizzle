@@ -18,12 +18,13 @@ bun run dev                  # 只跑前端（浏览器 http://localhost:1420）
 bun run tauri dev            # 起桌面应用
 bunx tsc --noEmit            # 类型检查
 bunx vite build              # 构建验证
+bun run build                # Vue/TypeScript 检查与 Vite 构建
 cd src-tauri && cargo check  # Rust 侧编译检查
 cd src-tauri && cargo test   # 含模块文档里的 no_run doctest
 ```
 
-- `bun run build` 内置 `vue-tsc --noEmit`，会被既存类型错挡住；验证构建请直接 `bunx vite build`。
-- 本机 bun 环境下 `vue-tsc` 报 `ERR_PACKAGE_PATH_NOT_EXPORTED`，类型检查统一用 `bunx tsc --noEmit`。
+- `bun run build` 是完整前端验证入口，先运行 `vue-tsc --noEmit` 再执行 Vite 构建。
+- `typescript` 保持在 6.0.x；当前 `vue-tsc` 通过 `typescript/lib/tsc` 加载编译器，TypeScript 7 不导出该内部路径。升级 TypeScript 前需先确认 `vue-tsc` 已兼容。
 
 ## 注释规范（最高优先级）
 
