@@ -12,11 +12,11 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+use platform_dirs::AppDirs;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use platform_dirs::AppDirs;
 
 pub struct MindrizzleFileCache {
     root: PathBuf,
@@ -104,10 +104,13 @@ fn remove_cache_dir(root: &Path) {
 
 /// 进程异常退出或只读不存会残留孤儿目录，所以启动早期清扫一次（此刻本进程尚未建目录，删除安全）
 pub fn cleanup_orphan_caches() {
-    let Some(cache_base) = AppDirs::new(Some("Mindrizzle"), false).map(|dirs| dirs.cache_dir) else {
+    let Some(cache_base) = AppDirs::new(Some("Mindrizzle"), false).map(|dirs| dirs.cache_dir)
+    else {
         return;
     };
-    let Ok(entries) = fs::read_dir(cache_base) else { return };
+    let Ok(entries) = fs::read_dir(cache_base) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         let is_orphan = path.is_dir()

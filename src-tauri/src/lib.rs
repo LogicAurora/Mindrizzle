@@ -7,13 +7,13 @@ mod settings_store;
 mod system_theme;
 mod utils;
 
-use tauri_plugin_log::{
-    RotationStrategy, Target, TargetKind, TimezoneStrategy, fern::FormatCallback, log::LevelFilter,
-};
 use anyhow::Context;
 use log::info;
 use log::Record;
 use std::fmt::Arguments;
+use tauri_plugin_log::{
+    fern::FormatCallback, log::LevelFilter, RotationStrategy, Target, TargetKind, TimezoneStrategy,
+};
 use tokio::fs;
 
 tauri_cmd! {
@@ -64,7 +64,7 @@ pub fn run() {
     } else {
         LevelFilter::Info
     };
-    let custom_format = |out: FormatCallback<'_>, args: &Arguments<'_>, record: &Record<'_>|{
+    let custom_format = |out: FormatCallback<'_>, args: &Arguments<'_>, record: &Record<'_>| {
         out.finish(format_args!(
             "[{}] [{}@{}:{}] [{}] {}",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
@@ -72,7 +72,7 @@ pub fn run() {
             record.file().unwrap_or("?"),
             record.line().unwrap_or(0),
             record.level(),
-            args.to_string().rsplit_once("] ").unwrap().1//FIXME: Tauri日志插件不符合预期，会输出默认日志格式，使格式重复
+            args.to_string().rsplit_once("] ").unwrap().1 //FIXME: Tauri日志插件不符合预期，会输出默认日志格式，使格式重复
         ))
     };
     tauri::Builder::default()
@@ -80,7 +80,7 @@ pub fn run() {
             tauri_plugin_log::Builder::new()
                 .level(log_level)
                 .targets([
-                    Target::new(TargetKind::Stdout).format(custom_format),//FIXME: Tauri日志插件不符合预期，必须手动在target内设置格式
+                    Target::new(TargetKind::Stdout).format(custom_format), //FIXME: Tauri日志插件不符合预期，必须手动在target内设置格式
                     Target::new(TargetKind::Webview).format(custom_format),
                     Target::new(TargetKind::LogDir { file_name: None }).format(custom_format),
                 ])

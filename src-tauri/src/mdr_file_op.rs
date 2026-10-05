@@ -1,23 +1,25 @@
+use anyhow::{Context, Result};
+use chrono::Local;
+use log::{info, warn};
+use quick_xml::de::from_str;
+use quick_xml::se::to_string;
 use std::fs::{self, File};
 use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
-use chrono::Local;
-use quick_xml::de::from_str;
-use quick_xml::se::to_string;
-use anyhow::{Context, Result};
-use log::{info, warn};
 use tauri::{Emitter, Window};
 
 use crate::mdr_file_cache::MindrizzleFileCache;
-use crate::{mdr_file_dir, tauri_cmd};
 use crate::mdr_file_struct::{MindrizzleFileBody, MindrizzleFileMeta, MindrizzleFileMetaView};
-use crate::mdr_file_tar::{extract_meta, extract_to_cache, extract_to_cache_with_progress, is_mdrf_compressed, pack_cache};
+use crate::mdr_file_tar::{
+    extract_meta, extract_to_cache, extract_to_cache_with_progress, is_mdrf_compressed, pack_cache,
+};
+use crate::{mdr_file_dir, tauri_cmd};
 
 // 文件名校验规则须与前端 NewFileDialog 保持一致，集中为常量避免两处漂移
 const MINDRIZZLE_FILE_FORBIDDEN_CHARS: [char; 9] = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
 const MINDRIZZLE_FILE_RESERVED_NAMES: [&str; 22] = [
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
-    "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 const MINDRIZZLE_FILE_MAX_NAME_LEN: usize = 50;
 const FILE_LOAD_PROGRESS_EVENT: &str = "file-load-progress";
@@ -32,7 +34,7 @@ const PROGRESS_RETURN_BODY: u32 = 90;
 const PROGRESS_COMPLETE: u32 = 100;
 const DEBUG_PROGRESS_DELAY: Duration = Duration::from_millis(180);
 
-tauri_cmd!{
+tauri_cmd! {
     pub fn get_mdr_file_meta(file_name: String) -> anyhow::Result<MindrizzleFileMetaView> {
         let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
         let path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
@@ -72,7 +74,7 @@ tauri_cmd!{
         info!("保存笔记正文成功：{}", resolved_name);
         Ok(())
     }
-    
+
     pub fn create_mdr_file(
         mdr_file_info: MindrizzleFileMeta,
         file_name: String
@@ -87,7 +89,7 @@ tauri_cmd!{
         .context("编码初始笔记正文")?;
         cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
         cache.write_file("body.json", body_xml.as_bytes()).context("写入初始笔记正文缓存")?;
-    
+
         let file_path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
         // 前端已拦截同名，后端仍须防覆盖既有笔记
         if file_path.exists() {
@@ -110,7 +112,10 @@ pub async fn get_mdr_file_body(
     })
     .await
     .map_err(|error| {
-        log::error!("IPC 命令 get_mdr_file_body 执行失败：读取任务异常：{}", error);
+        log::error!(
+            "IPC 命令 get_mdr_file_body 执行失败：读取任务异常：{}",
+            error
+        );
         tauri::ipc::InvokeError::from(format!("读取笔记任务异常：{error}"))
     })?;
     result.map_err(|error| {
@@ -193,10 +198,16 @@ fn resolve_mdrf_file_name(file_name: &str) -> anyhow::Result<String> {
     } else {
         file_name.to_string()
     };
-    if resolved.len() > MINDRIZZLE_FILE_MAX_NAME_LEN || resolved.starts_with(' ') || resolved.ends_with(&[' ', '.']) {
+    if resolved.len() > MINDRIZZLE_FILE_MAX_NAME_LEN
+        || resolved.starts_with(' ')
+        || resolved.ends_with(&[' ', '.'])
+    {
         return Err(anyhow::anyhow!("文件名过长或首尾含非法字符"));
     }
-    if resolved.chars().any(|c| MINDRIZZLE_FILE_FORBIDDEN_CHARS.contains(&c)) {
+    if resolved
+        .chars()
+        .any(|c| MINDRIZZLE_FILE_FORBIDDEN_CHARS.contains(&c))
+    {
         return Err(anyhow::anyhow!("文件名不能包含 \\ / : * ? \" < > | 等字符"));
     }
     if MINDRIZZLE_FILE_RESERVED_NAMES.contains(&resolved.to_ascii_uppercase().as_str()) {
@@ -211,16 +222,16 @@ fn read_file_modified_millis(path: &Path) -> anyhow::Result<i64> {
         .with_context(|| format!("读取笔记文件属性：{}", path.display()))?
         .modified()
         .context("读取笔记文件修改时间")?;
-    let elapsed = modified.duration_since(UNIX_EPOCH).context("笔记修改时间早于 UNIX 纪元")?;
+    let elapsed = modified
+        .duration_since(UNIX_EPOCH)
+        .context("笔记修改时间早于 UNIX 纪元")?;
     i64::try_from(elapsed.as_millis()).context("笔记修改时间超出可表示范围")
 }
 
 /// 直接截断原文件再打包失败会损坏 .mdrf，所以先写同目录临时文件再 rename 原子替换
 fn pack_cache_atomic(path: &Path, root: &Path, compressed: bool) -> anyhow::Result<()> {
     let tmp_path = path.with_extension("mdrf.tmp");
-    let packed = File::create(&tmp_path)
-        
-        .and_then(|writer| pack_cache(root, writer, compressed));
+    let packed = File::create(&tmp_path).and_then(|writer| pack_cache(root, writer, compressed));
     if let Err(e) = packed {
         let _ = fs::remove_file(&tmp_path); // 忽略清理失败，不影响主流程
         return Err(e.into());

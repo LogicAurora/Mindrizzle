@@ -11,10 +11,10 @@
 //! # Ok::<(), io::Error>(())
 //! ```
 
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use std::fs::{self, File};
 use std::io::{self, Read, Result, Seek, SeekFrom, Write};
 use std::path::{Component, Path};
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use tar::{Archive, Builder};
 use walkdir::WalkDir;
 
@@ -56,7 +56,10 @@ pub fn extract_to_cache<R: Read>(reader: R, target: &Path, compressed: bool) -> 
         let entry_path = entry.path()?.into_owned();
         // .mdrf 可能来自外部，拒绝含 `..`、绝对路径或盘符的条目防路径穿越
         if entry_path.components().any(|c| {
-            matches!(c, Component::ParentDir | Component::RootDir | Component::Prefix(_))
+            matches!(
+                c,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
         }) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -75,9 +78,10 @@ fn archive_total_size<R: Read + Seek>(reader: &mut R, compressed: bool) -> Resul
         Box::new(&mut *reader)
     };
     let mut archive = Archive::new(boxed_reader);
-    archive
-        .entries()?
-        .try_fold(0_u64, |total, entry| Ok(total.saturating_add(entry?.size())))
+    archive.entries()?.try_fold(
+        0_u64,
+        |total, entry| Ok(total.saturating_add(entry?.size())),
+    )
 }
 
 fn validate_archive_entry_path(path: &Path) -> Result<()> {
@@ -181,9 +185,14 @@ mod tests {
         header.set_size(FILE_CONTENT.len() as u64);
         header.set_mode(FILE_MODE);
         header.set_cksum();
-        builder.append_data(&mut header, FILE_NAME, FILE_CONTENT).unwrap();
+        builder
+            .append_data(&mut header, FILE_NAME, FILE_CONTENT)
+            .unwrap();
         let archive = builder.into_inner().unwrap();
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let target = std::env::temp_dir().join(format!("mindrizzle-progress-{unique}"));
         let mut progress = Vec::new();
 
