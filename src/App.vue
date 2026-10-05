@@ -8,7 +8,7 @@ import {
   mdiCalendarBlankOutline,
   mdiCogOutline
 } from '@mdi/js'
-import { computed, nextTick, onMounted, provide, ref, shallowRef, type Component } from 'vue'
+import { computed, nextTick, onMounted, provide, ref, shallowRef } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauri } from '@tauri-apps/api/core';
 
@@ -45,14 +45,17 @@ onMounted(async () => {
 
 import { isDebugLoadingEnabled, noteLoadControllerKey, routeTransition, startEditorTransitionKey } from './utils/routeTransition'
 import { Z_LAYER } from './Controls/zIndex'
-import { VSlideXTransition, VSlideXReverseTransition, VFadeTransition } from 'vuetify/components';
-const transitionMap = {
-  VSlideXTransition,
-  VSlideXReverseTransition,
-  VFadeTransition,
+const transitionClassMap = {
+  VSlideXTransition: 'slide-x-transition',
+  VSlideXReverseTransition: 'slide-x-reverse-transition',
+  VFadeTransition: 'fade-transition',
 } as const
 
-const resolveTransition = (): Component => transitionMap[routeTransition.value]
+const resolveTransitionName = () => transitionClassMap[routeTransition.value]
+
+function hideLeavingRoute(element: Element) {
+  (element as HTMLElement).style.setProperty('display', 'none', 'important')
+}
 
 const CURTAIN_DURATION = 560
 const CURTAIN_STAGGER = 110
@@ -249,9 +252,9 @@ const startResize = (direction: ResizeDirection) => {
 
     <v-main class="no-scrollbar">
       <router-view style="height: 100%;" v-slot="{ Component, route }">
-        <component :is="resolveTransition()" hide-on-leave>
+        <Transition :name="resolveTransitionName()" @before-leave="hideLeavingRoute">
           <component :is="Component" :key="route.path" />
-        </component>
+        </Transition>
       </router-view>
     </v-main>
     <div
