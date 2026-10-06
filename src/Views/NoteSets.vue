@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { mdiNoteOffOutline, mdiPencil, mdiPlus } from '@mdi/js';
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -8,6 +8,7 @@ import { info } from '@tauri-apps/plugin-log';
 import NewFileDialog from '../Controls/NewFileDialog.vue';
 import { loadEditorComponent, storePendingEditorBody, type EditorBodyResult } from '../utils/editorRoute'
 import { invokeCommand } from '../utils/invoke'
+import { loadNoteSetEntries, type NoteSetEntry } from '../utils/noteSetStore'
 import { isDebugLoadingEnabled, noteLoadControllerKey, startEditorTransitionKey } from '../utils/routeTransition'
 
 const startEditorTransition = inject(startEditorTransitionKey)!
@@ -44,26 +45,68 @@ async function prepareEditor(fileName: string) {
   }
 }
 
-async function openEditor(index: number) {
-  noteSets.value[index].loading = true
+async function openEditor(noteSet: NoteSetItem) {
+  noteSet.loading = true
   try {
     await startEditorTransition(
-      { name: 'editor', params: { fileName: fileListRef.value[index] } },
-      () => prepareEditor(fileListRef.value[index]),
+      { name: 'editor', params: { fileName: noteSet.fileName } },
+      () => prepareEditor(noteSet.fileName),
     )
   } finally {
-    noteSets.value[index].loading = false
+    noteSet.loading = false
   }
 }
 
 const isCreateDialogOpen = ref(false)
 
-loadNoteSets();
+const INITIAL_VISIBLE_COUNT = 12
+const VISIBLE_BATCH_SIZE = 12
+const SKELETON_COUNT = 6
+const SENTINEL_MARGIN_PX = 240
 
-let isError = ref(false);
-const noteSets = ref<
-  { name: string; description: string; tag?: string; updatedAt: number; loading: boolean }[]
->([]);
+type NoteSetItem = NoteSetEntry & { loading: boolean }
+
+const isError = ref(false);
+const isLoading = ref(true);
+const noteSets = ref<NoteSetItem[]>([]);
+const visibleCount = ref(INITIAL_VISIBLE_COUNT);
+const listSentinel = ref<HTMLElement | null>(null);
+const visibleNoteSets = computed(() => noteSets.value.slice(0, visibleCount.value));
+
+// 一次性建几百张卡片会把首屏主线程占满，所以按需追加
+function growVisibleNoteSets() {
+  visibleCount.value = Math.min(visibleCount.value + VISIBLE_BATCH_SIZE, noteSets.value.length);
+}
+
+let listObserver: IntersectionObserver | null = null;
+
+// 哨兵一直留在视口内时观察器不会再次回调，所以主动把视口填满
+async function fillListViewport(): Promise<void> {
+  const sentinel = listSentinel.value;
+  if (!sentinel || visibleCount.value >= noteSets.value.length) return;
+  await nextTick();
+  if (sentinel.getBoundingClientRect().top > window.innerHeight + SENTINEL_MARGIN_PX) return;
+  growVisibleNoteSets();
+  await fillListViewport();
+}
+
+onMounted(() => {
+  listObserver = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    growVisibleNoteSets();
+    void fillListViewport();
+  }, { rootMargin: `${SENTINEL_MARGIN_PX}px` });
+});
+
+watch(listSentinel, (sentinel) => {
+  listObserver?.disconnect();
+  if (sentinel) listObserver?.observe(sentinel);
+});
+
+onBeforeUnmount(() => {
+  listObserver?.disconnect();
+  listObserver = null;
+});
 
 const MILLIS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
@@ -72,7 +115,7 @@ const DAYS_PER_MONTH = 30;
 
 const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
 
-// 因 Date 只能给出绝对时间，故按分钟/小时/天折算，超过一月退回日期
+// Date 只有绝对时间，所以按分钟/小时/天折算，超过一月退回日期
 function formatUpdatedAt(timestamp: number): string {
   if (!timestamp) return '未知';
   const minutes = Math.round((timestamp - Date.now()) / MILLIS_PER_MINUTE);
@@ -84,43 +127,35 @@ function formatUpdatedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN');
 }
 
-const fileListRef = ref<string[]>([]);
-
 async function loadNoteSets() {
   try {
-    const fileList = await invokeCommand<string[]>('fetch_file_list');
-    fileListRef.value = fileList;
-    for (const fileName of fileList) {
-      const fileInfo = await invokeCommand<{ title: string; description: string; tag: string; updatedAt: number }>(
-        'get_mdr_file_meta',
-        { fileName: fileName }
-      );
-      noteSets.value.push({
-        name: fileInfo.title,
-        description: fileInfo.description,
-        tag: fileInfo.tag,
-        updatedAt: fileInfo.updatedAt,
-        loading: false,
-      });
-    }
+    const entries = await loadNoteSetEntries();
+    noteSets.value = entries.map((entry) => ({ ...entry, loading: false }));
     // 网页端无 IPC，日志插件的 invoke 会抛错
     if (isTauri()) info(`读取笔记元信息成功，共 ${noteSets.value.length} 条`)
   } catch (error) {
     isError.value = true;
+  } finally {
+    isLoading.value = false;
   }
 }
+
+loadNoteSets();
 </script>
 <template>
   <v-sheet class="pa-4" elevation="0">
     <v-snackbar v-model="isError" timeout="2000">
       Oh no!便签怎么皱成一团了！
     </v-snackbar>
-    <v-empty-state v-if="noteSets.length === 0"
+    <template v-if="isLoading">
+      <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" class="mb-4" />
+    </template>
+    <v-empty-state v-else-if="noteSets.length === 0"
     :icon="mdiNoteOffOutline"
     title = "还没有便签……"
     text = "点击右下角的 + 按钮创建新的便签集" />
     <v-list v-else class="overflow-visible">
-      <v-card v-for="(noteSet, index) in noteSets" :key="index" class="mb-4">
+      <v-card v-for="noteSet in visibleNoteSets" :key="noteSet.fileName" class="mb-4">
         <v-card-title>
           {{ noteSet.name }}
         </v-card-title>
@@ -132,7 +167,7 @@ async function loadNoteSets() {
         </v-card-text>
         <v-card-actions>
           <v-btn
-            @click="openEditor(index)"
+            @click="openEditor(noteSet)"
             @pointerenter="preloadEditor"
             @focus="preloadEditor"
             :icon="mdiPencil"
@@ -142,6 +177,7 @@ async function loadNoteSets() {
           ></v-btn>
         </v-card-actions>
       </v-card>
+      <div ref="listSentinel" />
     </v-list>
     <v-fab
       :icon="mdiPlus"

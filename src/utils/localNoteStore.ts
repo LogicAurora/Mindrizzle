@@ -3,6 +3,7 @@ import type { InvokeArgs } from '@tauri-apps/api/core'
 
 const FILE_INDEX_KEY = 'mindrizzle:file-index'
 const NOTE_KEY_PREFIX = 'mindrizzle:note:'
+const TEST_NOTE_PREFIX = '性能测试_'
 const FILE_NAME_MAX_LEN = 50
 const FILE_NAME_FORBIDDEN_CHARS = /[\\/:*?"<>|]/
 // 与后端 resolve_mdrf_file_name 对齐：首字符不得空格，尾字符不得空格或点
@@ -111,6 +112,28 @@ export const clearLocalNotes = (): void => {
     (key) => key === FILE_INDEX_KEY || key.startsWith(NOTE_KEY_PREFIX),
   )
   noteKeys.forEach((key) => localStorage.removeItem(key))
+}
+
+// 列表性能测试样本：一个批次只写一次索引，样本数大时也不至于 O(N²) 序列化
+export const createTestNotes = (count: number): string[] => {
+  const existing = readFileIndex()
+  const fileNames = Array.from({ length: count }, (_, index) => `${TEST_NOTE_PREFIX}${index}`)
+  fileNames.forEach((fileName) => {
+    writeNote(fileName, {
+      meta: { title: fileName, description: '便签集列表性能测试样本', tag: ['测试'] },
+      content: '',
+      updatedAt: Date.now(),
+    })
+  })
+  writeFileIndex([...existing, ...fileNames.filter((name) => !existing.includes(name))])
+  return fileNames
+}
+
+export const clearTestNotes = (): number => {
+  const testNames = readFileIndex().filter((name) => name.startsWith(TEST_NOTE_PREFIX))
+  testNames.forEach((name) => localStorage.removeItem(noteKeyOf(name)))
+  writeFileIndex(readFileIndex().filter((name) => !name.startsWith(TEST_NOTE_PREFIX)))
+  return testNames.length
 }
 
 const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {

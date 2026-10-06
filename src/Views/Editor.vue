@@ -96,6 +96,7 @@ import { useRoute } from 'vue-router'
 import { invokeCommand } from '../utils/invoke'
 import { getErrorMessage } from '../utils/getErrorMessage.ts'
 import { takePendingEditorBody } from '../utils/editorRoute'
+import { touchNoteSetUpdatedAt } from '../utils/noteSetStore'
 import { isDebugLoadingEnabled, noteLoadControllerKey } from '../utils/routeTransition'
 
 const noteLoadController = inject(noteLoadControllerKey)
@@ -389,6 +390,7 @@ const save = async () => {
   isSaving.value = true
   try {
     await invokeCommand("set_mdr_file_body", { fileName, content: MdrCRef.value?.save() ?? '' })
+    touchNoteSetUpdatedAt(String(fileName ?? ''))
   } catch (error) {
     logError(getErrorMessage(error))
   }

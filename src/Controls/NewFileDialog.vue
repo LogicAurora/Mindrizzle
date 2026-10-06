@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router';
 import { invokeCommand } from '../utils/invoke'
+import { invalidateNoteSetEntries } from '../utils/noteSetStore'
 import { error as LogError } from '@tauri-apps/plugin-log';
 
 const props = defineProps<{ isOpen: boolean }>()
@@ -96,6 +97,7 @@ async function submit() {
       fileName: fileName.value,
     });
     dialog.value = false;
+    invalidateNoteSetEntries();
     router.push(`/editor/${createdFileName}`)
   } catch(e) {
     LogError(getErrorMessage(e))
