@@ -11,11 +11,11 @@ import { defaultThemes } from './Vuetify.ts'
 
 const routes = [
   { path: '/', redirect: '/set' },
-  { path: '/set', component: NoteSet, meta: { level: 1 } },
-  { path: '/board', component: () => import('./Views/NoteBoard.vue'), meta: { level: 2 } },
-  { path: '/editor/:fileName', name: 'editor', component: loadEditorComponent, meta: { level: 100 } },
-  { path: '/settings/:tab', component: () => import('./Views/Settings.vue'), meta: { level: 3 } },
-  { path: '/debug', component: () => import('./Views/Debug.vue'), meta: { level: 4 } },
+  { path: '/set', component: NoteSet, meta: { level: 1, title: '便签集' } },
+  { path: '/board', component: () => import('./Views/NoteBoard.vue'), meta: { level: 2, title: '记事板' } },
+  { path: '/editor/:fileName', name: 'editor', component: loadEditorComponent, meta: { level: 100, title: '编辑' } },
+  { path: '/settings/:tab', component: () => import('./Views/Settings.vue'), meta: { level: 3, title: '设置' } },
+  { path: '/debug', component: () => import('./Views/Debug.vue'), meta: { level: 4, title: '调试' } },
 ]
 
 const router = createRouter({

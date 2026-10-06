@@ -8,12 +8,13 @@ import {
   mdiCalendarBlankOutline,
   mdiCogOutline
 } from '@mdi/js'
-import { computed, nextTick, onMounted, provide, ref, shallowRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauri } from '@tauri-apps/api/core';
 
 import { attachConsole } from '@tauri-apps/plugin-log';
-import { useRouter, type RouteLocationRaw } from 'vue-router';
+import { useDisplay } from 'vuetify'
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router';
 import { error as logError } from '@tauri-apps/plugin-log';
 
 import { getErrorMessage } from  "./utils/getErrorMessage"
@@ -44,6 +45,7 @@ onMounted(async () => {
 });
 
 import { isDebugLoadingEnabled, noteLoadControllerKey, routeTransition, startEditorTransitionKey } from './utils/routeTransition'
+import { loadTitleRollDirection, titleRollDirection } from './utils/uiPreference'
 import { Z_LAYER } from './Controls/zIndex'
 const transitionClassMap = {
   VSlideXTransition: 'slide-x-transition',
@@ -196,6 +198,58 @@ const startResize = (direction: ResizeDirection) => {
     void getCurrentWindow().startResizeDragging(direction)
   }
 }
+
+const APP_TITLE_FALLBACK = 'Mindrizzle'
+const BOOT_TITLE_DURATION = 3_000
+const DRAWER_SETTLE_DURATION = 260
+
+const currentRoute = useRoute()
+const { mobile: isMobileLayout } = useDisplay()
+const isBootTitleVisible = ref(true)
+let bootTitleTimer: number | undefined
+
+onMounted(() => {
+  bootTitleTimer = window.setTimeout(() => { isBootTitleVisible.value = false }, BOOT_TITLE_DURATION)
+  void loadTitleRollDirection().catch((error: unknown) => {
+    // 浏览器调试环境无 IPC，上报前守卫
+    if (isTauri()) logError(getErrorMessage(error))
+  })
+})
+
+onBeforeUnmount(() => {
+  if (bootTitleTimer !== undefined) clearTimeout(bootTitleTimer)
+  clearTimeout(titleSwitchTimer)
+})
+
+const titleRollName = computed(() => titleRollDirection.value === 'top-down' ? 'title-roll-down' : 'title-roll-up')
+
+// 启动瞬间先立住品牌名，随后交给路由 meta；编辑页要显示具体文件名
+const appTitle = computed(() => {
+  if (isBootTitleVisible.value) return APP_TITLE_FALLBACK
+  if (currentRoute.name === 'editor') return String(currentRoute.params.fileName ?? APP_TITLE_FALLBACK)
+  const title = currentRoute.meta.title
+  return typeof title === 'string' ? title : APP_TITLE_FALLBACK
+})
+
+const displayedTitle = ref(appTitle.value)
+let titleSwitchTimer: number | undefined
+let drawerClosedAt = 0
+
+// 抽屉退场还没走完就切字，两个动画会叠在一起糊成一团
+watch(appTitle, (nextTitle) => {
+  clearTimeout(titleSwitchTimer)
+  const settleDelay = Math.max(0, DRAWER_SETTLE_DURATION - (performance.now() - drawerClosedAt))
+  titleSwitchTimer = window.setTimeout(() => { displayedTitle.value = nextTitle }, settleDelay)
+})
+
+// 菜单点击要先同步关抽屉，否则路由已经变了才知道要等，退场时刻就晚了
+function navigateFromMenu(path: string) {
+  menuRef.value = false
+  // 侧栏在底部时不跟标题争位置，等它退完反而显得拖
+  drawerClosedAt = isMobileLayout.value ? 0 : performance.now()
+  // 重复导航只是没跳，不需要打扰用户
+  router.push(path).catch(() => undefined)
+}
 </script>
 
 <template>
@@ -222,8 +276,10 @@ const startResize = (direction: ResizeDirection) => {
         <div id="title-left-actions" class="toolbar-actions" />
         <v-app-bar-nav-icon @click.stop="menuRef = !menuRef" />
         <div id="title-right-actions" class="toolbar-actions" />
-        <span data-tauri-drag-region class="text-white" style="flex: 1; font-size: 1.25rem; margin-left: 5px;">
-          Mindrizzle
+        <span data-tauri-drag-region class="text-white app-title-wrap">
+          <Transition :name="titleRollName">
+            <span :key="displayedTitle" class="app-title">{{ displayedTitle }}</span>
+          </Transition>
         </span>
         <!-- 路由页面用 <Teleport to="#toolbar-actions" defer> 往这里塞自己的按钮；
              VToolbar 的 VBtn 默认值走组件树，teleport 进来的按钮拿不到，需自己写 variant="text" -->
@@ -234,13 +290,13 @@ const startResize = (direction: ResizeDirection) => {
 
     <v-navigation-drawer v-model="menuRef" :location="$vuetify.display.mobile ? 'bottom' : undefined" temporary>
       <v-list :lines="false" density="compact" nav>
-        <v-list-item :prepend-icon="mdiFormatListBulleted" title="便签集" @click="$router.push('/set')" />
-        <v-list-item :prepend-icon="mdiCalendarBlankOutline" title="记事板" @click="$router.push('/board')" />
-        <v-list-item :prepend-icon="mdiCogOutline" title="设置" @click="$router.push('/settings/introduce')" />
+        <v-list-item :prepend-icon="mdiFormatListBulleted" title="便签集" @click="navigateFromMenu('/set')" />
+        <v-list-item :prepend-icon="mdiCalendarBlankOutline" title="记事板" @click="navigateFromMenu('/board')" />
+        <v-list-item :prepend-icon="mdiCogOutline" title="设置" @click="navigateFromMenu('/settings/introduce')" />
       </v-list>
       <v-divider v-if="isDev" />
       <v-list v-if="isDev" :lines="false" density="compact" nav>
-        <v-list-item :prepend-icon="mdiBug" title="调试页面" @click="$router.push('/debug')" />
+        <v-list-item :prepend-icon="mdiBug" title="调试页面" @click="navigateFromMenu('/debug')" />
       </v-list>
       <v-divider v-if="isTauri()" />
       <v-list v-if="isTauri()" :lines="false" density="compact" nav>
@@ -312,6 +368,58 @@ body,
   -moz-user-select: none !important;
   -ms-user-select: none !important;
   user-select: none !important;
+}
+
+/* 文件名可能很长，截断而不是把右侧按钮挤出工具栏 */
+.app-title-wrap {
+  position: relative;
+  display: block;
+  flex: 1;
+  /* 两个标题叠在同一个位置滚动，所以高度得钉住 */
+  height: 1.5em;
+  margin-left: 5px;
+  font-size: 1.25rem;
+  line-height: 1.5em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.app-title {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* drag-region 判定看的是事件 target，文字不吃事件才拖得动窗口 */
+  pointer-events: none;
+}
+
+/* 标题切换滚动：down = 新字自上方落入，up = 自下方升起 */
+.title-roll-down-enter-active,
+.title-roll-down-leave-active,
+.title-roll-up-enter-active,
+.title-roll-up-leave-active {
+  transition: transform 240ms ease, opacity 240ms ease;
+}
+
+.title-roll-down-enter-from {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+.title-roll-down-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.title-roll-up-enter-from {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.title-roll-up-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
 }
 
 input,
