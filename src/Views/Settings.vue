@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { mdiInformationOutline, mdiPalette, mdiSwapVertical } from '@mdi/js'
 
 import about from './SettingTabs/About.vue'
 import appearance from './SettingTabs/Appearance.vue'
 import interfaceTab from './SettingTabs/Interface.vue'
 
 const SETTINGS_TABS = [
-  { value: 'about', label: '关于', component: about },
-  { value: 'appearance', label: '外观', component: appearance },
-  { value: 'interface', label: '界面', component: interfaceTab },
+  { value: 'about', label: '关于', component: about, icon: mdiInformationOutline },
+  { value: 'appearance', label: '外观', component: appearance, icon: mdiPalette },
+  { value: 'interface', label: '界面', component: interfaceTab, icon: mdiSwapVertical },
 ] as const
 const DEFAULT_SETTINGS_TAB = SETTINGS_TABS[0].value
 
@@ -32,7 +33,7 @@ function resolveSettingsTab(value: unknown): SettingsTabValue {
     <Teleport to="#toolbar-tabs" defer>
       <v-tabs v-model="tab" class="settings-tabs" align-tabs="title" color="white" slider-color="white"
         density="compact">
-        <v-tab v-for="item in SETTINGS_TABS" :key="item.value" :value="item.value">{{ item.label }}</v-tab>
+        <v-tab v-for="item in SETTINGS_TABS" :prepend-icon="item.icon" :key="item.value" :value="item.value">{{ item.label }}</v-tab>
       </v-tabs>
     </Teleport>
 
