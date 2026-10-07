@@ -202,6 +202,11 @@ const startResize = (direction: ResizeDirection) => {
 const APP_TITLE_FALLBACK = 'Mindrizzle'
 const BOOT_TITLE_DURATION = 3_000
 const DRAWER_SETTLE_DURATION = 260
+// 工具栏主行 compact 密度下的实际高度（height 64 - 16）
+const TOOLBAR_ROW_HEIGHT = 48
+const TOOLBAR_TABS_HEIGHT = 36
+// extensionHeight 会被 compact 密度减 8，补回来才能得到 36px 的 tab 行
+const TOOLBAR_EXTENSION_HEIGHT = TOOLBAR_TABS_HEIGHT + 8
 
 const currentRoute = useRoute()
 const { mobile: isMobileLayout } = useDisplay()
@@ -222,6 +227,10 @@ onBeforeUnmount(() => {
 })
 
 const titleRollName = computed(() => titleRollDirection.value === 'top-down' ? 'title-roll-down' : 'title-roll-up')
+
+// 页面把 tab 行 teleport 进工具栏后工具栏会变高，页面高度得按同一个值算
+const hasToolbarTabs = computed(() => currentRoute.meta.toolbarTabs === true)
+const toolbarHeight = computed(() => `${TOOLBAR_ROW_HEIGHT + (hasToolbarTabs.value ? TOOLBAR_TABS_HEIGHT : 0)}px`)
 
 // 启动瞬间先立住品牌名，随后交给路由 meta；编辑页要显示具体文件名
 const appTitle = computed(() => {
@@ -253,7 +262,7 @@ function navigateFromMenu(path: string) {
 </script>
 
 <template>
-  <v-app class="container">
+  <v-app class="container" :style="{ '--app-toolbar-height': toolbarHeight }">
     <div class="window-outline" />
     <div
       v-if="isTauri()"
@@ -264,7 +273,8 @@ function navigateFromMenu(path: string) {
       :style="{ cursor: edge.cursor }"
       @mousedown.prevent="startResize(edge.direction)"
     />
-    <v-toolbar color="primary" density="compact" style="padding: 0;">
+    <v-toolbar color="primary" density="compact" :extended="hasToolbarTabs"
+      :extension-height="TOOLBAR_EXTENSION_HEIGHT" style="padding: 0;">
       <div data-tauri-drag-region style="
           display: flex; 
           align-items: center; 
@@ -285,6 +295,10 @@ function navigateFromMenu(path: string) {
              VToolbar 的 VBtn 默认值走组件树，teleport 进来的按钮拿不到，需自己写 variant="text" -->
         <div id="toolbar-actions" class="toolbar-actions" />
       </div>
+      <!-- 设置页把 tab 行 teleport 到这里，用 v-tabs 的 align-tabs="title" 与上方标题同左缘 -->
+      <template #extension>
+        <div id="toolbar-tabs" class="toolbar-tabs" />
+      </template>
     </v-toolbar>
 
 
@@ -292,7 +306,7 @@ function navigateFromMenu(path: string) {
       <v-list :lines="false" density="compact" nav>
         <v-list-item :prepend-icon="mdiFormatListBulleted" title="便签集" @click="navigateFromMenu('/set')" />
         <v-list-item :prepend-icon="mdiCalendarBlankOutline" title="记事板" @click="navigateFromMenu('/board')" />
-        <v-list-item :prepend-icon="mdiCogOutline" title="设置" @click="navigateFromMenu('/settings/introduce')" />
+        <v-list-item :prepend-icon="mdiCogOutline" title="设置" @click="navigateFromMenu('/settings/about')" />
       </v-list>
       <v-divider v-if="isDev" />
       <v-list v-if="isDev" :lines="false" density="compact" nav>
@@ -432,7 +446,7 @@ textarea {
 
 .no-scrollbar {
   overflow-y: auto;
-  height: calc(100vh - 48px);
+  height: calc(100vh - var(--app-toolbar-height, 48px));
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -449,6 +463,18 @@ textarea {
 .toolbar-actions {
   display: flex;
   align-items: center;
+}
+
+.toolbar-tabs {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+}
+
+/* tab 行铺在 primary 底上，且 teleport 后拿不到工具栏的 VBtn 默认值，所以文字自己跟标题一样用白色 */
+#toolbar-tabs .v-tab {
+  color: #fff;
 }
 
 /* border 会撑高 2px 被 #app 裁掉、outline 会被定位子元素盖住，所以用最高层级绝对定位覆盖层画描边 */

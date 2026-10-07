@@ -2,8 +2,10 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { mdiCheck, mdiClose, mdiContentCopy, mdiGithub, mdiInformationOutline } from '@mdi/js'
 import { computed, ref } from 'vue'
+
 import packageInfo from '../../../package.json'
 import appIconUrl from '../../../app-icon.svg'
+import MdrSettingsPageBase from './MdrSettingsPageBase.vue'
 
 const isDiagnosticsOpen = ref(false)
 const isGitCommitLoaded = ref(!isTauri())
@@ -69,8 +71,9 @@ async function copyDiagnostics() {
 </script>
 
 <template>
-  <v-sheet color="surface" class="about-surface">
-    <v-container class="about-page py-6 py-sm-8">
+  <MdrSettingsPageBase>
+    <!-- 关于页用品牌横幅当页头，所以顶掉默认的 title/subtitle 页头 -->
+    <template #header>
       <section class="about-hero">
         <div class="about-hero-main">
           <v-avatar class="about-mark" rounded="lg" aria-hidden="true">
@@ -94,53 +97,53 @@ async function copyDiagnostics() {
           </div>
         </div>
       </section>
+    </template>
 
-      <div class="about-bottom">
-        <div class="about-actions">
-          <v-btn
-            href="https://github.com/LogicAurora/Mindrizzle"
-            target="_blank"
-            rel="noopener noreferrer"
-            :prepend-icon="mdiGithub"
-            variant="text"
-          >GitHub</v-btn>
-          <v-btn
-            :prepend-icon="mdiInformationOutline"
-            color="primary"
-            variant="tonal"
-            @click="openDiagnostics"
-          >诊断信息</v-btn>
-        </div>
+    <div class="about-bottom">
+      <div class="about-actions">
+        <v-btn
+          href="https://github.com/LogicAurora/Mindrizzle"
+          target="_blank"
+          rel="noopener noreferrer"
+          :prepend-icon="mdiGithub"
+          variant="text"
+        >GitHub</v-btn>
+        <v-btn
+          :prepend-icon="mdiInformationOutline"
+          color="primary"
+          variant="tonal"
+          @click="openDiagnostics"
+        >诊断信息</v-btn>
       </div>
+    </div>
 
-      <section class="about-credits" aria-label="开源鸣谢与版权信息">
-        <div class="credits-heading">
-          <h2>特别鸣谢</h2>
-          <p>感谢开源项目与社区贡献者，让 Mindrizzle 得以持续成长。</p>
-        </div>
-        <div class="credits-projects">
-          <a
-            v-for="project in openSourceProjects"
-            :key="project.name"
-            :href="project.url"
-            target="_blank"
-            rel="noopener noreferrer"
-          >{{ project.name }}</a>
-        </div>
-        <div class="credits-footer">
-          <div class="credits-links">
-            <a href="https://github.com/LogicAurora/Mindrizzle/graphs/contributors" target="_blank" rel="noopener noreferrer">
-              贡献者
-            </a>
-            <a href="https://github.com/LogicAurora/Mindrizzle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
-              GNU GPL v3.0
-            </a>
+    <section class="about-credits" aria-label="开源鸣谢与版权信息">
+      <div class="credits-heading">
+        <h2>特别鸣谢</h2>
+        <p>感谢开源项目与社区贡献者，让 Mindrizzle 得以持续成长。</p>
+      </div>
+      <div class="credits-projects">
+        <a
+          v-for="project in openSourceProjects"
+          :key="project.name"
+          :href="project.url"
+          target="_blank"
+          rel="noopener noreferrer"
+        >{{ project.name }}</a>
+      </div>
+      <div class="credits-footer">
+        <div class="credits-links">
+          <a href="https://github.com/LogicAurora/Mindrizzle/graphs/contributors" target="_blank" rel="noopener noreferrer">
+            贡献者
+          </a>
+          <a href="https://github.com/LogicAurora/Mindrizzle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+            GNU GPL v3.0
+          </a>
           <span>在此，特别感谢每一位为Mindrizzle做出贡献的开发者！！！</span>
-          </div>
-          <span>版权所有 © {{ copyrightYear }} LogicAurora</span>
         </div>
-      </section>
-    </v-container>
+        <span>版权所有 © {{ copyrightYear }} LogicAurora</span>
+      </div>
+    </section>
 
     <v-dialog v-model="isDiagnosticsOpen" max-width="560">
       <v-card>
@@ -167,14 +170,10 @@ async function copyDiagnostics() {
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-sheet>
+  </MdrSettingsPageBase>
 </template>
 
 <style scoped>
-.about-page {
-  max-width: 960px;
-}
-
 .about-hero {
   position: relative;
   display: flex;
@@ -341,29 +340,10 @@ async function copyDiagnostics() {
   gap: 8px 14px;
 }
 
-.about-principles,
 .about-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.about-principles {
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.principle-mark {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgb(var(--v-theme-primary));
-}
-
-.principle-divider {
-  margin: 0 3px;
-  opacity: 0.45;
 }
 
 @media (max-width: 600px) {

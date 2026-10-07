@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useTheme } from 'vuetify'
 import { mdiCheckCircle, mdiImageFilterHdr, mdiPaletteOutline } from '@mdi/js'
 import { isTauri } from '@tauri-apps/api/core'
+import MdrSettingsPageBase from './MdrSettingsPageBase.vue'
 import { invokeCommand } from '../../utils/invoke'
 import { getSetting, setSetting } from '../../utils/settingsStore'
 import { APPEARANCE_SETTING_KEY, isAppearancePreference, type AppearancePreference } from '../../utils/appearancePreference'
@@ -202,132 +203,119 @@ onMounted(() => {
 </script>
 
 <template>
-  <v-sheet color="surface">
-    <v-container class="py-8 py-sm-10">
-      <v-row align="center" justify="space-between" class="mb-7">
-        <v-col>
-          <v-card-subtitle class="eyebrow text-overline pa-0">界面偏好</v-card-subtitle>
-          <v-card-title class="text-h5 font-weight-medium pa-0">外观</v-card-title>
-          <v-card-text class="heading-copy text-body-2 pa-0">调整画布与界面的视觉呈现。</v-card-text>
-        </v-col>
-        <v-col cols="auto">
-          <v-icon :icon="mdiPaletteOutline" color="primary" size="30" />
+  <MdrSettingsPageBase title="外观" subtitle="调整画布与界面的视觉呈现。" :icon="mdiPaletteOutline">
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <div>
+          <div class="settings-section-title">主题</div>
+          <div class="settings-section-caption">选择应用的整体色彩氛围</div>
+        </div>
+        <v-chip size="small" color="primary" variant="tonal">{{ selectedThemeLabel }}</v-chip>
+      </div>
+      <v-row density="compact">
+        <v-col v-for="option in themeOptions" :key="option.themeName" cols="4">
+          <v-card
+            :aria-pressed="selectedTheme === option.themeName"
+            variant="flat"
+            rounded="sm"
+            @click="changeTheme($event, option.themeName)"
+          >
+            <v-card-text class="pa-2">
+              <v-theme-provider theme="light" with-background>
+                <div class="theme-preview d-flex align-center ga-2 pa-3 rounded-sm" :class="option.style">
+                  <v-sheet class="preview-sidebar rounded-sm" />
+                  <v-sheet class="preview-paper rounded-sm" />
+                  <v-avatar class="preview-accent" color="primary" size="7" />
+                </div>
+              </v-theme-provider>
+            </v-card-text>
+            <v-card-item class="py-1">
+              <v-card-title class="text-body-2 pa-0">{{ option.name }}</v-card-title>
+              <template #append>
+                <v-icon v-if="selectedTheme === option.themeName" :icon="mdiCheckCircle" color="primary" size="18" />
+              </template>
+            </v-card-item>
+          </v-card>
         </v-col>
       </v-row>
+    </section>
 
-      <section>
-        <div class="d-flex align-center justify-space-between mb-4">
-          <div>
-            <v-card-title class="text-subtitle-1 pa-0">主题</v-card-title>
-            <v-card-subtitle class="text-body-2 pa-0">选择应用的整体色彩氛围</v-card-subtitle>
-          </div>
-          <v-chip size="small" color="primary" variant="tonal">{{ selectedThemeLabel }}</v-chip>
+    <v-divider class="my-6" />
+
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <div>
+          <div class="settings-section-title">主题色</div>
+          <div class="settings-section-caption">清空颜色可恢复 Vuetify 默认蓝色</div>
         </div>
-        <v-row density="compact">
-          <v-col v-for="option in themeOptions" :key="option.themeName" cols="4">
-            <v-card
-              :aria-pressed="selectedTheme === option.themeName"
-              variant="flat"
-              rounded="sm"
-              @click="changeTheme($event, option.themeName)"
-            >
-              <v-card-text class="pa-2">
-                <v-theme-provider theme="light" with-background>
-                  <div class="theme-preview d-flex align-center ga-2 pa-3 rounded-sm" :class="option.style">
-                    <v-sheet class="preview-sidebar rounded-sm" />
-                    <v-sheet class="preview-paper rounded-sm" />
-                    <v-avatar class="preview-accent" color="primary" size="7" />
-                  </div>
-                </v-theme-provider>
-              </v-card-text>
-              <v-card-item class="py-1">
-                <v-card-title class="text-body-2 pa-0">{{ option.name }}</v-card-title>
-                <template #append>
-                  <v-icon v-if="selectedTheme === option.themeName" :icon="mdiCheckCircle" color="primary" size="18" />
-                </template>
-              </v-card-item>
-            </v-card>
-          </v-col>
-        </v-row>
-      </section>
+        <v-chip size="small" color="primary" variant="tonal">{{ primaryColor }}</v-chip>
+      </div>
+      <v-btn-toggle
+        :model-value="selectedColorMode"
+        color="primary"
+        divided
+        mandatory
+        density="comfortable"
+        @update:model-value="selectColorMode"
+      >
+        <v-btn value="wallpaper" :prepend-icon="mdiImageFilterHdr" :loading="isLoadingWallpaper" :disabled="!isTauri()">
+          壁纸取色
+        </v-btn>
+        <v-btn value="color" :prepend-icon="mdiPaletteOutline">颜色</v-btn>
+      </v-btn-toggle>
+      <v-alert v-if="!isTauri()" class="mt-3" density="compact" type="info" variant="tonal">
+        浏览器无法读取系统壁纸，请在桌面应用中使用此选项。
+      </v-alert>
+      <v-alert v-if="wallpaperError" class="mt-3" density="compact" type="warning" variant="tonal">
+        {{ wallpaperError }}
+      </v-alert>
+      <v-alert v-if="settingsError" class="mt-3" density="compact" type="warning" variant="tonal">
+        设置保存失败：{{ settingsError }}
+      </v-alert>
+      <v-row v-if="selectedColorMode === 'color'" density="compact" class="mt-2">
+        <v-col cols="12" sm="6">
+          <v-color-input
+            :model-value="primaryColor"
+            label="主题色"
+            mode="hex"
+            clearable
+            variant="solo-filled"
+            density="compact"
+            hide-details
+            hide-actions
+            @update:model-value="updatePrimaryColor"
+          />
+        </v-col>
+      </v-row>
+    </section>
 
-      <v-divider class="my-6" />
+    <v-divider class="my-6" />
 
-      <section>
-        <div class="d-flex align-center justify-space-between mb-4">
-          <div>
-            <v-card-title class="text-subtitle-1 pa-0">主题色</v-card-title>
-            <v-card-subtitle class="text-body-2 pa-0">清空颜色可恢复 Vuetify 默认蓝色</v-card-subtitle>
-          </div>
-          <v-chip size="small" color="primary" variant="tonal">{{ primaryColor }}</v-chip>
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <div>
+          <div class="settings-section-title">画布预览</div>
+          <div class="settings-section-caption">当前外观下的笔记画布</div>
         </div>
-        <v-btn-toggle
-          :model-value="selectedColorMode"
-          color="primary"
-          divided
-          mandatory
-          density="comfortable"
-          @update:model-value="selectColorMode"
-        >
-          <v-btn value="wallpaper" :prepend-icon="mdiImageFilterHdr" :loading="isLoadingWallpaper" :disabled="!isTauri()">
-            壁纸取色
-          </v-btn>
-          <v-btn value="color" :prepend-icon="mdiPaletteOutline">颜色</v-btn>
-        </v-btn-toggle>
-        <v-alert v-if="!isTauri()" class="mt-3" density="compact" type="info" variant="tonal">
-          浏览器无法读取系统壁纸，请在桌面应用中使用此选项。
-        </v-alert>
-        <v-alert v-if="wallpaperError" class="mt-3" density="compact" type="warning" variant="tonal">
-          {{ wallpaperError }}
-        </v-alert>
-        <v-alert v-if="settingsError" class="mt-3" density="compact" type="warning" variant="tonal">
-          设置保存失败：{{ settingsError }}
-        </v-alert>
-        <v-row v-if="selectedColorMode === 'color'" density="compact" class="mt-2">
-          <v-col cols="12" sm="6">
-            <v-color-input
-              :model-value="primaryColor"
-              label="主题色"
-              mode="hex"
-              clearable
-              variant="solo-filled"
-              density="compact"
-              hide-details
-              hide-actions
-              @update:model-value="updatePrimaryColor"
-            />
-          </v-col>
-        </v-row>
-      </section>
-
-      <v-divider class="my-6" />
-
-      <section>
-        <div class="d-flex align-center justify-space-between mb-4">
-          <div>
-            <v-card-title class="text-subtitle-1 pa-0">画布预览</v-card-title>
-            <v-card-subtitle class="text-body-2 pa-0">当前外观下的笔记画布</v-card-subtitle>
-          </div>
-          <v-chip size="small" color="primary" variant="tonal">100%</v-chip>
+        <v-chip size="small" color="primary" variant="tonal">100%</v-chip>
+      </div>
+      <v-card class="canvas-preview" variant="flat" rounded="sm">
+        <div class="canvas-grid d-flex align-center justify-center ga-7 pa-6" :style="{ backgroundColor: currentCanvasColor }">
+          <v-card class="note note-main d-flex flex-column align-start ga-2 pa-3" elevation="1">
+            <v-card-subtitle class="text-caption text-primary pa-0">灵感 · 01</v-card-subtitle>
+            <span class="note-line note-line-long" />
+            <span class="note-line note-line-short" />
+            <v-chip size="x-small" color="primary" variant="tonal">随手记下</v-chip>
+          </v-card>
+          <v-card class="note note-side d-flex flex-column align-start ga-2 pa-3" elevation="1">
+            <v-card-subtitle class="text-caption text-primary pa-0">稍后整理</v-card-subtitle>
+            <span class="note-line note-line-long" />
+            <span class="note-line note-line-medium" />
+          </v-card>
         </div>
-        <v-card class="canvas-preview" variant="flat" rounded="sm">
-          <div class="canvas-grid d-flex align-center justify-center ga-7 pa-6" :style="{ backgroundColor: currentCanvasColor }">
-            <v-card class="note note-main d-flex flex-column align-start ga-2 pa-3" elevation="1">
-              <v-card-subtitle class="text-caption text-primary pa-0">灵感 · 01</v-card-subtitle>
-              <span class="note-line note-line-long" />
-              <span class="note-line note-line-short" />
-              <v-chip size="x-small" color="primary" variant="tonal">随手记下</v-chip>
-            </v-card>
-            <v-card class="note note-side d-flex flex-column align-start ga-2 pa-3" elevation="1">
-              <v-card-subtitle class="text-caption text-primary pa-0">稍后整理</v-card-subtitle>
-              <span class="note-line note-line-long" />
-              <span class="note-line note-line-medium" />
-            </v-card>
-          </div>
-        </v-card>
-      </section>
-    </v-container>
-  </v-sheet>
+      </v-card>
+    </section>
+  </MdrSettingsPageBase>
 </template>
 <style scoped>
 .theme-preview {

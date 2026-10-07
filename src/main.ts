@@ -14,7 +14,7 @@ const routes = [
   { path: '/set', component: NoteSet, meta: { level: 1, title: '便签集' } },
   { path: '/board', component: () => import('./Views/NoteBoard.vue'), meta: { level: 2, title: '记事板' } },
   { path: '/editor/:fileName', name: 'editor', component: loadEditorComponent, meta: { level: 100, title: '编辑' } },
-  { path: '/settings/:tab', component: () => import('./Views/Settings.vue'), meta: { level: 3, title: '设置' } },
+  { path: '/settings/:tab', component: () => import('./Views/Settings.vue'), meta: { level: 3, title: '设置', toolbarTabs: true } },
   { path: '/debug', component: () => import('./Views/Debug.vue'), meta: { level: 4, title: '调试' } },
 ]
 
