@@ -387,6 +387,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   width: 100%;
+  /* 富文本内嵌时外层容器高度由缩放手柄决定，不铺满会让右下角手柄浮在代码块下方的空白里 */
+  height: 100%;
   min-width: 300px;
   min-height: 200px;
 }
