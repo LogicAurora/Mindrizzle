@@ -2,7 +2,8 @@ import type { NodeJSON } from '@prosekit/core'
 import { defineAsyncComponent } from 'vue'
 import type { EditorCommands } from './RichEditor/extension.ts'
 import RichTextEditor, { isHeightChangable as isRichTextHeightChangable } from './RichEditor/RichTextEditor.vue'
-import { CODE_BLOCK_CONSTRAINTS, RICH_TEXT_CONSTRAINTS } from './componentConstraints.ts'
+import CanvasTestBench from './EditorComponents/CanvasTestBench.vue'
+import { CODE_BLOCK_CONSTRAINTS, RICH_TEXT_CONSTRAINTS, TEST_BENCH_CONSTRAINTS } from './componentConstraints.ts'
 import { normalizeConstraints, type ResizeConstraints } from './resizeConstraints.ts'
 
 // highlight.js 内核与十余种语言语法包体积超过主包，所以仅在渲染代码块时按需加载
@@ -18,8 +19,14 @@ export interface CodeBlockConfig {
   language: string
 }
 
-export type WidgetConfig = RichTextConfig | CodeBlockConfig
-export type ComponentKey = 'RichTextEditor' | 'EditableCodeBlock'
+export interface TestBenchConfig {
+  counter: number
+  note: string
+  showViewport?: boolean
+}
+
+export type WidgetConfig = RichTextConfig | CodeBlockConfig | TestBenchConfig
+export type ComponentKey = 'RichTextEditor' | 'EditableCodeBlock' | 'CanvasTestBench'
 
 export const DEFAULT_COMPONENT_KEY: ComponentKey = 'RichTextEditor'
 
@@ -80,6 +87,7 @@ export interface AddableComponentMeta {
 export const componentMap = {
   RichTextEditor,
   EditableCodeBlock,
+  CanvasTestBench,
 }
 
 export const ADDABLE_COMPONENTS: AddableComponentMeta[] = [
@@ -113,6 +121,13 @@ export const ADDABLE_COMPONENTS: AddableComponentMeta[] = [
       }),
     },
   },
+  {
+    key: 'CanvasTestBench',
+    label: '测试台',
+    addId: 'add-test',
+    defaultConfig: () => ({ counter: 0, note: '', showViewport: true }),
+    defaultSize: { w: 420, h: 360 },
+  },
 ]
 
 export const componentMetaOf = (key: ComponentKey) =>
@@ -131,6 +146,7 @@ export const widthChangableOf = (item: Pick<CanvasItem, 'component' | 'config'>)
 const componentConstraints: Partial<Record<ComponentKey, ResizeConstraints>> = {
   RichTextEditor: RICH_TEXT_CONSTRAINTS,
   EditableCodeBlock: CODE_BLOCK_CONSTRAINTS,
+  CanvasTestBench: TEST_BENCH_CONSTRAINTS,
 }
 
 const CANVAS_DEFAULT_CONSTRAINTS: Required<ResizeConstraints> = {

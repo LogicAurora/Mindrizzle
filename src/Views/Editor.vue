@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, inject, nextTick } from 'vue'
-import { mdiFormatHeader1, mdiFormatUnderline, mdiFormatBold, mdiFormatItalic, mdiMouse, mdiNoteText, mdiCodeBraces, mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
+import { mdiFormatHeader1, mdiFormatUnderline, mdiFormatBold, mdiFormatItalic, mdiMouse, mdiNoteText, mdiCodeBraces, mdiFlaskOutline, mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { error as logError } from '@tauri-apps/plugin-log'
@@ -117,6 +117,7 @@ const componentOf = computed(() => {
 const ADD_OPTIONS = [
   { key: 'RichTextEditor', label: '富文本', icon: mdiNoteText, addId: 'add-rich' },
   { key: 'EditableCodeBlock', label: '代码块', icon: mdiCodeBraces, addId: 'add-code' },
+  { key: 'CanvasTestBench', label: '测试台', icon: mdiFlaskOutline, addId: 'add-test' },
 ] as const
 const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0)
 // 添加类型单选索引

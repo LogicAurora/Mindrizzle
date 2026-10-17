@@ -13,3 +13,10 @@ export const CODE_BLOCK_CONSTRAINTS: ResizeConstraints = {
   minHeight: 210,
   maxHeight: null,
 }
+
+export const TEST_BENCH_CONSTRAINTS: ResizeConstraints = {
+  minWidth: 340,
+  maxWidth: null,
+  minHeight: 260,
+  maxHeight: null,
+}
