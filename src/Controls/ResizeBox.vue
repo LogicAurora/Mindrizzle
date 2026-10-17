@@ -172,6 +172,8 @@ const cleanup = () => {
   window.removeEventListener('mouseup', onUp)
 }
 onUnmounted(cleanup)
+
+defineExpose({ rootEl })
 </script>
 
 <template>

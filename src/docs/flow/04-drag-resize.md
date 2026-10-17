@@ -1,13 +1,15 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-17 -->
 # 04 拖拽与缩放
 
 ## 图 4.1 拖拽主流程
 
 ```mermaid
 flowchart TD
-  A["startCustomDrag(item, e)"] --> B["selectForDrag 选中"]
-  B --> C["收集 customDragGroup"]
-  C --> D["collectLinkedIds 联结块"]
+  A["MdrCanvasComponentBase 拖拽栏 mousedown"] --> A2["emit dragstart"]
+  A2 --> B["MdrCanvas startCustomDrag(item, e)"]
+  B --> C["selectForDrag 选中"]
+  C --> C2["收集 customDragGroup"]
+  C2 --> D["collectLinkedIds 联结块"]
   D --> E["cacheDragDom 缓存 DOM 引用"]
   E --> F["挂 window pointermove/mousemove 捕获"]
   F --> G["startAutoPan()"]
@@ -132,6 +134,9 @@ flowchart TD
 
 ## 维护提示
 
+- 改拖拽主流程 → 更新图 4.1
+- 改联结传播 → 更新图 4.4
+- 组件声明尺寸可变性 → 改 `canvasComponents.ts` 注册项的 `widthChangableOf` / `heightChangableOf`，画布与 base 都只读注册结果
 - 改拖拽吸附逻辑 → 更新图 4.1，并补充相关回归验证
 - 改 propagateLinkedEdges → 更新图 4.4 + 加特征测试
 - 改命令式同步 → 更新图 4.2

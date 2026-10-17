@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-17 -->
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -25,7 +25,6 @@ flowchart LR
   BH -->|"Mindrizzle:block-popup-top"| MC
   BH -->|"Mindrizzle:block-handle-active"| MC
 
-  RTE -->|"Mindrizzle:auto-height"| MC
   RTE -->|"Mindrizzle:scrollbar-drag"| BH
   RTE -->|"Mindrizzle:rich-text-read-only"| VCN
 
@@ -42,7 +41,6 @@ flowchart LR
 | `Mindrizzle:block-popup` | block-handle | MdrCanvas | popup 遮挡 tm 手柄 |
 | `Mindrizzle:block-popup-top` | block-handle | MdrCanvas | popup 上方开启 |
 | `Mindrizzle:block-handle-active` | block-handle | MdrCanvas | popup 激活 |
-| `Mindrizzle:auto-height` | RichTextEditor | MdrCanvas | 上报内容高度 + 光标 y |
 | `Mindrizzle:canvas-pan` | useBlockDrag | MdrCanvas | 拖拽贴边驱动画布平移 |
 | `Mindrizzle:extract-component` | vue-component | MdrCanvas | 插入组件拖出成块 |
 | `Mindrizzle:rich-text-read-only` | RichTextEditor | vue-component | 只读态同步 |
@@ -53,7 +51,8 @@ flowchart LR
 ```mermaid
 flowchart TB
   subgraph 定义方
-    MC["MdrCanvas 定义<br/>.canvas-container<br/>.canvas<br/>.handle-tm<br/>.floating-handle<br/>.side-settings"]
+    MC["MdrCanvas 定义<br/>.canvas-container<br/>.canvas<br/>.handle-tm<br/>.selected-outline"]
+    MCB["MdrCanvasComponentBase 定义<br/>.floating-handle<br/>.side-settings<br/>.block-container"]
     RB["ResizeBox 定义<br/>.drag-wrapper[data-id]"]
     RTE["RichTextEditor 定义<br/>.editor-wrapper<br/>.editor-scroll<br/>.editor-scroll-shell<br/>.custom-scrollbar"]
     PK["ProseKit 定义<br/>.ProseMirror"]
@@ -93,15 +92,18 @@ flowchart TB
 | `.canvas-container` | MdrCanvas | useBlockDrag / blockHandleUtils / useHoverState |
 | `.canvas` | MdrCanvas | block-handle（Teleport 目标） / blockHandleUtils |
 | `.drag-wrapper[data-id]` | ResizeBox | 几乎全部 |
+| `.mdr-canvas-component[data-uuid]` | MdrCanvasComponentBase | 调试 / 块实例定位 |
+| `.component-settings-menu` | MdrCanvasComponentBase | 块设置菜单（挂 body、视觉坐标） |
 | `.editor-wrapper` | RichTextEditor | useBlockDrag / useHoverUi |
 | `.editor-scroll` | RichTextEditor | blockHandleUtils / useHoverUi |
 | `.ProseMirror` | ProseKit | 所有 hook |
 | `.block-handle-popup[data-block-id]` | block-handle | block-handle / useBlockDrag |
 | `.block-handle-positioner[data-owner]` | block-handle | blockHandleUtils |
-| `.handle-tm` / `.floating-handle` / `.side-settings` | MdrCanvas | useHoverState / useHoverUi |
+| `.handle-tm` / `.floating-handle` / `.side-settings` | MdrCanvas（`.handle-tm`）/ MdrCanvasComponentBase（浮层） | useHoverState / useHoverUi |
 | `.custom-scrollbar` / `.editor-scroll-shell` | RichTextEditor | block-handle |
 
 ## 维护提示
 
 - **改任何事件名或选择器名 → 先查这两张表**，再 grep 确认
 - 新增事件 / 选择器 → 同步更新图与表
+- 块内组件经 `COMPONENT_CONTROLLER_KEY` / `CANVAS_CONTROLLER_KEY` 申请移动、改尺寸、平移、缩放或读视图数据，不再直接触碰画布状态；自动高度经 `resizeTo`，光标跟随经 `getViewData` + `panBy`

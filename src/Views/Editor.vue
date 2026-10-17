@@ -492,7 +492,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 500px;
+  /* 小窗口下 500px 最小高会顶出 v-main 滚动条，所以只保证不塌陷 */
+  min-height: 0;
 }
 
 .toolbar {

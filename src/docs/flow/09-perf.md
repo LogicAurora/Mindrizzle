@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-17 -->
 # 09 性能：节流与缓存
 
 ## 图 9.1 rAF 节流点汇总
@@ -23,11 +23,10 @@ flowchart TB
 ```mermaid
 flowchart TB
   subgraph WeakMap 缓存
-    A["componentPropCache<br/>按 CanvasItem 缓存 props"]
-    B["componentRefHandlers<br/>按 CanvasItem 缓存 ref 回调"]
-    C["autoHeightHandlers<br/>按 CanvasItem 缓存回调"]
-    D["resizeCallbackCache<br/>按 CanvasItem 缓存 resize 回调"]
-    E["canvasScaleCache<br/>按 .canvas 元素缓存换算系数"]
+    A["componentRefHandlers<br/>按 CanvasItem 缓存 ref 回调"]
+    B["resizeCallbackCache<br/>按 CanvasItem 缓存 resize 回调"]
+    C["interactionHandlerCache<br/>按 CanvasItem 缓存 controller 回调"]
+    D["canvasScaleCache<br/>按 .canvas 元素缓存换算系数"]
   end
   subgraph 显式缓存
     F["edgeMasksMap / cornerHitsMap<br/>shallowRef + recomputeMasks"]

@@ -1,7 +1,7 @@
 import type { NodeJSON } from '@prosekit/core'
 import { defineAsyncComponent } from 'vue'
 import type { EditorCommands } from './RichEditor/extension.ts'
-import RichTextEditor from './RichEditor/RichTextEditor.vue'
+import RichTextEditor, { isHeightChangable as isRichTextHeightChangable } from './RichEditor/RichTextEditor.vue'
 import { CODE_BLOCK_CONSTRAINTS, RICH_TEXT_CONSTRAINTS } from './componentConstraints.ts'
 import { normalizeConstraints, type ResizeConstraints } from './resizeConstraints.ts'
 
@@ -20,6 +20,14 @@ export interface CodeBlockConfig {
 
 export type WidgetConfig = RichTextConfig | CodeBlockConfig
 export type ComponentKey = 'RichTextEditor' | 'EditableCodeBlock'
+
+export const DEFAULT_COMPONENT_KEY: ComponentKey = 'RichTextEditor'
+
+// 块配置 ↔ 富文本内可插入节点的映射，具体组件在注册项里声明
+export interface ComponentNodeMapping {
+  name: string
+  props: Record<string, unknown>
+}
 
 export interface ComponentController {
   saveConfig?: () => Partial<WidgetConfig>
@@ -56,6 +64,17 @@ export interface AddableComponentMeta {
   addId: string
   defaultConfig: () => WidgetConfig
   defaultSize: { w: number; h: number }
+  widthChangableOf?: (config: WidgetConfig) => boolean
+  heightChangableOf?: (config: WidgetConfig) => boolean
+  // 可接收画布拖拽落点（如富文本）
+  acceptsDrop?: boolean
+  // 块配置转为富文本内可插入的节点（把块拖入富文本用）
+  toNode?: (config: WidgetConfig) => ComponentNodeMapping | null
+  // 富文本节点拖出成块（从富文本抽出块用）
+  extractFromNode?: {
+    nodeName: string
+    toConfig: (props: Record<string, unknown>) => WidgetConfig
+  }
 }
 
 export const componentMap = {
@@ -70,6 +89,8 @@ export const ADDABLE_COMPONENTS: AddableComponentMeta[] = [
     addId: 'add-rich',
     defaultConfig: () => ({ content: null }),
     defaultSize: { w: 400, h: 300 },
+    heightChangableOf: (config) => isRichTextHeightChangable(config as RichTextConfig),
+    acceptsDrop: true,
   },
   {
     key: 'EditableCodeBlock',
@@ -80,6 +101,17 @@ export const ADDABLE_COMPONENTS: AddableComponentMeta[] = [
       language: 'javascript',
     }),
     defaultSize: { w: 400, h: 250 },
+    toNode: (config) => {
+      const codeConfig = config as CodeBlockConfig
+      return { name: 'CodeBlock', props: { modelValue: codeConfig.code, language: codeConfig.language } }
+    },
+    extractFromNode: {
+      nodeName: 'CodeBlock',
+      toConfig: (props) => ({
+        code: (props.modelValue as string | undefined) ?? '',
+        language: (props.language as string | undefined) ?? 'javascript',
+      }),
+    },
   },
 ]
 
@@ -88,6 +120,13 @@ export const componentMetaOf = (key: ComponentKey) =>
 
 export const componentLabelOf = (key: ComponentKey) =>
   componentMetaOf(key)?.label ?? key
+
+// 组件注册项声明自身尺寸可变性，画布据此判断联结该不该改它
+export const heightChangableOf = (item: Pick<CanvasItem, 'component' | 'config'>): boolean =>
+  componentMetaOf(item.component)?.heightChangableOf?.(item.config) ?? true
+
+export const widthChangableOf = (item: Pick<CanvasItem, 'component' | 'config'>): boolean =>
+  componentMetaOf(item.component)?.widthChangableOf?.(item.config) ?? true
 
 const componentConstraints: Partial<Record<ComponentKey, ResizeConstraints>> = {
   RichTextEditor: RICH_TEXT_CONSTRAINTS,

@@ -11,71 +11,16 @@
         <div v-for="line in linkedConnections" :key="line.key" class="connection-segment"
           :style="connectionSegmentStyle(line)" />
       </div>
-      <ResizeBox v-for="item in state.items" :key="`${item.id}-${mobileMode ? 'm' : 'd'}`"
-        :data-id="item.id" :item-id="item.id" :z-index="blockZ(item.id)" :active="isActive(item.id)" :x="layoutOf(item).x"
-        :y="layoutOf(item).y" :w="layoutOf(item).w" :h="layoutOf(item).h"
-        :min-width="(constraintsOf(item).minWidth ?? 0) + 8" :min-height="(constraintsOf(item).minHeight ?? 0) + 8"
-        :max-width="constraintsOf(item).maxWidth ?? null" :max-height="constraintsOf(item).maxHeight ?? null"
-        :handles="resizeHandlesOf(item)" :disabled="!isEditMode" :dragging="customDrag.draggingIds.has(item.id)" :zoom="zoom"
-        @resizestart="resizeCallbacksOf(item).start" @resizing="resizeCallbacksOf(item).resizing"
-        @resizestop="resizeCallbacksOf(item).resizestop" class="drag-wrapper"
-        :class="{ selected: isEditMode && state.selectedIds.has(item.id), 'popup-open': popupBlockId === item.id, 'drag-passthrough': customDrag.draggingIds.has(item.id) }">
-        <v-sheet class="block-container" color="surface" elevation="0" rounded :style="cornerStyleOf(item.id)">
-          <!-- 只盖接触段、露出段保留边框，所以按段渲染同色遮罩 -->
-          <template v-for="m in masksOf(item.id)" :key="`${m.side}-${m.start}`">
-            <div class="edge-mask" :style="maskStyle(m)" />
-          </template>
-          <div class="content-area">
-            <!-- 视口外的块只留静态快照，省掉 ProseMirror 的插件 state、RO 与逐块 window 捕获监听 -->
-            <component v-if="!isVirtualized(item.id)" :is="componentMap[item.component as keyof typeof componentMap]"
-              :ref="componentRefOf(item)" v-bind="getComponentProps(item)"
-              @update:model-value="(val: string) => updateCode(item.id, val)"
-              @update:language="(lang: string) => updateLanguage(item.id, lang)" class="inner-component" />
-            <div v-else class="virtual-snapshot" v-html="virtualSnapshots[item.id]" />
-          </div>
-        </v-sheet>
-      </ResizeBox>
+      <component v-for="item in state.items" :key="`${item.id}-${mobileMode ? 'm' : 'd'}`"
+        :is="componentMap[item.component]" :ref="componentRefOf(item)" :config="item.config"
+        :virtualized="isVirtualized(item.id)" :snapshot="virtualSnapshots[item.id] ?? ''"
+        :base="blockBasePropsOf(item)" @resizestart="resizeCallbacksOf(item).start"
+        @resizing="resizeCallbacksOf(item).resizing" @resizestop="resizeCallbacksOf(item).resizestop"
+        @dragstart="onFloatingHandleDown(item, $event)" />
 
       <v-fade-transition :duration="120">
         <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle"></div>
       </v-fade-transition>
-      <Transition name="pop-up">
-        <!-- 多选时多个拖拽栏互相干扰，所以只显 hover 命中块（拖拽中只显源块） -->
-        <div v-if="floatingHandleItem" :key="floatingHandleItem.id" class="floating-handle drag-handle"
-          :class="{ 'handle-bottom': handlePlacementOf(floatingHandleItem) === 'bottom' }"
-          :data-id="floatingHandleItem.id" :style="handleBarStyle(floatingHandleItem)"
-          @mousedown="onFloatingHandleDown">
-          <v-icon size="16" color="on-surface-variant" :icon="mdiDragVariant" class="mr-1" />
-          <span class="text-caption text-medium-emphasis user-select-none">
-            {{ componentLabelOf(floatingHandleItem.component) }}
-          </span>
-        </div>
-      </Transition>
-
-      <!-- 块级设置需独立于内容区，所以在块右侧单开一栏 -->
-      <Transition name="pop-up">
-        <div v-if="sideSettingsItem" :key="sideSettingsItem.id"
-          class="side-settings" :class="{ 'handle-bottom': handlePlacementOf(sideSettingsItem) === 'bottom' }"
-          :data-id="sideSettingsItem.id" :style="sideSettingsStyle(sideSettingsItem)">
-          <v-menu location="bottom end" :close-on-content-click="false" :close-on-back="false">
-            <template #activator="{ props: menuProps }">
-              <v-btn v-bind="menuProps" size="x-small" variant="tonal" color="grey" icon
-                title="块设置" @mousedown.stop @click.stop>
-                <v-icon :icon="mdiCogOutline" size="13" />
-              </v-btn>
-            </template>
-            <v-card min-width="240" class="auto-height-menu">
-              <v-list density="compact">
-                <v-list-item>
-                  <v-switch :model-value="isAutoHeight(sideSettingsItem)" color="primary"
-                    label="高度自适应内容" hint="块高随内容自动调整" persistent-hint hide-details
-                    @update:model-value="onAutoHeightToggle" />
-                </v-list-item>
-              </v-list>
-            </v-card>
-          </v-menu>
-        </div>
-      </Transition>
 
       <!-- 描边需在拖拽栏之上保持连贯，所以用独立高层 overlay 渲染（data-id 供拖拽期命令式跟随） -->
       <template v-for="item in selectedOutlineItems" :key="`outline-${item.id}`">
@@ -122,22 +67,34 @@ export type {
 
 <script setup lang="ts">
 import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, watch, markRaw, type CSSProperties } from 'vue'
-import ResizeBox from './ResizeBox.vue'
 
-import { mdiDragVariant, mdiPaperclip, mdiCogOutline, mdiArrowUp } from '@mdi/js'
+import { mdiPaperclip, mdiArrowUp } from '@mdi/js'
 import {
   ADDABLE_COMPONENTS,
+  DEFAULT_COMPONENT_KEY,
   componentLabelOf,
   componentMap,
   componentMetaOf,
   constraintsOf,
+  heightChangableOf,
+  widthChangableOf,
   type CanvasItem,
   type ComponentController,
-  type RichTextConfig,
-  type CodeBlockConfig,
   type Rect,
   type WidgetConfig,
 } from './canvasComponents.ts'
+import {
+  handleBarStyleOf,
+  sideSettingsStyleOf,
+  settingsBarRectOf as settingsBarRectOfContent,
+  HANDLE_GAP,
+  HANDLE_HEIGHT,
+  OUTLINE_PX,
+  type EdgeMask,
+  type HandlePlacement,
+} from './blockFloatGeometry.ts'
+import type { BlockInteractionHandlers, BlockSize, CanvasViewData } from './canvasComponentControllers.ts'
+import type { MdrCanvasComponentShellProps } from './MdrCanvasComponentBase.types.ts'
 import type { ResizeConstraints } from './resizeConstraints.ts'
 import { Z_LAYER } from './zIndex.ts'
 import { roundToVisual, contentToScreen, screenToContent, contentToVisual, type CanvasTransform, type Point, type ViewportOrigin } from '../utils/canvasCoords.ts'
@@ -584,11 +541,7 @@ const selectionBoxStyle = computed(() => {
 })
 // #endregion 框选状态
 
-// #region 组件数据读写
-// 逐次渲染返回新 props/回调对象会让子组件判定变更而逐个重渲染，所以按块缓存、值全等时复用
-const componentPropCache = new WeakMap<CanvasItem, Record<string, any>>()
 const componentRefHandlers = new WeakMap<CanvasItem, (el: unknown) => void>()
-const autoHeightHandlers = new WeakMap<CanvasItem, (v: boolean) => void>()
 
 const componentRefOf = (item: CanvasItem) => {
   const cached = componentRefHandlers.get(item)
@@ -598,58 +551,47 @@ const componentRefOf = (item: CanvasItem) => {
   return handler
 }
 
-const autoHeightHandlerOf = (item: CanvasItem) => {
-  const cached = autoHeightHandlers.get(item)
-  if (cached) return cached
-  const handler = (v: boolean) => setAutoHeight(item, v)
-  autoHeightHandlers.set(item, handler)
-  return handler
-}
-
-const stableProps = (item: CanvasItem, props: Record<string, any>) => {
-  const cached = componentPropCache.get(item)
-  if (cached) {
-    const keys = Object.keys(props)
-    if (keys.length === Object.keys(cached).length && keys.every((key) => cached[key] === props[key])) return cached
-  }
-  componentPropCache.set(item, props)
-  return props
-}
-
-const getComponentProps = (item: CanvasItem) => {
-  if (item.component === 'RichTextEditor') {
-    const cfg = item.config as RichTextConfig
-    return stableProps(item, {
-      doc: cfg.content,
-      compact: mobileMode.value,
-      autoHeight: cfg.autoHeight === true,
-      readOnly: !isEditMode.value,
-      'onUpdate:autoHeight': autoHeightHandlerOf(item),
-    })
-  }
-  if (item.component === 'EditableCodeBlock') {
-    const cfg = item.config as CodeBlockConfig
-    return stableProps(item, {
-      modelValue: cfg.code,
-      language: cfg.language,
-      readOnly: !isEditMode.value,
-    })
-  }
-  return {}
-}
-
-const updateCode = (id: string, code: string) => {
-  const item = state.items.find((i) => i.id === id)
-  if (item && item.component === 'EditableCodeBlock') {
-    ; (item.config as CodeBlockConfig).code = code
+// 块组件只收通用壳层属性，块类型相关映射由组件内部自行处理
+const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
+  const layout = layoutOf(item)
+  const c = constraintsOf(item)
+  return {
+    itemId: item.id,
+    uuid: item.id,
+    x: layout.x,
+    y: layout.y,
+    width: layout.w,
+    height: layout.h,
+    minWidth: (c.minWidth ?? 0) + 8,
+    minHeight: (c.minHeight ?? 0) + 8,
+    maxWidth: c.maxWidth,
+    maxHeight: c.maxHeight,
+    compact: mobileMode.value,
+    active: isActive(item.id),
+    dragging: customDrag.draggingIds.has(item.id),
+    showHandle: floatingHandleItem.value?.id === item.id,
+    showSettings: sideSettingsItem.value?.id === item.id,
+    handles: resizeHandlesOf(item),
+    zIndex: blockZ(item.id),
+    zoom: zoom.value,
+    placement: placementOf(item),
+    popupOpen: popupBlockId.value === item.id,
+    cornerStyle: cornerStyleOf(item.id),
+    masks: masksOf(item.id),
+    readOnly: !isEditMode.value,
+    draggable: isEditMode.value,
+    handlers: interactionHandlersOf(item),
   }
 }
 
-const updateLanguage = (id: string, lang: string) => {
-  const item = state.items.find((i) => i.id === id)
-  if (item && item.component === 'EditableCodeBlock') {
-    ; (item.config as CodeBlockConfig).language = lang
-  }
+const writeItemConfig = (item: CanvasItem, patch: Partial<WidgetConfig>) => {
+  item.config = { ...item.config, ...patch } as WidgetConfig
+}
+
+// config 已非响应式，而手柄集合、子组件 props 与联结判定都依赖它，所以结构性变更须显式刷新
+const updateItemConfig = (item: CanvasItem, patch: Partial<WidgetConfig>) => {
+  writeItemConfig(item, patch)
+  markLayoutDirty()
 }
 
 const setComponentRef = (id: string, el: any) => {
@@ -662,11 +604,6 @@ const layoutOf = (item: CanvasItem): Rect => (mobileMode.value ? item.layout.mob
 
 // 接触段要融合、露出段保留边框，所以为每块生成接触段同色遮罩（块内相对坐标）
 // #region 贴合遮罩与圆角
-interface EdgeMask {
-  side: 'l' | 'r' | 't' | 'b'
-  start: number
-  len: number
-}
 const EDGE_TOL = 1
 // 逐帧重算 O(N²) 成本高，所以改为显式缓存：交互期间冻结、收尾按最终布局刷新
 const computeEdgeMasks = (): Record<string, EdgeMask[]> => {
@@ -702,23 +639,6 @@ const computeEdgeMasks = (): Record<string, EdgeMask[]> => {
 }
 const edgeMasksMap = shallowRef<Record<string, EdgeMask[]>>({})
 const masksOf = (id: string): EdgeMask[] => edgeMasksMap.value[id] ?? []
-// 遮罩相对 padding box 定位，所以向外偏 1px 覆盖 border
-const maskStyle = (m: EdgeMask): CSSProperties => {
-  const base: CSSProperties = {
-    position: 'absolute',
-    pointerEvents: 'none',
-    zIndex: 16,
-  }
-  // 接触段需提示可分离，所以在 surface 底色上间隔画淡灰虚线盖住实线 border
-  const dashH = `repeating-linear-gradient(90deg, rgb(var(--v-theme-surface)) 0 4px, rgba(var(--v-theme-on-surface), 0.35) 4px 6px, rgb(var(--v-theme-surface)) 6px 8px)`
-  const dashV = `repeating-linear-gradient(180deg, rgb(var(--v-theme-surface)) 0 4px, rgba(var(--v-theme-on-surface), 0.35) 4px 6px, rgb(var(--v-theme-surface)) 6px 8px)`
-  // 右端会溢出盖住相邻垂直边框，所以长度缩 len-2，使贴合处边框连贯
-  const span = Math.max(m.len - 2, 0)
-  if (m.side === 'l') return { ...base, left: '-1px', top: `${m.start}px`, width: '1px', height: `${span}px`, background: dashV }
-  if (m.side === 'r') return { ...base, right: '-1px', top: `${m.start}px`, width: '1px', height: `${span}px`, background: dashV }
-  if (m.side === 't') return { ...base, top: '-1px', left: `${m.start}px`, height: '1px', width: `${span}px`, background: dashH }
-  return { ...base, bottom: '-1px', left: `${m.start}px`, height: '1px', width: `${span}px`, background: dashH }
-}
 
 // 保留圆角会在接触边两端露弧形缺口，所以接触角归零圆角
 const ROUNDED = 4
@@ -777,54 +697,18 @@ const scheduleGeometryRefresh = () => {
 
 // 块贴近视口顶部时上方放不下手柄，所以按块视觉位置决定放上/下方
 // #region 手柄与描边样式
-const HANDLE_HEIGHT = 28
-const handlePlacementOf = (item: CanvasItem): 'top' | 'bottom' =>
+const handlePlacementOf = (item: CanvasItem): HandlePlacement =>
   visualY(layoutOf(item).y) < Math.round(HANDLE_HEIGHT * zoom.value) ? 'bottom' : 'top'
 
-const handleBarStyle = (item: CanvasItem): CSSProperties => {
-  const layout = layoutOf(item)
-  // 拖拽中 handlePlacementOf 会切换放置导致手柄与块分离，所以拖拽期间锁定 placementLocked
-  const dragging = customDrag.active && !!customDragGroup[item.id]
-  const bottom = dragging ? customDrag.placementLocked : handlePlacementOf(item) === 'bottom'
-  // round(y*zoom) 不一致会露 1px 缝隙，所以分别取整使手柄贴齐块视觉边缘
-  const handleTop = bottom
-    ? roundToPx(layout.y + layout.h)
-    : roundToPx(layout.y) - roundToPx(HANDLE_HEIGHT)
-  return {
-    position: 'absolute',
-    top: `${handleTop}px`,
-    left: `${roundToPx(layout.x + 10)}px`,
-    height: `${roundToPx(HANDLE_HEIGHT)}px`,
-    // 手柄脱离块内层叠上下文，所以置 Z_LAYER.dragHandle 保证高于选中块与描边环
-    zIndex: Z_LAYER.dragHandle,
-    padding: '0 10px',
-    display: 'flex',
-    alignItems: 'center',
-    cursor: 'grab',
-    whiteSpace: 'nowrap',
-    // 内联 transform 会压掉 transition 滑出动画，所以改用 CSS 变量 --handle-y/--handle-slide 组合进动画
-    '--handle-y': '0px',
-    '--handle-slide': `${bottom ? -HANDLE_HEIGHT : HANDLE_HEIGHT}px`,
+// 拖拽中块位置持续变化会让上方空间翻转、手柄与块分离，所以拖拽期锁定放置
+const placementOf = (item: CanvasItem): HandlePlacement => {
+  if (customDrag.active && customDrag.sourceItemId === item.id) {
+    return customDrag.placementLocked ? 'bottom' : 'top'
   }
-}
-
-// 设置栏与拖拽栏同放置逻辑，显示在块右上角
-const SIDE_SETTINGS_WIDTH = 28
-const SIDE_SETTINGS_MARGIN = 8
-const sideSettingsStyle = (item: CanvasItem): CSSProperties => {
-  const l = layoutOf(item)
-  const bottom = handlePlacementOf(item) === 'bottom'
-  const top = bottom ? roundToPx(l.y + l.h) : roundToPx(l.y) - roundToPx(HANDLE_HEIGHT)
-  return {
-    position: 'absolute',
-    top: `${top}px`,
-    left: `${roundToPx(l.x + l.w) - roundToPx(SIDE_SETTINGS_WIDTH) - roundToPx(SIDE_SETTINGS_MARGIN)}px`,
-    zIndex: Z_LAYER.dragHandle,
-  }
+  return handlePlacementOf(item)
 }
 
 // 描边环相对块边缘外扩 2px
-const OUTLINE_PX = 2
 const selectedOutlineStyle = (item: CanvasItem): CSSProperties => {
   const l = layoutOf(item)
   // 归属块拖拽栏需盖住别的块高亮又不遮断自己，所以其描边环用 outline（1002）
@@ -1122,8 +1006,10 @@ const syncDragDom = () => {
   })
   const source = customDrag.sourceItemId ? customDragItems.get(customDrag.sourceItemId) : null
   if (!source) return
-  if (dragHandleEl) applyElStyle(dragHandleEl, handleBarStyle(source))
-  if (dragSettingsEl) applyElStyle(dragSettingsEl, sideSettingsStyle(source))
+  // zoom 变化会让子组件用冻结的 prop 重写 transform，所以拖拽中按最新 layout 补写浮层位置
+  const geometry = { layout: layoutOf(source), placement: placementOf(source), round: roundToPx }
+  if (dragHandleEl) applyElStyle(dragHandleEl, handleBarStyleOf(geometry))
+  if (dragSettingsEl) applyElStyle(dragSettingsEl, sideSettingsStyleOf(geometry))
 }
 
 const clearDragDom = () => {
@@ -1215,7 +1101,8 @@ const findRichTextDropTarget = (): string | null => {
     canvasTransform(), viewport, sourceLayout.x + sourceLayout.w, sourceLayout.y + sourceLayout.h,
   )
   for (const target of state.items) {
-    if (target.id === source.id || target.component !== 'RichTextEditor') continue
+    // 只有声明可接收落点的组件才参与命中（如富文本）
+    if (target.id === source.id || !componentMetaOf(target.component)?.acceptsDrop) continue
     const targetLayout = layoutOf(target)
     const targetTopLeft = contentToScreen(canvasTransform(), viewport, targetLayout.x, targetLayout.y)
     const targetBottomRight = contentToScreen(
@@ -1479,26 +1366,13 @@ const connectionPoint = (a: Rect, b: Rect): { x: number; y: number } => {
 
 // 层级已在 zIndex.ts 固定，所以曲别针无需运行时降 z
 
-// autoHeight 时块高由内容驱动，所以过滤垂直手柄
-const isAutoHeight = (item: CanvasItem): boolean =>
-  item.component === 'RichTextEditor' && (item.config as RichTextConfig).autoHeight === true
-
-const setAutoHeight = (item: CanvasItem, v: boolean) => {
-  if (item.component !== 'RichTextEditor') return
-  ;(item.config as RichTextConfig).autoHeight = v
-  // config 已非响应式，而手柄集合与子组件 props 依赖它，所以显式刷新
-  markLayoutDirty()
-}
-
 // 每次渲染返回新数组会让 ResizeBox 判定 props 变更而重渲染，所以复用常量数组
-const HANDLES_SIDE_ONLY = ['ml', 'mr']
 const HANDLES_MOBILE = ['tm', 'bm']
 const HANDLES_NO_TOP_MIDDLE = ['tl', 'tr', 'ml', 'mr', 'bl', 'bm', 'br']
 const HANDLES_ALL = ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br']
 
-// 手柄已 Teleport 脱离 .drag-wrapper（CSS 隐藏规则失效），所以按 popup 显隐过滤 tm 手柄
+// 手柄已 Teleport 脱离 .drag-wrapper（CSS 隐藏规则失效），所以按 popup 显隐过滤 tm 手柄；可变形由 base 按 changable 收窄
 const resizeHandlesOf = (item: CanvasItem): string[] => {
-  if (isAutoHeight(item)) return HANDLES_SIDE_ONLY
   if (mobileMode.value) return HANDLES_MOBILE
   if (popupBlockId.value === item.id) return HANDLES_NO_TOP_MIDDLE
   return HANDLES_ALL
@@ -1522,6 +1396,79 @@ const resizeCallbacksOf = (item: CanvasItem): ResizeCallbacks => {
   resizeCallbackCache.set(item, callbacks)
   return callbacks
 }
+
+// #region 块组件控制器
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 3
+
+// 组件申请移动时沿用联结语义：联动可达块一起走，移动端锁水平
+const moveBlockBy = (item: CanvasItem, dx: number, dy: number) => {
+  if (!isEditMode.value) return
+  const deltaX = mobileMode.value ? 0 : Math.round(dx)
+  const deltaY = Math.round(dy)
+  if (!deltaX && !deltaY) return
+  const targets = mobileMode.value ? [item.id] : Array.from(collectLinkedIds(item.id))
+  const itemMap = new Map(state.items.map((it) => [it.id, it]))
+  targets.forEach((id) => {
+    const target = itemMap.get(id)
+    if (!target) return
+    const layout = layoutOf(target)
+    layout.x += deltaX
+    layout.y += deltaY
+  })
+  markLayoutDirty()
+  recomputeMasks()
+}
+
+// 高度由块自身内容驱动（如自动高度），所以不按 changable 拦截；宽度仍受声明约束
+const resizeBlockTo = (item: CanvasItem, size: Partial<BlockSize>) => {
+  if (!isEditMode.value) return
+  const c = constraintsOf(item)
+  const layout = layoutOf(item)
+  const width = widthChangableOf(item)
+    ? clampVal(Math.round(size.width ?? layout.w), (c.minWidth ?? 0) + 8, c.maxWidth)
+    : layout.w
+  const height = clampVal(Math.round(size.height ?? layout.h), (c.minHeight ?? 0) + 8, c.maxHeight)
+  applyBlockSize(item, width, height)
+}
+
+const panCanvasBy = (dx: number, dy: number) => {
+  if (!mobileMode.value) pan.x += Math.round(dx)
+  pan.y += Math.round(dy)
+}
+
+const zoomCanvasTo = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return
+  zoom.value = clampVal(value, ZOOM_MIN, ZOOM_MAX)
+}
+
+const canvasViewOf = (item: CanvasItem): CanvasViewData => ({
+  zoom: zoom.value,
+  pan: { x: pan.x, y: pan.y },
+  origin: { x: origin.x, y: origin.y },
+  viewport: viewRect.value ? { ...viewRect.value } : null,
+  block: { ...layoutOf(item) },
+  isPanning: isPanning.value,
+})
+
+// 回调逐次渲染换引用会让块组件重渲染，所以按块缓存
+const interactionHandlerCache = new WeakMap<CanvasItem, BlockInteractionHandlers>()
+const interactionHandlersOf = (item: CanvasItem): BlockInteractionHandlers => {
+  const cached = interactionHandlerCache.get(item)
+  if (cached) return cached
+  const handlers: BlockInteractionHandlers = {
+    moveBy: (dx, dy) => moveBlockBy(item, dx, dy),
+    resizeTo: (size) => resizeBlockTo(item, size),
+    panCanvas: panCanvasBy,
+    zoomCanvas: zoomCanvasTo,
+    getCanvasView: () => canvasViewOf(item),
+    writeConfig: (patch) => writeItemConfig(item, patch),
+    updateConfig: (patch) => updateItemConfig(item, patch),
+  }
+  interactionHandlerCache.set(item, handlers)
+  return handlers
+}
+// #endregion 块组件控制器
 
 // 候选需两两判定相邻（O(N²)），所以与遮罩一致改为显式缓存，只在布局落定时刷新
 interface PaperclipCandidate {
@@ -1597,11 +1544,9 @@ const resolveDragConflict = () => {
   })
 }
 
-const componentNodeOf = (item: CanvasItem): { name: string; props: Record<string, any> } | null => {
-  if (item.component !== 'EditableCodeBlock') return null
-  const config = item.config as CodeBlockConfig
-  return { name: 'CodeBlock', props: { modelValue: config.code, language: config.language } }
-}
+// 块配置 → 富文本节点由注册项声明，画布不感知具体组件类型
+const componentNodeOf = (item: CanvasItem) =>
+  componentMetaOf(item.component)?.toNode?.(item.config) ?? null
 
 const insertDraggedComponent = (targetId: string, sourceId: string, pos: number | null): boolean => {
   const target = state.items.find((item) => item.id === targetId)
@@ -1772,8 +1717,8 @@ const applyResizeLayout = (item: CanvasItem, propagate: boolean) => {
     (pan.x - rs.panStartX) / zoom.value,
     (pan.y - rs.panStartY) / zoom.value,
   )
-  // autoHeight 块高度由内容定，所以纵向不参与自动滚动补偿
-  if (isAutoHeight(item)) {
+  // 高度由内容驱动的块不参与自动滚动补偿
+  if (!heightChangableOf(item)) {
     final.y = rs.lastBase.y
     final.h = rs.lastBase.h
   }
@@ -1834,8 +1779,8 @@ const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, 
       if (!nStart || !target) return
       const c = constraintsOf(target)
       const minW = (c.minWidth ?? 0) + 8, maxW = c.maxWidth ?? null
-      // autoHeight 块高度由内容定，所以只跟随平移，不参与高度重算
-      const fixedH = isAutoHeight(target) ? (positions[nid]?.h ?? nStart.h) : null
+      // 高度不可变的块只跟随平移，不参与高度重算
+      const fixedH = heightChangableOf(target) ? null : (positions[nid]?.h ?? nStart.h)
       const minH = fixedH ?? (c.minHeight ?? 0) + 8
       const maxH = fixedH ?? c.maxHeight ?? null
       let enqueue = false
@@ -2015,6 +1960,8 @@ const pushColumnBelow = (root: CanvasItem, shift: LinkedShift) => {
   let cursor = rootLayout.y + rootLayout.h
   column.forEach((other) => {
     const layout = layoutOf(other)
+    // 只推动下方块；上方块即使水平重叠也不在推动方向上
+    if (layout.y + layout.h <= rootLayout.y + EDGE_TOL) return
     // 已随联结链就位的块不再推，但要推进推动线，否则其下方块会漏推
     if (shift.moved.has(other.id)) {
       cursor = Math.max(cursor, layout.y + layout.h)
@@ -2038,54 +1985,29 @@ const pushOverlapped = (shift: LinkedShift) => {
     .forEach((seed) => pushColumnBelow(seed, shift))
 }
 
-// 改高复用 resize 的共享边传播，再消解增长造成的重叠
-const applyDesktopHeight = (item: CanvasItem, height: number) => {
+// 尺寸变更复用 resize 的共享边传播，再消解增长造成的重叠
+const applyBlockSize = (item: CanvasItem, width: number, height: number) => {
   const layout = layoutOf(item)
-  const dy = height - layout.h
-  if (dy === 0) return
+  if (layout.w === width && layout.h === height) return
+  if (mobileMode.value) {
+    // 先算 delta 再覆盖高度，使下方堆叠块跟随平移
+    const dy = height - layout.h
+    layout.h = height
+    shiftBlocksBelow(item, dy)
+    scheduleGeometryRefresh()
+    markLayoutDirty()
+    return
+  }
   const shift = buildShiftContext()
   shift.moved.add(item.id)
+  layout.w = width
   layout.h = height
   if (linkedPairs.value.size > 0) {
     propagateLinkedEdges(item, layout, shift.starts).forEach((id) => shift.moved.add(id))
   }
-  if (dy > 0) pushOverlapped(shift)
-}
-
-const onAutoHeight = (e: Event) => {
-  const detail = (e as CustomEvent<{ id?: string; height?: number; cursorY?: number }>).detail
-  if (!detail?.id || typeof detail.height !== 'number') return
-  const item = state.items.find((it) => it.id === detail.id)
-  if (!item || item.component !== 'RichTextEditor') return
-  const minH = (constraintsOf(item).minHeight ?? 0) + 8
-  const h = Math.max(Math.round(detail.height), minH)
-  const layout = layoutOf(item)
-  if (layout.h !== h) {
-    if (mobileMode.value) {
-      // 先算 delta 再覆盖高度，使下方堆叠块跟随平移
-      shiftBlocksBelow(item, h - layout.h)
-      layout.h = h
-    } else {
-      applyDesktopHeight(item, h)
-    }
-    scheduleGeometryRefresh()
-    // 块高变化只写 layout（非响应式），所以必须显式刷新渲染
-    markLayoutDirty()
-  }
-  // 用户手动平移时不应被光标跟随拉回，所以拖拽中跳过
-  if (typeof detail.cursorY === 'number' && !isPanning.value) followCursor(item, detail.cursorY)
-}
-
-const CURSOR_VISIBLE_MARGIN = 24
-const followCursor = (item: CanvasItem, cursorY: number) => {
-  const cont = canvasContainerRef.value
-  if (!cont) return
-  const cr = cont.getBoundingClientRect()
-  const l = layoutOf(item)
-  // 块视觉位置 = 容器顶 + 块坐标*zoom + origin + pan
-  const cursorBottom = cr.top + l.y * zoom.value + origin.y + pan.y + cursorY
-  const over = cursorBottom - (cr.bottom - CURSOR_VISIBLE_MARGIN)
-  if (over > 0) pan.y -= Math.round(over)
+  pushOverlapped(shift)
+  scheduleGeometryRefresh()
+  markLayoutDirty()
 }
 // #endregion 高度自适应
 
@@ -2345,9 +2267,6 @@ const onBlockPopupTopChange = (e: Event) => {
 // 候选改为缓存后，需在 popup 上侧开关/链接变化时显式刷新
 watch([popupTopOpen, linkedPairs], () => { paperclipCandidates.value = computePaperclipCandidates() })
 
-// 手柄与块间留 2px 缝隙，鼠标经过时仍命中手柄所属块，避免焦点转到背后组件
-const HANDLE_GAP = 2
-
 interface ScreenRect {
   left: number
   top: number
@@ -2371,12 +2290,10 @@ const screenRectFactory = (): ScreenRectFactory => {
 const insideScreenRect = (rect: ScreenRect, clientX: number, clientY: number): boolean =>
   clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
 
-// 复刻 sideSettingsStyle 的几何
+// 命中测试不读真实 DOM 矩形，所以复用设置栏同一套几何公式
 const settingsBarRectOf = (rectOf: ScreenRectFactory, item: CanvasItem): ScreenRect | null => {
-  const l = layoutOf(item)
-  const top = handlePlacementOf(item) === 'bottom' ? l.y + l.h : l.y - HANDLE_HEIGHT
-  const left = l.x + l.w - SIDE_SETTINGS_WIDTH - SIDE_SETTINGS_MARGIN
-  return rectOf(left, top, SIDE_SETTINGS_WIDTH, HANDLE_HEIGHT)
+  const rect = settingsBarRectOfContent(layoutOf(item), placementOf(item))
+  return rectOf(rect.x, rect.y, rect.w, rect.h)
 }
 
 // 三个命中判定都只在选中块里找，所以先取选中块小集合（原实现每次 pointermove 都遍历全量块、随块数线性劣化）
@@ -2504,21 +2421,14 @@ const floatingHandleItem = computed(() => {
   const item = floatingOwnerItem.value
   return item && popupBlockId.value !== item.id ? item : null
 })
-const sideSettingsItem = computed(() =>
-  floatingOwnerItem.value?.component === 'RichTextEditor' ? floatingOwnerItem.value : null
-)
+// 设置栏是否出现由块组件自身是否提供设置插槽决定
+const sideSettingsItem = computed(() => floatingOwnerItem.value)
 const selectedOutlineItems = computed(() =>
   isEditMode.value ? state.items.filter((it) => state.selectedIds.has(it.id)) : []
 )
 
-const onFloatingHandleDown = (e: MouseEvent) => {
-  const item = floatingHandleItem.value
-  if (item) startCustomDrag(item, e)
-}
-
-const onAutoHeightToggle = (value: unknown) => {
-  const item = sideSettingsItem.value
-  if (item) setAutoHeight(item, !!value)
+const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
+  startCustomDrag(item, e)
 }
 
 // 归属块必须是选中块，否则取最近选中块，避免鼠标扫过未选中块时拖拽栏全消失
@@ -2883,16 +2793,9 @@ const addComponent = (key: CanvasItem['component'], at?: { x: number; y: number 
 // #endregion 自动布局与添加
 
 // #region 插入组件拖出成块
-// 插入组件名 → 画布块类型，及 props → 块 config 的换算
-const EXTRACT_RULES: Record<
-  string,
-  { key: CanvasItem['component']; toConfig: (props: Record<string, any>) => WidgetConfig }
-> = {
-  CodeBlock: {
-    key: 'EditableCodeBlock',
-    toConfig: (props) => ({ code: props.modelValue ?? '', language: props.language ?? 'javascript' }),
-  },
-}
+// 节点名 → 块注册项由注册表声明，画布不感知具体组件类型
+const extractMetaOf = (nodeName: string) =>
+  ADDABLE_COMPONENTS.find((meta) => meta.extractFromNode?.nodeName === nodeName)
 
 // 仅编辑态且落点在画布内才新增块，经 detail.accepted 同步回填结果
 type ExtractDetail = {
@@ -2904,16 +2807,17 @@ type ExtractDetail = {
 }
 const onExtractComponent = (event: Event) => {
   const detail = (event as CustomEvent<ExtractDetail>).detail
-  const rule = detail && EXTRACT_RULES[detail.componentName]
+  const meta = detail ? extractMetaOf(detail.componentName) : undefined
+  const extract = meta?.extractFromNode
   const rect = canvasContainerRef.value?.getBoundingClientRect()
-  if (!rule || !rect || !isEditMode.value) return
+  if (!meta || !extract || !rect || !isEditMode.value) return
   const isInside = detail.clientX >= rect.left && detail.clientX <= rect.right
     && detail.clientY >= rect.top && detail.clientY <= rect.bottom
   if (!isInside) return
   const id = addComponent(
-    rule.key,
+    meta.key,
     screenToContent(canvasTransform(), rect, detail.clientX, detail.clientY),
-    rule.toConfig(detail.props),
+    extract.toConfig(detail.props),
   )
   if (!id) return
   detail.accepted = true
@@ -3103,7 +3007,7 @@ const save = () => {
 const normalizeLoadedItem = (it: any): CanvasItem => {
   const component: CanvasItem['component'] = componentMap[it.component as CanvasItem['component']]
     ? (it.component as CanvasItem['component'])
-    : 'RichTextEditor'
+    : DEFAULT_COMPONENT_KEY
   const isLegacyFlat = !it.layout && typeof it.x === 'number' && typeof it.y === 'number'
   const desktop: Rect = isLegacyFlat
     ? { x: it.x, y: it.y, w: it.w ?? 400, h: it.h ?? 300 }
@@ -3232,7 +3136,6 @@ onMounted(() => {
   window.addEventListener('Mindrizzle:block-popup', onBlockPopupChange)
   window.addEventListener('Mindrizzle:block-popup-top', onBlockPopupTopChange)
   window.addEventListener('Mindrizzle:block-handle-active', onBlockHandleActiveChange)
-  window.addEventListener('Mindrizzle:auto-height', onAutoHeight)
   window.addEventListener('blur', abortSessions)
   window.addEventListener('pointercancel', abortSessions)
 })
@@ -3257,8 +3160,6 @@ onUnmounted(() => {
   window.removeEventListener('Mindrizzle:block-popup', onBlockPopupChange)
   window.removeEventListener('Mindrizzle:block-popup-top', onBlockPopupTopChange)
   window.removeEventListener('Mindrizzle:block-handle-active', onBlockHandleActiveChange)
-  window.removeEventListener('Mindrizzle:auto-height', onAutoHeight)
-  window.removeEventListener('blur', abortSessions)
   window.removeEventListener('pointercancel', abortSessions)
 })
 
@@ -3282,10 +3183,7 @@ defineExpose({
   syncComponentData,
   layoutOf,
   handlePlacementOf,
-  handleBarStyle,
-  getComponentProps,
-  updateCode,
-  updateLanguage,
+  blockBasePropsOf,
   setComponentRef,
   addComponent,
   setAddPreview,
@@ -3347,11 +3245,6 @@ defineExpose({
 .canvas.panning {
   cursor: grabbing;
   user-select: none;
-}
-
-/* 拖拽中的块会盖住落点处的编辑器，所以让其命中穿透 */
-.drag-wrapper.drag-passthrough {
-  pointer-events: none;
 }
 
 .selection-box {
@@ -3487,115 +3380,6 @@ defineExpose({
   contain: layout style;
 }
 
-/* VDR 用内联 display 控制手柄，所以需 !important 覆盖 */
-.drag-wrapper.popup-open :deep(.handle-tm) {
-  display: none !important;
-}
-
-.block-container {
-  height: 100%;
-  width: 100%;
-  position: relative;
-  overflow: visible;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  /* outline 画在盒外会越界叠到邻块，所以用盒内 border */
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.15);
-}
-
-/* 描边环已负责外框，所以 border 置透明（保留占位避免内容跳动） */
-.drag-wrapper.selected .block-container {
-  border-color: transparent;
-}
-
-.floating-handle {
-  position: absolute;
-  bottom: auto;
-  /* 块重叠时拖拽栏不被盖住，所以置 Z_LAYER.dragHandle */
-  z-index: 1001;
-}
-
-/* 未完成的滑出动画 transform 会把 handle 顶离固定位，所以拖拽期间禁用动画并归位 */
-body.block-handle-dragging .floating-handle {
-  transition: none !important;
-  transform: none !important;
-}
-
-.drag-handle {
-  position: absolute;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  cursor: grab;
-  /* 要实底不透明，所以用 surface 纯色 */
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.15);
-  border-bottom: 0;
-  border-radius: 4px 4px 0 0;
-  z-index: 16;
-  padding: 0 10px;
-  white-space: nowrap;
-  box-sizing: border-box;
-  user-select: none;
-  transition: background 0.2s;
-  /* 贴边微调由内联 --handle-y 提供 */
-  transform: translateY(var(--handle-y, -1px));
-}
-
-.drag-handle.handle-bottom {
-  border-top: 0;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.15);
-  border-radius: 0 0 4px 4px;
-}
-
-.drag-handle:hover {
-  /* surface-variant 混色难看，所以仅以主题色描边提示 */
-  background: rgb(var(--v-theme-surface));
-  border-color: rgb(var(--v-theme-primary));
-}
-
-.side-settings {
-  position: absolute;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  cursor: grab;
-  /* 要实底不透明，所以用 surface 纯色 */
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.15);
-  border-bottom: 0;
-  border-radius: 4px 4px 0 0;
-  z-index: 16;
-  padding: 0 4px;
-  white-space: nowrap;
-  box-sizing: border-box;
-  user-select: none;
-  transition: background 0.2s;
-  /* 贴边微调由内联 --handle-y 提供 */
-  transform: translateY(var(--handle-y, -1px));
-}
-.side-settings.handle-bottom {
-  border-top: 0;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.15);
-  border-radius: 0 0 4px 4px;
-}
-.side-settings:hover {
-  /* surface-variant 混色难看，所以仅以主题色描边提示 */
-  background: rgb(var(--v-theme-surface));
-  border-color: rgb(var(--v-theme-primary));
-}
-.side-settings :deep(.v-btn) {
-  height: 18px;
-  width: 18px;
-  min-width: 18px;
-}
-
-/* v-list-item__content 默认 overflow:hidden 会裁掉 switch 阴影，所以放开裁剪 */
-:global(.auto-height-menu .v-list-item__content) {
-  overflow: visible;
-}
-
 .left-handle {
   bottom: 100%;
   left: 10px;
@@ -3605,60 +3389,5 @@ body.block-handle-dragging .floating-handle {
   font-size: 12px;
   color: rgba(var(--v-theme-on-surface), 0.6);
   margin-left: 4px;
-}
-
-.content-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 4px;
-  box-sizing: border-box;
-  background-color: transparent;
-  /* 要盖住块内滑出的手柄又不挡缩放手柄，所以取 15 */
-  position: relative;
-  z-index: 15;
-}
-
-.inner-component {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  width: 100%;
-}
-
-/* 快照是克隆的组件 DOM，用 display:contents 让它像原来一样直接充当 .content-area 的 flex 子项 */
-.virtual-snapshot {
-  display: contents;
-}
-/* 克隆里残留的 pointer-events:auto 会把指针事件吞进死 DOM，所以整棵子树穿透 */
-.virtual-snapshot :deep(*) {
-  pointer-events: none !important;
-}
-
-.pop-up-enter-active,
-.pop-up-leave-active {
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 滑出方向由 handleBarStyle 的 --handle-slide 驱动 */
-.pop-up-enter-from {
-  opacity: 0;
-  transform: translateY(calc(var(--handle-y, 0px) + var(--handle-slide, 28px)));
-}
-
-.pop-up-enter-to {
-  opacity: 1;
-  transform: translateY(var(--handle-y, 0px));
-}
-
-.pop-up-leave-from {
-  opacity: 1;
-  transform: translateY(var(--handle-y, 0px));
-}
-
-.pop-up-leave-to {
-  opacity: 0;
-  transform: translateY(calc(var(--handle-y, 0px) + var(--handle-slide, 28px)));
 }
 </style>

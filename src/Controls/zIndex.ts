@@ -9,5 +9,7 @@ export const Z_LAYER = {
   dragHandle: 1001,
   selectedBlock: 1000,
   itemZLimit: 500,
+  // 块设置菜单挂在 body 上（zoom 容器外），需压过所有画布浮层
+  settingsMenu: 2100,
   appLoadingCurtain: 10002,
 } as const

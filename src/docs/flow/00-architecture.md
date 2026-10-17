@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-17 -->
 # 00 系统全景
 
 ## 心智模型
@@ -18,8 +18,10 @@ flowchart TB
   end
 
   subgraph Block["块渲染层"]
+    MCB["MdrCanvasComponentBase.vue<br/>通用壳 + 浮层 + controller"]
     RB["ResizeBox.vue"]
-    RTE["RichTextEditor.vue"]
+    RTE["RichTextEditor.vue<br/>自身使用 base"]
+    CODE["EditableCodeBlock.vue<br/>自身使用 base"]
     VCN["vue-component.ts"]
     EXT["extension.ts"]
     FMT["formatting.ts"]
@@ -40,7 +42,10 @@ flowchart TB
   end
 
   MC --> RB
-  RB --> RTE
+  MC --> MCB
+  MCB --> RB
+  RTE --> MCB
+  CODE --> MCB
   RTE --> EXT
   RTE --> VCN
   RTE --> RDI
@@ -64,11 +69,19 @@ flowchart TB
 ```mermaid
 flowchart LR
   MC["MdrCanvas.vue"] --> RB["ResizeBox.vue"]
+  MC --> MCB["MdrCanvasComponentBase.vue"]
   MC --> CC["canvasCoords.ts"]
   MC --> ZI["zIndex.ts"]
   MC --> BHU["blockHandleUtils.ts"]
-  RB --> VCN["vue-component.ts"]
-  VCN --> BHU
+  MCB --> RB
+  MCB --> GEO["blockFloatGeometry.ts"]
+  MCB --> CTRL["canvasComponentControllers.ts"]
+  MCB --> ZI
+  RTE_B["MdrCanvasComponentBaseRichText.vue"] --> MCB
+  RTE_B --> RTE["RichTextEditor.vue"]
+  COD["RichTextEditor.vue"] --> MCB
+  RTE --> CTRL
+  CODE["EditableCodeBlock.vue"] --> MCB
   VCN --> BHO["blockHandleOwner.ts"]
   VCN --> RS["resizeConstraints.ts"]
   RTE["RichTextEditor.vue"] --> EXT["extension.ts"]
@@ -91,11 +104,14 @@ flowchart LR
 ## 层职责
 
 - **画布层**：MdrCanvas 管布局/会话/缩放；zIndex 定层；canvasCoords 管换算。
-- **块渲染层**：ResizeBox 提供拖拽/缩放手柄；RichTextEditor 承载 ProseMirror；vue-component 是 PM 节点视图。
-- **悬浮手柄层**：block-handle + 三个 hook，负责 hover / popup / 行拖拽。
+- **块渲染层**：MdrCanvasComponentBase 提供通用壳（尺寸、拖拽栏、设置插槽、controller）；具体块组件（RichText/Code）只关心自身 config、可变形与设置 UI；ResizeBox 提供缩放手柄；RichTextEditor 承载 ProseMirror。
+- **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 basRichTextEditor / EditableCodeBlock 在自己的定义里使用 base，并自行处理 config、可变形、设置 UI 与自动高度；ResizeBox 提供缩放手柄。
+- **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 base 渲染共用。
+- **控制器契约**：canvasComponentControllers 定义块内组件向画布申请移动/改尺寸/平移/缩放/读视图的接口（provide/inject），自动高度与光标跟随都由块组件自己调用
 - **工具层**：blockHandleUtils 是编辑器侧唯一坐标与几何入口。
 
 ## 维护提示
 
 - 新增文件 → 更新图 0.1、0.2
 - 新增跨层依赖 → 检查是否应该走事件而不是 import
+- 新增块类型 → 按 [../components/README.md](../components/README.md) 的接入清单登记

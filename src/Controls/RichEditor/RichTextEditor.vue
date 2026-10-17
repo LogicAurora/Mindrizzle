@@ -1,42 +1,56 @@
 <template>
-  <div
-    ref="wrapperRef"
-    class="editor-wrapper"
-    :data-read-only="props.readOnly ? 'true' : 'false'"
-    :class="{ compact: useCompact, 'auto-height': autoHeight }"
-    :style="{
-      color: 'var(--v-theme-on-surface)',
-      background: 'var(--v-theme-surface)',
-    }"
-    @mousedown.stop
-    @touchstart.stop
-  >
-    <ProseKit :editor="editor">
-      <div class="editor-scroll-shell">
-        <div ref="scrollRef" class="editor-scroll" @scroll="updateScrollMetrics">
-          <div ref="editorMount" class="editor-mount" />
+  <MdrCanvasComponentBase ref="baseRef" v-bind="props.base" :icon="mdiNoteText" :title="RICH_TEXT_LABEL"
+    :height-changable="!autoHeight" :width-changable="props.base.compact !== true">
+    <div v-if="!virtualized" ref="wrapperRef" class="editor-wrapper inner-component"
+      :data-read-only="readOnly ? 'true' : 'false'" :class="{ compact: useCompact, 'auto-height': autoHeight }"
+      :style="{
+        color: 'var(--v-theme-on-surface)',
+        background: 'var(--v-theme-surface)',
+      }" @mousedown.stop @touchstart.stop>
+      <ProseKit :editor="editor">
+        <div class="editor-scroll-shell">
+          <div ref="scrollRef" class="editor-scroll" @scroll="updateScrollMetrics">
+            <div ref="editorMount" class="editor-mount" />
+          </div>
+          <div v-if="scrollMetrics.hasVertical" class="custom-scrollbar custom-scrollbar-vertical"
+            @pointerdown="startVerticalScrollbar" @wheel="scrollVertical">
+            <div class="custom-scrollbar-thumb" :style="verticalThumbStyle"
+              @pointerdown.stop="startVerticalThumb" />
+          </div>
+          <div v-if="scrollMetrics.hasHorizontal" class="custom-scrollbar custom-scrollbar-horizontal"
+            @pointerdown="startHorizontalScrollbar" @wheel="scrollHorizontal">
+            <div class="custom-scrollbar-thumb" :style="horizontalThumbStyle"
+              @pointerdown.stop="startHorizontalThumb" />
+          </div>
         </div>
-        <div v-if="scrollMetrics.hasVertical" class="custom-scrollbar custom-scrollbar-vertical"
-          @pointerdown="startVerticalScrollbar" @wheel="scrollVertical">
-          <div class="custom-scrollbar-thumb" :style="verticalThumbStyle"
-            @pointerdown.stop="startVerticalThumb" />
-        </div>
-        <div v-if="scrollMetrics.hasHorizontal" class="custom-scrollbar custom-scrollbar-horizontal"
-          @pointerdown="startHorizontalScrollbar" @wheel="scrollHorizontal">
-          <div class="custom-scrollbar-thumb" :style="horizontalThumbStyle"
-            @pointerdown.stop="startHorizontalThumb" />
-        </div>
-      </div>
-      <blockHandle :editor="editor" :read-only="props.readOnly === true" />
-      <!-- .vdr 的 transform 祖先会使 fixed 基准偏移，所以 Teleport 到 body -->
-      <Teleport to="body">
-        <RowDropIndicator :editor="editor" />
-      </Teleport>
-    </ProseKit>
-  </div>
+        <blockHandle :editor="editor" :read-only="readOnly" />
+        <!-- .vdr 的 transform 祖先会使 fixed 基准偏移，所以 Teleport 到 body -->
+        <Teleport to="body">
+          <RowDropIndicator :editor="editor" />
+        </Teleport>
+      </ProseKit>
+    </div>
+    <!-- 视口外的块只留静态快照，省掉 ProseMirror 的插件 state、RO 与逐块 window 捕获监听 -->
+    <div v-else class="virtual-snapshot inner-component" v-html="snapshot" />
+    <template #settings>
+      <v-list density="compact">
+        <v-list-item>
+          <v-switch :model-value="autoHeight" color="primary" label="高度自适应内容" hint="块高随内容自动调整"
+            persistent-hint hide-details @update:model-value="onAutoHeightToggle" />
+        </v-list-item>
+      </v-list>
+    </template>
+  </MdrCanvasComponentBase>
 </template>
 <script lang="ts">
+import type { RichTextConfig } from '../canvasComponents.ts'
+
 export { RICH_TEXT_CONSTRAINTS as resizeConstraints } from '../componentConstraints.ts'
+
+export const RICH_TEXT_LABEL = '富文本'
+
+// 高度由内容驱动时联结不得改它的高度
+export const isHeightChangable = (config: RichTextConfig): boolean => config.autoHeight !== true
 </script>
 <script setup lang="ts">
 import 'prosekit/basic/style.css'
@@ -48,23 +62,35 @@ import RowDropIndicator from './extensions/RowDropIndicator.vue'
 import { ref, onMounted, onUnmounted, computed, reactive, watch } from 'vue'
 import { ProseKit, useDocChange } from '@prosekit/vue'
 import { useDisplay } from 'vuetify'
+import { mdiNoteText } from '@mdi/js'
 
 import { defineExtension } from './extension.ts'
 import { createEditor, NodeJSON } from '@prosekit/core'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY, viewportToLayout } from './extensions/blockHandleUtils.ts'
+import MdrCanvasComponentBase from '../MdrCanvasComponentBase.vue'
+import type { MdrCanvasComponentContentProps } from '../MdrCanvasComponentBase.types.ts'
+import type { WidgetConfig } from '../canvasComponents.ts'
+import type { BlockCanvasController, BlockComponentController } from '../canvasComponentControllers.ts'
 
-interface Props {
-  dir?: 'ltr' | 'rtl'
-  compact?: boolean
-  doc?: NodeJSON | null
-  autoHeight?: boolean
-  readOnly?: boolean
-}
-const props = defineProps<Props>()
+const props = defineProps<MdrCanvasComponentContentProps<WidgetConfig> & {
+  virtualized?: boolean
+  snapshot?: string
+}>()
 
 const { xs } = useDisplay()
 const isMobile = computed(() => xs.value)
-const useCompact = computed(() => props.compact ?? isMobile.value)
+const useCompact = computed(() => props.base.compact ?? isMobile.value)
+const readOnly = computed(() => props.base.readOnly === true)
+const richTextConfig = computed(() => props.config as RichTextConfig)
+const autoHeight = computed(() => richTextConfig.value.autoHeight === true)
+
+// 块组件是 base 的父级、inject 拿不到子级 provide，所以经 ref 取 base 暴露的 controller
+const baseRef = ref<{ controller: BlockComponentController; canvasController: BlockCanvasController } | null>(null)
+
+// 自动高度改变块高与手柄集合，所以经画布刷新派生状态
+const onAutoHeightToggle = (value: unknown) => {
+  props.base.handlers.updateConfig({ autoHeight: !!value })
+}
 
 const extension = defineExtension()
 const editor = createEditor({ extension })
@@ -80,7 +106,7 @@ const syncReadOnly = (readOnly: boolean) => {
   wrapperRef.value?.dispatchEvent(new CustomEvent('Mindrizzle:rich-text-read-only', { detail: readOnly }))
 }
 
-watch(() => props.readOnly, (readOnly) => syncReadOnly(readOnly === true))
+watch(readOnly, (value) => syncReadOnly(value))
 
 const updateScrollMetrics = () => {
   const scroll = scrollRef.value
@@ -164,6 +190,12 @@ const startHorizontalScrollbar = (event: PointerEvent) => {
 let scrollbarDrag: { axis: 'vertical' | 'horizontal'; start: number; scroll: number } | null = null
 const startVerticalThumb = (event: PointerEvent) => startScrollbarDrag('vertical', event)
 const startHorizontalThumb = (event: PointerEvent) => startScrollbarDrag('horizontal', event)
+// 块内事件需块 id，逐层上溯到 wrapper 的 data-id
+const blockId = (): string | null => {
+  let el: HTMLElement | null = wrapperRef.value ?? null
+  while (el && !el.classList.contains('drag-wrapper')) el = el.parentElement
+  return el?.getAttribute('data-id') ?? null
+}
 // 拖拽滚动条时指针会滑出块行、原生 hover 扩展反复清/置 hover 致 popup 与滚动条闪烁，所以通知本块收起 popup
 const notifyScrollbarDrag = (active: boolean) => {
   const id = blockId()
@@ -227,31 +259,38 @@ function scrollContent(deltaY: number) {
   if (scrollRef.value) scrollRef.value.scrollTop += deltaY
 }
 
-// autoHeight 时经块 id 上报内容高度给画布
-const blockId = (): string | null => {
-  let el: HTMLElement | null = wrapperRef.value ?? null
-  while (el && !el.classList.contains('drag-wrapper')) el = el.parentElement
-  return el?.getAttribute('data-id') ?? null
-}
 // 再加上 .content-area 上下 padding(8) 与 border(2)，共 10
 const AUTO_HEIGHT_EXTRA = 10
 // auto-height 类解除了 height:100% 钳制，所以 offsetHeight 即内容自然高度
 const syncAutoHeight = () => {
-  if (!props.autoHeight) return
-  const id = blockId()
+  if (!autoHeight.value) return
   const scrollEl = wrapperRef.value?.querySelector('.editor-scroll') as HTMLElement | null
-  if (!id || !scrollEl) return
+  if (!scrollEl) return
   const height = Math.ceil(scrollEl.offsetHeight + AUTO_HEIGHT_EXTRA)
-  // 光标行在块内的 y（视觉像素），供画布跟随输入滚动
-  let cursorY = height
+  baseRef.value?.controller.resizeTo({ height })
+  followCursor(cursorVisualY(height))
+}
+
+// 光标行在块内的 y（视觉像素），供输入时跟随滚动
+const cursorVisualY = (height: number): number => {
   const head = editor.view?.state.selection.head
   const wrapperRect = wrapperRef.value?.getBoundingClientRect()
-  if (head != null && wrapperRect) {
-    const coords = editor.view!.coordsAtPos(head)
-    if (coords) cursorY = Math.min(Math.max(coords.bottom - wrapperRect.top, 0), height)
-  }
-  const visualCursorY = wrapperRef.value ? layoutToViewportSize(wrapperRef.value, cursorY) : cursorY
-  window.dispatchEvent(new CustomEvent('Mindrizzle:auto-height', { detail: { id, height, cursorY: visualCursorY } }))
+  if (head == null || !wrapperRect) return height
+  const coords = editor.view!.coordsAtPos(head)
+  const cursorY = coords ? Math.min(Math.max(coords.bottom - wrapperRect.top, 0), height) : height
+  return wrapperRef.value ? layoutToViewportSize(wrapperRef.value, cursorY) : cursorY
+}
+
+const CURSOR_VISIBLE_MARGIN = 24
+// 光标贴近视口底部时上移画布，否则输入行会被裁
+const followCursor = (cursorY: number) => {
+  const canvas = baseRef.value?.canvasController
+  const view = canvas?.getViewData()
+  if (!view?.viewport || view.isPanning) return
+  // 屏幕 y = 容器顶 + content*zoom + origin + pan，与画布侧几何同公式
+  const cursorBottom = view.viewport.top + view.block.y * view.zoom + view.origin.y + view.pan.y + cursorY
+  const over = cursorBottom - (view.viewport.bottom - CURSOR_VISIBLE_MARGIN)
+  if (over > 0) canvas?.panBy(0, -Math.round(over))
 }
 
 // 组件 width/height 走 attr、改 attr 未必改变容器盒子，所以 doc change 后补测（rAF 合并同帧事务）
@@ -280,7 +319,7 @@ let contentResizeFrame = 0
 // 内容容器尺寸变化需重测度量；autoHeight 时还须重报块高，否则只测到占位高度、块高停在旧值
 const onContentResize = () => {
   updateScrollMetrics()
-  if (!props.autoHeight || contentResizeFrame) return
+  if (!autoHeight.value || contentResizeFrame) return
   // RO 回调里同步改块高会触发循环告警，所以延后一帧
   contentResizeFrame = requestAnimationFrame(() => {
     contentResizeFrame = 0
@@ -304,14 +343,14 @@ onMounted(() => {
   if (editorMount.value) {
     editor.mount(editorMount.value)
     editorMounted = true
-    syncReadOnly(props.readOnly === true)
+    syncReadOnly(readOnly.value)
     observer.observe(editorMount.value)
     if (isMobile.value) {
       // 默认聚焦滚动会滚动画布容器，所以用 preventScroll 聚焦根 DOM
       setTimeout(() => (editor.view?.dom as HTMLElement | undefined)?.focus({ preventScroll: true }), 100)
     }
-    if (props.doc) {
-      applyContent(props.doc)
+    if (richTextConfig.value.content) {
+      applyContent(richTextConfig.value.content)
     }
     // 等 mount/setContent 完成后才能量，所以 rAF 后测一次
     requestAnimationFrame(() => {
@@ -335,7 +374,7 @@ onUnmounted(() => {
 })
 
 // 开启瞬间按当前内容测一次
-watch(() => props.autoHeight, (v) => {
+watch(autoHeight, (v) => {
   if (v) requestAnimationFrame(() => syncAutoHeight())
 })
 
@@ -343,7 +382,7 @@ function importJSON(json: NodeJSON) {
   applyContent(json)
 }
 
-watch(() => props.doc, (v) => {
+watch(() => richTextConfig.value.content, (v) => {
   if (v) applyContent(v as NodeJSON)
 })
 
@@ -367,6 +406,16 @@ defineExpose({
 </script>
 
 <style scoped>
+/* 快照是克隆的组件 DOM，用 display:contents 让它像原来一样直接充当 .content-area 的 flex 子项 */
+.virtual-snapshot {
+  display: contents;
+}
+
+/* 克隆里残留的 pointer-events:auto 会把指针事件吞进死 DOM，所以整棵子树穿透 */
+.virtual-snapshot :deep(*) {
+  pointer-events: none !important;
+}
+
 .editor-wrapper {
   position: relative;
   border: 1px solid transparent;

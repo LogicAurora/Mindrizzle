@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-17 -->
 # 06 悬浮手柄与 popup
 
 ## 图 6.1 hover 状态解析流程
@@ -105,3 +105,5 @@ flowchart TD
 - 改 popup 放置策略 → 更新图 6.3
 - 改桥接区 → 更新图 6.4 + 检查 11-workarounds.md
 - 改 owner 仲裁 → 更新图 6.5
+- 拖拽栏/设置栏由 `MdrCanvasComponentBase` 渲染并 Teleport 到 `.canvas`；命中测试仍归 MdrCanvas（`resolvePointerHit`），几何统一取 `blockFloatGeometry.ts`
+- 块设置菜单挂 body、用 `layoutToViewportX/Y` 把按钮矩形换算成视觉坐标后 `position: fixed`（v-menu 读 zoom 内的布局矩形会整体错位）；底部放不下时 nextTick 量高上翻

@@ -10,6 +10,7 @@
    - 手柄/popup → [06-block-handle](06-block-handle.md)
    - 卡顿 → [09-perf](09-perf.md)
    - 诡异行为 → [11-workarounds](11-workarounds.md)
+   - 新增块类型 → [../components/README.md](../components/README.md)
 
 ## 文件索引
 
@@ -27,6 +28,8 @@
 | 09-perf.md | 节流与缓存 |
 | 10-utils.md | 工具函数索引 |
 | 11-workarounds.md | 非逻辑防御清单 |
+
+> 组件开发（base props、controller、注册表、虚拟化）见 [../components/](../components/)。
 
 ## 维护规则
 

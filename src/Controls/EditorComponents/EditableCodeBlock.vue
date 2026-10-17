@@ -1,59 +1,68 @@
 <template>
-  <v-sheet class="code-editor-container">
-    <div class="toolbar">
-      <v-select
-        v-model="currentLanguage"
-        :items="languageOptions"
-        :disabled="readOnly"
-        aria-label="语言"
-        variant="solo"
-        density="compact"
-        hide-details
-        class="language-select"
-      />
-      <v-btn
-        variant="text"
-        :icon="mdiContentCopy"
-        size="x-small"
-        @click="copyCode"
-        title="复制代码"
-      />
-    </div>
+  <component :is="rootComponent" v-bind="rootProps">
+    <v-sheet v-if="!virtualized" class="code-editor-container" :class="{ 'inner-component': !!props.base }">
+      <div class="toolbar">
+        <v-select
+          v-model="currentLanguage"
+          :items="languageOptions"
+          :disabled="readOnly"
+          aria-label="语言"
+          variant="solo"
+          density="compact"
+          hide-details
+          class="language-select"
+        />
+        <v-btn
+          variant="text"
+          :icon="mdiContentCopy"
+          size="x-small"
+          @click="copyCode"
+          title="复制代码"
+        />
+      </div>
 
-    <div class="code-editor-wrapper" ref="wrapperRef">
-      <pre class="highlight-layer"><code ref="highlightRef" :class="`language-${currentLanguage}`"></code></pre>
-      <textarea
-        ref="textareaRef"
-        v-model="internalCode"
-        class="edit-layer"
-        :readonly="readOnly"
-        :style="{ caretColor: String(primaryColor) }"
-        spellcheck="false"
-        @scroll="syncScroll"
-        @input="onInput"
-        @keydown="handleKeydown"
-      ></textarea>
-    </div>
+      <div class="code-editor-wrapper" ref="wrapperRef">
+        <pre class="highlight-layer"><code ref="highlightRef" :class="`language-${currentLanguage}`"></code></pre>
+        <textarea
+          ref="textareaRef"
+          v-model="internalCode"
+          class="edit-layer"
+          :readonly="readOnly"
+          :style="{ caretColor: String(primaryColor) }"
+          spellcheck="false"
+          @scroll="syncScroll"
+          @input="onInput"
+          @keydown="handleKeydown"
+        ></textarea>
+      </div>
 
-    <v-snackbar
-      :prepend-icon="mdiCheck"
-      v-model="snackbar"
-      :timeout="1500"
-      color="success"
-      location="top"
-    >
-      代码已复制到剪贴板
-    </v-snackbar>
-  </v-sheet>
+      <v-snackbar
+        :prepend-icon="mdiCheck"
+        v-model="snackbar"
+        :timeout="1500"
+        color="success"
+        location="top"
+      >
+        代码已复制到剪贴板
+      </v-snackbar>
+    </v-sheet>
+    <!-- 视口外的块只留静态快照，省掉 highlight.js 实例与逐块监听 -->
+    <div v-else class="virtual-snapshot inner-component" v-html="snapshot" />
+  </component>
 </template>
 <script lang="ts">
 export { CODE_BLOCK_CONSTRAINTS as resizeConstraints } from '../componentConstraints.ts'
+
+export const CODE_BLOCK_LABEL = '代码块'
 </script>
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick, computed, onBeforeUnmount } from 'vue';
 import { useTheme } from 'vuetify';
-import { mdiContentCopy, mdiCheck } from '@mdi/js';
+import { mdiContentCopy, mdiCheck, mdiCodeBraces } from '@mdi/js';
 import hljs from 'highlight.js/lib/core';
+import MdrCanvasComponentBase from '../MdrCanvasComponentBase.vue';
+import type { MdrCanvasComponentShellProps } from '../MdrCanvasComponentBase.types.ts';
+import type { CodeBlockConfig, WidgetConfig } from '../canvasComponents.ts';
 
 import githubCss from 'highlight.js/styles/github.css?raw';
 import atomDarkCss from 'highlight.js/styles/atom-one-dark.css?raw';
@@ -142,24 +151,40 @@ const languageOptions = [
   { title: 'Kotlin', value: 'kotlin' },
 ];
 
-const props = defineProps({
-  modelValue: {
-    type: String,
-    default: '',
-  },
-  language: {
-    type: String,
-    default: 'plaintext',
-  },
-  readOnly: {
-    type: Boolean,
-    default: false,
-  },
-});
+const props = defineProps<{
+  config?: WidgetConfig;
+  base?: MdrCanvasComponentShellProps;
+  virtualized?: boolean;
+  snapshot?: string;
+  // 富文本内插入组件模式沿用原有 props
+  modelValue?: string;
+  language?: string;
+  readOnly?: boolean;
+}>();
 
 const emit = defineEmits(['update:modelValue', 'update:language']);
-const internalCode = ref(props.modelValue);
-const currentLanguage = ref(props.language);
+
+const codeConfig = computed<CodeBlockConfig>(() => props.config
+  ? props.config as CodeBlockConfig
+  : { code: props.modelValue ?? '', language: props.language ?? 'plaintext' });
+const readOnly = computed(() => props.base ? props.base.readOnly === true : props.readOnly === true);
+const rootComponent = computed(() => (props.base ? MdrCanvasComponentBase : 'div'));
+const rootProps = computed(() => props.base
+  ? { ...props.base, icon: mdiCodeBraces, title: CODE_BLOCK_LABEL, widthChangable: props.base.compact !== true }
+  : { class: 'standalone-code-block' });
+
+const internalCode = ref(codeConfig.value.code);
+const currentLanguage = ref(codeConfig.value.language);
+
+// 画布模式写回 config；富文本插入模式交回 NodeView
+const writeConfig = (patch: Partial<CodeBlockConfig>) => {
+  if (props.base) {
+    props.base.handlers.writeConfig(patch);
+    return;
+  }
+  if (patch.code != null) emit('update:modelValue', patch.code);
+  if (patch.language != null) emit('update:language', patch.language);
+};
 
 const snackbar = ref(false);
 
@@ -187,8 +212,8 @@ const renderHighlight = () => {
 };
 
 const onInput = () => {
-  if (props.readOnly) return;
-  emit('update:modelValue', internalCode.value);
+  if (readOnly.value) return;
+  writeConfig({ code: internalCode.value });
   renderHighlight();
 };
 
@@ -233,7 +258,7 @@ const copyCode = async () => {
 };
 
 const handleKeydown = (event: KeyboardEvent) => {
-  if (props.readOnly) return;
+  if (readOnly.value) return;
   const textarea = textareaRef.value;
   if (!textarea) return;
 
@@ -264,7 +289,7 @@ const handleKeydown = (event: KeyboardEvent) => {
       textarea.selectionEnd = end + 1;
       textarea.focus({ preventScroll: true });
     });
-    emit('update:modelValue', newText);
+    writeConfig({ code: newText });
     renderHighlight();
     return;
   }
@@ -279,33 +304,31 @@ const handleKeydown = (event: KeyboardEvent) => {
     textarea.selectionEnd = start + 1;
     textarea.focus({ preventScroll: true });
   });
-  emit('update:modelValue', newText);
+  writeConfig({ code: newText });
   renderHighlight();
 };
 
+watch(currentLanguage, (newLang) => {
+  writeConfig({ language: newLang });
+  nextTick(renderHighlight);
+});
+
+// 富文本插入模式由 NodeView 回写 props，画布模式下这两项恒为 undefined
 watch(
   () => props.language,
   (newLang) => {
-    if (newLang !== currentLanguage.value) {
-      currentLanguage.value = newLang;
-      nextTick(renderHighlight);
-    }
+    if (newLang == null || newLang === currentLanguage.value) return;
+    currentLanguage.value = newLang;
+    nextTick(renderHighlight);
   }
 );
-
-watch(currentLanguage, (newLang) => {
-  if (props.readOnly) return;
-  emit('update:language', newLang);
-  nextTick(renderHighlight);
-});
 
 watch(
   () => props.modelValue,
   (newVal) => {
-    if (newVal !== internalCode.value) {
-      internalCode.value = newVal;
-      nextTick(renderHighlight);
-    }
+    if (newVal == null || newVal === internalCode.value) return;
+    internalCode.value = newVal;
+    nextTick(renderHighlight);
   }
 );
 
@@ -350,6 +373,15 @@ defineExpose({
 </script>
 
 <style scoped>
+/* 快照是克隆的组件 DOM，用 display:contents 让它像原来一样直接充当 .content-area 的 flex 子项 */
+.virtual-snapshot {
+  display: contents;
+}
+
+/* 克隆里残留的 pointer-events:auto 会把指针事件吞进死 DOM，所以整棵子树穿透 */
+.virtual-snapshot :deep(*) {
+  pointer-events: none !important;
+}
 
 .code-editor-container {
   display: flex;

@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-17 -->
 # 05 块生命周期
 
 ## 三种状态
@@ -80,30 +80,31 @@ flowchart TD
 
 > 顺序很重要：**先 saveConfig → 再记录滚动 → 最后克隆 HTML**。实例一去，doc 与 DOM 都取不到。
 
-## 图 5.5 autoHeight 高度上报与推挤
+## 图 5.5 自动高度与光标跟随（组件内实现）
 
 ```mermaid
 flowchart TD
-  A["useDocChange / RO 回调"] --> B["syncAutoHeight()"]
+  A["useDocChange / RO 回调"] --> B["RichTextEditor.syncAutoHeight()"]
   B --> C["测 .editor-scroll.offsetHeight + 10"]
-  C --> D["算 cursorY（coordsAtPos）"]
-  D --> E["派发 Mindrizzle:auto-height"]
-  E --> F["MdrCanvas onAutoHeight"]
-  F --> G{"mobileMode?"}
-  G -->|是| H["shiftBlocksBelow 下方堆叠块跟随"]
-  G -->|否| I["applyDesktopHeight"]
-  I --> J["propagateLinkedEdges 联结群"]
-  J --> K{"dy > 0?"}
-  K -->|是| L["pushOverlapped 消解重叠"]
-  K -->|否| M["跳过"]
-  H --> N["scheduleGeometryRefresh + markLayoutDirty"]
-  L --> N
-  M --> N
-  N --> O["followCursor 光标跟随"]
+  C --> D["componentController.resizeTo({ height })"]
+  D --> E["MdrCanvas resizeBlockTo → applyBlockSize"]
+  E --> F{"mobileMode?"}
+  F -->|是| G["shiftBlocksBelow 下方堆叠块跟随"]
+  F -->|否| H["propagateLinkedEdges 联结群<br/>heightChangable=false 的块不改高"]
+  H --> I["pushOverlapped 消解重叠"]
+  G --> J["scheduleGeometryRefresh + markLayoutDirty"]
+  I --> J
+  C --> K["canvasController.getViewData()"]
+  K --> L["光标超出视口底部 → panBy(0, -over)"]
 ```
+
+> `heightChangable` 由块组件注册项声明（富文本 autoHeight 时不可改高），画布与 base 共用同一判定；`isPanning` 由 `getViewData` 提供，拖拽平移期间组件不跟随光标。
+>
+> `pushColumnBelow` 只推 root **下方**的水平重叠块；位于其上方的块即使 x 范围相交也不参与推动。
 
 ## 维护提示
 
 - 新增"固定块"条件 → 更新图 5.2
 - 改虚拟化顺序 → 更新图 5.4
 - 改 autoHeight 推挤 → 更新图 5.5，并补充相关回归验证
+- 自动高度的测量、`resizeTo` 与光标跟随都在 `RichTextEditor.vue` 内，画布只保留通用 `applyBlockSize`

@@ -71,6 +71,9 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 | `src/Controls/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
 | `src/utils/canvasCoords.ts` | content ↔ 视口坐标换算的唯一来源 |
 | `src/Controls/zIndex.ts` | 叠加层 z-index 的唯一事实来源 |
+| `src/Controls/MdrCanvasComponentBase.vue` | 块通用壳：几何、拖拽栏、设置插槽、controller（见 `src/docs/components/`） |
+| `src/Controls/canvasComponentControllers.ts` | 块 ↔ 画布控制器契约（移动 / 改尺寸 / 平移 / 缩放 / 视图） |
+| `src/Controls/blockFloatGeometry.ts` | 拖拽栏、设置栏、遮罩几何与浮层 z 的唯一来源 |
 | `src/Views/Editor.vue` | 路由页面与工具栏交互（滚轮切工具、选区确认 overlay） |
 | `src-tauri/src/mdr_file_*.rs` | `.mdrf` 归档读写、缓存目录、IPC 命令 |
 
