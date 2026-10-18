@@ -1,11 +1,12 @@
 import type { NodeJSON } from '@prosekit/core'
-import { mdiCodeBraces, mdiFlaskOutline, mdiNoteText } from '@mdi/js'
+import { mdiCodeBraces, mdiFlaskOutline, mdiImageOutline, mdiNoteText } from '@mdi/js'
 import { defineAsyncComponent, type Component } from 'vue'
 
 import type { EditorCommands } from '../Components/RichEditor/extension.ts'
 import RichTextEditor, { isHeightChangable as isRichTextHeightChangable } from '../Components/RichEditor/RichTextEditor.vue'
 import CanvasTestBench from '../Components/CanvasTestBench.vue'
-import { CODE_BLOCK_CONSTRAINTS, RICH_TEXT_CONSTRAINTS, TEST_BENCH_CONSTRAINTS } from './componentConstraints.ts'
+import ImageBlock from '../Components/ImageBlock.vue'
+import { CODE_BLOCK_CONSTRAINTS, IMAGE_BLOCK_CONSTRAINTS, RICH_TEXT_CONSTRAINTS, TEST_BENCH_CONSTRAINTS } from './componentConstraints.ts'
 import { normalizeConstraints, type ResizeConstraints } from './resizeConstraints.ts'
 
 // highlight.js 内核与十余种语言语法包体积超过主包，所以仅在渲染代码块时按需加载
@@ -27,7 +28,18 @@ export interface TestBenchConfig {
   showViewport?: boolean
 }
 
-export type WidgetConfig = RichTextConfig | CodeBlockConfig | TestBenchConfig
+export type ImageFit = 'contain' | 'cover' | 'fill' | 'tile'
+
+export interface ImageBlockConfig {
+  // 归档内的相对路径，读取时再经 ComponentDataStore 拼成 mdrfcd://
+  path: string
+  mime: string
+  alt: string
+  fit: ImageFit
+  autoSize: boolean
+}
+
+export type WidgetConfig = RichTextConfig | CodeBlockConfig | TestBenchConfig | ImageBlockConfig
 
 // 块配置 ↔ 富文本内可插入节点的映射，具体组件在注册项里声明
 export interface ComponentNodeMapping {
@@ -126,6 +138,18 @@ export const CANVAS_COMPONENTS = [
         language: (props.language as string | undefined) ?? 'javascript',
       }),
     },
+  }),
+  defineCanvasComponent<ImageBlockConfig>({
+    key: 'ImageBlock',
+    label: '图片',
+    icon: mdiImageOutline,
+    addId: 'add-image',
+    component: ImageBlock,
+    constraints: IMAGE_BLOCK_CONSTRAINTS,
+    defaultConfig: () => ({ path: '', mime: '', alt: '', fit: 'contain', autoSize: false }),
+    defaultSize: { w: 360, h: 240 },
+    widthChangableOf: (config) => config.autoSize !== true,
+    heightChangableOf: (config) => config.autoSize !== true,
   }),
   defineCanvasComponent<TestBenchConfig>({
     key: 'CanvasTestBench',

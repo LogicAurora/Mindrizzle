@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart TD
-  MC["MdrCanvas<br/>布局 / 选中 / 拖拽 / 联结"] --> C["块组件（RichTextEditor / EditableCodeBlock）"]
+  MC["MdrCanvas<br/>布局 / 选中 / 拖拽 / 联结"] --> C["块组件（RichTextEditor / EditableCodeBlock / ImageBlock）"]
   C --> B["MdrCanvasComponentBase<br/>几何 / 拖拽栏 / 设置插槽 / controller"]
   B --> RB["ResizeBox<br/>缩放手柄（Teleport 到 .canvas）"]
   B --> SLOT["块内容 slot<br/>.inner-component"]
@@ -175,7 +175,7 @@ const syncAutoHeight = () => {
 - `title` / `icon` 由块组件自己定义，注册表 label 只用于添加菜单。
 - 拖拽栏/设置栏必须 Teleport 到 `.canvas`，放进块内会被 `.drag-wrapper` 的 z 层压住。
 - 只读态不要只靠 CSS：画布会隐藏浮层，组件还须给编辑器传自身的 `readOnly` 开关。
-- 尺寸可变性只影响「联结与手柄」，组件自己调用 `resizeTo` 不受 `heightChangable` 限制。
+- 尺寸可变性只影响「联结与手柄」，组件自己调用 `resizeTo` 不受 `widthChangable` / `heightChangable` 限制。
 
 ## 维护提示
 

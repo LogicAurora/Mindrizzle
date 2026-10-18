@@ -20,3 +20,10 @@ export const TEST_BENCH_CONSTRAINTS: ResizeConstraints = {
   minHeight: 260,
   maxHeight: null,
 }
+
+export const IMAGE_BLOCK_CONSTRAINTS: ResizeConstraints = {
+  minWidth: 160,
+  maxWidth: null,
+  minHeight: 120,
+  maxHeight: null,
+}

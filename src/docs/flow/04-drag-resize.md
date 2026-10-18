@@ -104,6 +104,7 @@ flowchart TD
 ```
 
 > 分维 BFS 的关键：`seenX` / `seenY` 独立标记，避免交叉轴被反复拉走。
+> 不可变轴（`widthChangableOf` / `heightChangableOf` 为 `false`）的块在该轴只平移贴合，尺寸重算会被冻结。
 
 ## 图 4.5 useBlockDrag 行拖拽
 

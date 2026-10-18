@@ -61,6 +61,7 @@ export type {
   ComponentController,
   RichTextConfig,
   CodeBlockConfig,
+  ImageBlockConfig,
   WidgetConfig,
 } from '../Registry/canvasComponents.ts'
 </script>
@@ -1419,14 +1420,12 @@ const moveBlockBy = (item: CanvasItem, dx: number, dy: number) => {
   recomputeMasks()
 }
 
-// 高度由块自身内容驱动（如自动高度），所以不按 changable 拦截；宽度仍受声明约束
+// 组件自身发起的尺寸调整不受 changable 拦截；手柄与联结的锁定另有 applyResizeLayout / propagateLinkedEdges 把关
 const resizeBlockTo = (item: CanvasItem, size: Partial<BlockSize>) => {
   if (!isEditMode.value) return
   const c = constraintsOf(item)
   const layout = layoutOf(item)
-  const width = widthChangableOf(item)
-    ? clampVal(Math.round(size.width ?? layout.w), (c.minWidth ?? 0) + 8, c.maxWidth)
-    : layout.w
+  const width = clampVal(Math.round(size.width ?? layout.w), (c.minWidth ?? 0) + 8, c.maxWidth)
   const height = clampVal(Math.round(size.height ?? layout.h), (c.minHeight ?? 0) + 8, c.maxHeight)
   applyBlockSize(item, width, height)
 }
@@ -1777,9 +1776,10 @@ const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, 
       const target = itemMap.get(nid)
       if (!nStart || !target) return
       const c = constraintsOf(target)
-      const minW = (c.minWidth ?? 0) + 8, maxW = c.maxWidth ?? null
-      // 高度不可变的块只跟随平移，不参与高度重算
+      // 宽/高不可变的块只跟随平移，不参与对应轴重算
+      const fixedW = widthChangableOf(target) ? null : (positions[nid]?.w ?? nStart.w)
       const fixedH = heightChangableOf(target) ? null : (positions[nid]?.h ?? nStart.h)
+      const minW = fixedW ?? (c.minWidth ?? 0) + 8, maxW = fixedW ?? c.maxWidth ?? null
       const minH = fixedH ?? (c.minHeight ?? 0) + 8
       const maxH = fixedH ?? c.maxHeight ?? null
       let enqueue = false

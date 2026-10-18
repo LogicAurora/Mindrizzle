@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-10-18 -->
 # 00 系统全景
 
 ## 心智模型
@@ -22,6 +22,7 @@ flowchart TB
     RB["ResizeBox.vue"]
     RTE["RichTextEditor.vue<br/>自身使用 base"]
     CODE["EditableCodeBlock.vue<br/>自身使用 base"]
+    IMG["ImageBlock.vue<br/>自身使用 base"]
     VCN["vue-component.ts"]
     EXT["extension.ts"]
     FMT["formatting.ts"]
@@ -46,6 +47,7 @@ flowchart TB
   MCB --> RB
   RTE --> MCB
   CODE --> MCB
+  IMG --> MCB
   RTE --> EXT
   RTE --> VCN
   RTE --> RDI
@@ -82,6 +84,8 @@ flowchart LR
   COD["RichTextEditor.vue"] --> MCB
   RTE --> CTRL
   CODE["EditableCodeBlock.vue"] --> MCB
+  IMG["ImageBlock.vue"] --> MCB
+  IMG --> CDS["componentDataStore.ts"]
   VCN --> BHO["blockHandleOwner.ts"]
   VCN --> RS["resizeConstraints.ts"]
   RTE["RichTextEditor.vue"] --> EXT["extension.ts"]
@@ -104,7 +108,7 @@ flowchart LR
 ## 层职责
 
 - **画布层**：MdrCanvas 管布局/会话/缩放；zIndex 定层；canvasCoords 管换算。
-- **块渲染层**：MdrCanvasComponentBase 提供通用壳（尺寸、拖拽栏、设置插槽、controller）；具体块组件（RichText/Code）只关心自身 config、可变形与设置 UI；ResizeBox 提供缩放手柄；RichTextEditor 承载 ProseMirror。
+- **块渲染层**：MdrCanvasComponentBase 提供通用壳（尺寸、拖拽栏、设置插槽、controller）；具体块组件（RichText/Code/Image）只关心自身 config、可变形与设置 UI；ImageBlock 的图片二进制经 componentDataStore 存入 `.mdrf` 的 `ComponentsData/<UUID>/`；ResizeBox 提供缩放手柄；RichTextEditor 承载 ProseMirror。
 - **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 basRichTextEditor / EditableCodeBlock 在自己的定义里使用 base，并自行处理 config、可变形、设置 UI 与自动高度；ResizeBox 提供缩放手柄。
 - **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 base 渲染共用。
 - **控制器契约**：canvasComponentControllers 定义块内组件向画布申请移动/改尺寸/平移/缩放/读视图的接口（provide/inject），自动高度与光标跟随都由块组件自己调用

@@ -99,6 +99,7 @@ flowchart TD
 ```
 
 > `heightChangable` 由块组件注册项声明（富文本 autoHeight 时不可改高），画布与 base 共用同一判定；`isPanning` 由 `getViewData` 提供，拖拽平移期间组件不跟随光标。
+> 组件自己调用 `resizeTo` 不受 changable 拦截；自动大小（如图片块）在尺寸落定后把两轴都置为不可变，手柄随之收掉。
 >
 > `pushColumnBelow` 只推 root **下方**的水平重叠块；位于其上方的块即使 x 范围相交也不参与推动。
 

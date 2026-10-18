@@ -115,8 +115,9 @@ const geometry = computed(() => ({
 const handleStyle = computed(() => handleBarStyleOf(geometry.value))
 const settingsStyle = computed(() => sideSettingsStyleOf(geometry.value))
 
-// 该轴不可变时联结不得改它，手柄同步收掉；高度不可变只剩左右手柄，宽度不可变只剩上下手柄
+// 该轴不可变时联结不得改它，手柄同步收掉；两轴都锁时不留手柄，否则只剩单轴手柄
 const effectiveHandles = computed<string[]>(() => {
+  if (!props.heightChangable && !props.widthChangable) return []
   if (!props.heightChangable) return props.handles.filter((handle) => handle === 'ml' || handle === 'mr')
   if (!props.widthChangable) return props.handles.filter((handle) => handle === 'tm' || handle === 'bm')
   return props.handles
@@ -186,15 +187,26 @@ const onSettingsToggle = async (event: MouseEvent) => {
   fitSettingsMenuVertically()
 }
 
-const isInsideSettingsUi = (target: Node | null): boolean =>
-  !!settingsMenuEl.value?.contains(target) || !!settingsAnchorEl.value?.contains(target)
+// 设置项里的下拉菜单/浮层挂在 body 的 overlay 容器，不能当成「点了外面」
+const isInsideSettingsUi = (target: EventTarget | null): boolean => {
+  const element = target instanceof Element ? target : null
+  return !!settingsMenuEl.value?.contains(element) ||
+    !!settingsAnchorEl.value?.contains(element) ||
+    !!element?.closest('.v-overlay-container')
+}
 
 const closeSettings = () => {
   settingsOpen.value = false
 }
 
 const onDocumentPointerDown = (event: MouseEvent) => {
-  if (isInsideSettingsUi(event.target as Node)) return
+  if (isInsideSettingsUi(event.target)) return
+  closeSettings()
+}
+
+// 下拉菜单内部滚动（选项滚动/scrollIntoView）不应关掉设置面板
+const onDocumentScroll = (event: Event) => {
+  if (isInsideSettingsUi(event.target)) return
   closeSettings()
 }
 
@@ -206,14 +218,14 @@ const bindSettingsDismiss = (open: boolean) => {
   if (open) {
     window.addEventListener('mousedown', onDocumentPointerDown, true)
     window.addEventListener('keydown', onDocumentKeydown, true)
-    window.addEventListener('scroll', closeSettings, true)
+    window.addEventListener('scroll', onDocumentScroll, true)
     window.addEventListener('resize', closeSettings)
     window.addEventListener('Mindrizzle:canvas-transform', closeSettings)
     return
   }
   window.removeEventListener('mousedown', onDocumentPointerDown, true)
   window.removeEventListener('keydown', onDocumentKeydown, true)
-  window.removeEventListener('scroll', closeSettings, true)
+  window.removeEventListener('scroll', onDocumentScroll, true)
   window.removeEventListener('resize', closeSettings)
   window.removeEventListener('Mindrizzle:canvas-transform', closeSettings)
 }
