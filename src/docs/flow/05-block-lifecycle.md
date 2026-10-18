@@ -91,7 +91,7 @@ flowchart TD
   E --> F{"mobileMode?"}
   F -->|是| G["shiftBlocksBelow 下方堆叠块跟随"]
   F -->|否| H["propagateLinkedEdges 联结群<br/>heightChangable=false 的块不改高"]
-  H --> I["pushOverlapped 消解重叠"]
+  H --> I["pushOverlapped<br/>按起始方位：右侧推右 / 下方推下"]
   G --> J["scheduleGeometryRefresh + markLayoutDirty"]
   I --> J
   C --> K["canvasController.getViewData()"]
@@ -101,7 +101,7 @@ flowchart TD
 > `heightChangable` 由块组件注册项声明（富文本 autoHeight 时不可改高），画布与 base 共用同一判定；`isPanning` 由 `getViewData` 提供，拖拽平移期间组件不跟随光标。
 > 组件自己调用 `resizeTo` 不受 changable 拦截；自动大小（如图片块）在尺寸落定后把两轴都置为不可变，手柄随之收掉。
 >
-> `pushColumnBelow` 只推 root **下方**的水平重叠块；位于其上方的块即使 x 范围相交也不参与推动。
+> `pushOverlapped` 按**变更前**的起始矩形判断方位：原本贴在右侧的块横向右推（横向联结群跟随），原本在下方/底边贴合的块纵向推下；变宽后新产生的横向重叠不会再被误判成「下方块」，也不会把侧边块推到下面。
 
 ## 维护提示
 

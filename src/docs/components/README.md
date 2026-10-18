@@ -167,7 +167,7 @@ const syncAutoHeight = () => {
 
 - 高度会被 `constraintsOf` 的 `minHeight + 8` 钳制，内容不足时停在最小高。
 - 光标跟随：`getViewData()` 判断光标是否超出视口底部，再 `panBy(0, -over)`；拖拽平移期间 `isPanning` 为 `true`，应跳过。
-- 高度变化后的联结传播与重叠推挤由画布 `applyBlockSize` 统一处理，块组件不要直接写 layout。
+- 尺寸变化后的联结传播与重叠推挤由画布 `applyBlockSize` 统一处理，块组件不要直接写 layout。
 
 ## 常见坑
 

@@ -1914,6 +1914,13 @@ interface LinkedShift {
   moved: Set<string>
 }
 
+type PushAxis = 'x' | 'y'
+
+interface AxisShift {
+  delta: number
+  axis: PushAxis
+}
+
 const buildShiftContext = (): LinkedShift => ({
   starts: new Map(state.items.map((it) => [it.uuid, { ...layoutOf(it) }])),
   itemMap: new Map(state.items.map((it) => [it.uuid, it])),
@@ -1921,6 +1928,7 @@ const buildShiftContext = (): LinkedShift => ({
 })
 
 const isOverlappingX = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x
+const isOverlappingY = (a: Rect, b: Rect) => a.y < b.y + b.h && a.y + a.h > b.y
 
 // 与位移块保持横向贴合的邻居分两类：正下方贴合、以及上缘齐的同行块（后者不跟则下方横跨块会脱开）
 const touchesVertically = (from: Rect, to: Rect): boolean => {
@@ -1930,8 +1938,24 @@ const touchesVertically = (from: Rect, to: Rect): boolean => {
   return belowAttached || sameRowAttached
 }
 
-// 纵向改高时整片联结群一起搬运，链才会一直闭合
-const shiftLinkedGroup = (rootId: string, delta: number, shift: LinkedShift) => {
+// 横向推挤的跟随规则与纵向镜像：正右侧贴合、以及左缘齐的同列块
+const touchesHorizontally = (from: Rect, to: Rect): boolean => {
+  const rightAttached = isOverlappingY(from, to) && Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE
+  const sameColumnAttached = Math.abs(to.x - from.x) <= SNAP_TOLERANCE &&
+    (Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE || Math.abs(from.y - (to.y + to.h)) <= SNAP_TOLERANCE)
+  return rightAttached || sameColumnAttached
+}
+
+const axisAlong = (rect: Rect, axis: PushAxis) => (axis === 'x' ? rect.x : rect.y)
+const axisSize = (rect: Rect, axis: PushAxis) => (axis === 'x' ? rect.w : rect.h)
+const setAxis = (rect: Rect, axis: PushAxis, value: number) => {
+  if (axis === 'x') rect.x = value
+  else rect.y = value
+}
+
+// 尺寸推挤时整片联结群一起搬运，链才会一直闭合
+const shiftLinkedGroup = (rootId: string, step: AxisShift, shift: LinkedShift) => {
+  const touches = step.axis === 'x' ? touchesHorizontally : touchesVertically
   const queue = [rootId]
   while (queue.length) {
     const id = queue.shift()!
@@ -1942,46 +1966,51 @@ const shiftLinkedGroup = (rootId: string, delta: number, shift: LinkedShift) => 
       const neighborStart = shift.starts.get(neighborId)
       const neighbor = shift.itemMap.get(neighborId)
       if (!neighborStart || !neighbor) return
-      if (!touchesVertically(source, neighborStart)) return
-      layoutOf(neighbor).y = neighborStart.y + delta
+      if (!touches(source, neighborStart)) return
+      setAxis(layoutOf(neighbor), step.axis, axisAlong(neighborStart, step.axis) + step.delta)
       shift.moved.add(neighborId)
       queue.push(neighborId)
     })
   }
 }
 
-// 把某块下方的重叠块整体下推，被推块的下方联结链一并带走，避免推挤撕开贴合
-const pushColumnBelow = (root: CanvasItem, shift: LinkedShift) => {
+// 尺寸增长后按变更前方位推挤：右侧块右推、下方块下推，变宽新产生的横向重叠不能被误判成下方块
+const pushAxisOverlap = (root: CanvasItem, shift: LinkedShift, axis: PushAxis) => {
   const rootLayout = layoutOf(root)
-  const column = state.items
-    .filter((other) => other.uuid !== root.uuid && isOverlappingX(rootLayout, layoutOf(other)))
-    .sort((a, b) => layoutOf(a).y - layoutOf(b).y)
-  let cursor = rootLayout.y + rootLayout.h
-  column.forEach((other) => {
+  const rootStart = shift.starts.get(root.uuid)
+  if (!rootStart) return
+  const crosses = axis === 'x' ? isOverlappingY : isOverlappingX
+  const startLimit = axisAlong(rootStart, axis) + axisSize(rootStart, axis) - EDGE_TOL
+  const targets = state.items
+    .filter((other) => other.uuid !== root.uuid && crosses(rootLayout, layoutOf(other)))
+    .sort((a, b) => axisAlong(layoutOf(a), axis) - axisAlong(layoutOf(b), axis))
+  let cursor = axisAlong(rootLayout, axis) + axisSize(rootLayout, axis)
+  targets.forEach((other) => {
     const layout = layoutOf(other)
-    // 只推动下方块；上方块即使水平重叠也不在推动方向上
-    if (layout.y + layout.h <= rootLayout.y + EDGE_TOL) return
-    // 已随联结链就位的块不再推，但要推进推动线，否则其下方块会漏推
+    const start = shift.starts.get(other.uuid)
+    // 只推变更前就贴在右侧/下方的块，原本重叠的块保持原位
+    if (!start || axisAlong(start, axis) < startLimit) return
     if (shift.moved.has(other.uuid)) {
-      cursor = Math.max(cursor, layout.y + layout.h)
+      cursor = Math.max(cursor, axisAlong(layout, axis) + axisSize(layout, axis))
       return
     }
-    if (layout.y >= cursor) return
-    const delta = cursor - layout.y
-    layout.y = cursor
+    const pos = axisAlong(layout, axis)
+    if (pos >= cursor) return
+    setAxis(layout, axis, cursor)
     shift.moved.add(other.uuid)
-    shiftLinkedGroup(other.uuid, delta, shift)
-    cursor = layout.y + layout.h
+    shiftLinkedGroup(other.uuid, { delta: cursor - pos, axis }, shift)
+    cursor = axisAlong(layout, axis) + axisSize(layout, axis)
   })
 }
 
-// 联结群整体位移后，逐块消解与未联结块的重叠
+// 联结群整体位移后，逐块消解与未联结块的重叠：先按横向推右，再按纵向推下
 const pushOverlapped = (shift: LinkedShift) => {
-  Array.from(shift.moved)
+  const seeds = Array.from(shift.moved)
     .map((id) => shift.itemMap.get(id))
     .filter((item): item is CanvasItem => !!item)
     .sort((a, b) => layoutOf(a).y - layoutOf(b).y)
-    .forEach((seed) => pushColumnBelow(seed, shift))
+  seeds.forEach((seed) => pushAxisOverlap(seed, shift, 'x'))
+  seeds.forEach((seed) => pushAxisOverlap(seed, shift, 'y'))
 }
 
 // 尺寸变更复用 resize 的共享边传播，再消解增长造成的重叠
