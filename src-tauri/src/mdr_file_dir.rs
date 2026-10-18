@@ -7,7 +7,3 @@ pub fn get_mdr_file_save_dir() -> std::path::PathBuf {
     }
     path
 }
-
-pub fn get_mdr_file_dir(file_name: String) -> std::path::PathBuf {
-    get_mdr_file_save_dir().join(file_name + ".mdrf")
-}

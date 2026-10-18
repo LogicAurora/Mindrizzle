@@ -18,10 +18,15 @@ use tauri_plugin_log::{
 use tokio::fs;
 
 tauri_cmd! {
-    fn fetch_file_list() -> anyhow::Result<Vec<String>> {
+    fn fetch_file_list(dir: Option<String>) -> anyhow::Result<Vec<String>> {
         let mut file_list: Vec<String> = Vec::new();
-        let dir = mdr_file_dir::get_mdr_file_save_dir();
-        for entry in std::fs::read_dir(&dir).with_context(|| format!("读取笔记目录：{}", dir.display()))? {
+        let directory = match dir.as_deref() {
+            Some(raw_dir) => mdr_file_op::resolve_workspace_dir(raw_dir)?,
+            None => mdr_file_dir::get_mdr_file_save_dir(),
+        };
+        for entry in std::fs::read_dir(&directory)
+            .with_context(|| format!("读取笔记目录：{}", directory.display()))?
+        {
             let entry = entry.context("读取笔记目录项")?;
             let path = entry.path();
             if !path.is_file() {
@@ -38,16 +43,18 @@ tauri_cmd! {
                 file_list.push(file_name.to_string());
             }
         }
+        file_list.sort();
         info!("读取笔记列表成功，共 {} 个文件", file_list.len());
         Ok(file_list)
     }
 }
 
 #[tauri::command]
-async fn is_file_name_valid(file_name: String) -> bool {
-    let path = mdr_file_dir::get_mdr_file_dir(file_name);
-    let result = !fs::try_exists(path).await.unwrap_or(false);
-    result
+async fn is_file_name_valid(file_name: String, dir: Option<String>) -> bool {
+    let Ok(location) = mdr_file_op::resolve_note_archive(&file_name, dir.as_deref(), None) else {
+        return false;
+    };
+    !fs::try_exists(location.archive).await.unwrap_or(false)
 }
 
 #[tauri::command]
@@ -94,6 +101,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             fetch_file_list,
             is_file_name_valid,
@@ -102,6 +110,7 @@ pub fn run() {
             mdr_file_op::get_mdr_file_body,
             mdr_file_op::set_mdr_file_body,
             mdr_file_op::create_mdr_file,
+            mdr_file_op::move_mdrf_file,
             mdr_component_data::list_component_data_files,
             mdr_component_data::read_component_data_file,
             mdr_component_data::write_component_data_file,

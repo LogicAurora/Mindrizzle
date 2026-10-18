@@ -14,7 +14,6 @@ use std::path::{Component, Path, PathBuf};
 use tar::Archive;
 
 use crate::mdr_file_cache::{invalidate_named, MindrizzleFileCache};
-use crate::mdr_file_dir;
 use crate::mdr_file_op;
 use crate::mdr_file_tar::{extract_to_cache, is_mdrf_compressed};
 use crate::tauri_cmd;
@@ -26,12 +25,21 @@ const COMPONENT_PATH_MAX_LEN: usize = 512;
 const COMPONENT_FILE_MAX_BYTES: usize = 64 * 1024 * 1024;
 const COMPONENT_PATH_FORBIDDEN_CHARS: [char; 8] = ['\\', ':', '*', '?', '"', '<', '>', '|'];
 
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NoteSource {
+    dir: Option<String>,
+    file_path: Option<String>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentFileRequest {
     file_name: String,
     uuid: String,
     path: String,
+    #[serde(flatten)]
+    source: NoteSource,
 }
 
 // 列目录不需要具体文件路径，所以单独一个结构，避免前端被迫传空 path
@@ -40,6 +48,8 @@ pub struct ComponentFileRequest {
 pub struct ComponentScopeRequest {
     file_name: String,
     uuid: String,
+    #[serde(flatten)]
+    source: NoteSource,
 }
 
 #[derive(Deserialize)]
@@ -49,10 +59,14 @@ pub struct ComponentFileWriteRequest {
     uuid: String,
     path: String,
     content_base64: String,
+    #[serde(flatten)]
+    source: NoteSource,
 }
 
 struct ComponentFileTarget {
     // 缓存失效要用，否则重新打包后同名暂存区还会把旧数据写回去
+    cache_key: String,
+    // 日志与错误提示用，外部文件取归档文件名
     note_name: String,
     archive: PathBuf,
     uuid: String,
@@ -74,12 +88,10 @@ impl ComponentFileTarget {
 
 tauri_cmd! {
     pub fn list_component_data_files(request: ComponentScopeRequest) -> anyhow::Result<Vec<String>> {
-        let note_name = mdr_file_op::resolve_mdrf_file_name(&request.file_name)?;
         validate_component_uuid(&request.uuid)?;
-        let archive = resolve_archive(&note_name)?;
-        let compressed = is_mdrf_compressed(&archive).context("检测笔记压缩格式")?;
+        let target = resolve_scope(&request)?;
         let prefix = format!("{COMPONENT_DATA_ROOT}/{}/", request.uuid);
-        list_archive_paths(&archive, compressed, &prefix)
+        list_archive_paths(&target.archive, target.compressed, &prefix)
     }
 
     pub fn read_component_data_file(request: ComponentFileRequest) -> anyhow::Result<String> {
@@ -101,6 +113,7 @@ tauri_cmd! {
             file_name: request.file_name,
             uuid: request.uuid,
             path: request.path,
+            source: request.source,
         })?;
         write_archive_file(&target, &content)?;
         info!("写入组件数据成功：{} / {} / {}", target.note_name, target.uuid, target.path);
@@ -121,28 +134,39 @@ tauri_cmd! {
     }
 }
 
-fn resolve_target(request: &ComponentFileRequest) -> Result<ComponentFileTarget> {
-    // 文件名、UUID 与路径都会拼进磁盘路径或归档条目，所以在进文件层之前统一校验
-    let note_name = mdr_file_op::resolve_mdrf_file_name(&request.file_name)?;
-    validate_component_uuid(&request.uuid)?;
-    let path = normalize_component_path(&request.path)?;
-    let archive = resolve_archive(&note_name)?;
-    let compressed = is_mdrf_compressed(&archive).context("检测笔记压缩格式")?;
+fn resolve_scope(request: &ComponentScopeRequest) -> Result<ComponentFileTarget> {
+    let location = mdr_file_op::resolve_note_archive(
+        &request.file_name,
+        request.source.dir.as_deref(),
+        request.source.file_path.as_deref(),
+    )?;
+    if !location.archive.is_file() {
+        return Err(anyhow::anyhow!("文件不存在或者是个目录"));
+    }
     Ok(ComponentFileTarget {
-        note_name,
-        archive,
+        cache_key: location.archive.to_string_lossy().into_owned(),
+        note_name: location.note_name,
+        compressed: is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?,
+        archive: location.archive,
         uuid: request.uuid.clone(),
-        path,
-        compressed,
+        path: String::new(),
     })
 }
 
-fn resolve_archive(note_name: &str) -> Result<PathBuf> {
-    let archive = mdr_file_dir::get_mdr_file_dir(note_name.to_string());
-    if !archive.is_file() {
-        return Err(anyhow::anyhow!("文件不存在或者是个目录"));
-    }
-    Ok(archive)
+fn resolve_target(request: &ComponentFileRequest) -> Result<ComponentFileTarget> {
+    // 文件名、UUID 与路径都会拼进磁盘路径或归档条目，所以在进文件层之前统一校验
+    validate_component_uuid(&request.uuid)?;
+    let path = normalize_component_path(&request.path)?;
+    let mut target = resolve_scope(&ComponentScopeRequest {
+        file_name: request.file_name.clone(),
+        uuid: request.uuid.clone(),
+        source: NoteSource {
+            dir: request.source.dir.clone(),
+            file_path: request.source.file_path.clone(),
+        },
+    })?;
+    target.path = path;
+    Ok(target)
 }
 
 fn validate_component_uuid(uuid: &str) -> Result<()> {
@@ -245,7 +269,7 @@ fn write_archive_file(target: &ComponentFileTarget, content: &[u8]) -> Result<()
         fs::write(&file_path, content).context("写入组件数据文件")
     })?;
     // 同名暂存区里还是加载时的旧 ComponentsData，不删会在下次保存时把旧数据写回归档
-    invalidate_named(&target.note_name);
+    invalidate_named(&target.cache_key);
     Ok(())
 }
 
@@ -263,7 +287,7 @@ fn delete_archive_file(target: &ComponentFileTarget) -> Result<()> {
         Ok(())
     })?;
     // 同名暂存区里还是加载时的旧 ComponentsData，不删会在下次保存时把旧数据写回归档
-    invalidate_named(&target.note_name);
+    invalidate_named(&target.cache_key);
     Ok(())
 }
 

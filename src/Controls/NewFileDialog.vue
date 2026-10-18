@@ -5,7 +5,7 @@ import { invokeCommand } from '../utils/invoke'
 import { invalidateNoteSetEntries } from '../utils/noteSetStore'
 import { error as LogError } from '@tauri-apps/plugin-log';
 
-const props = defineProps<{ isOpen: boolean }>()
+const props = defineProps<{ isOpen: boolean; dir?: string }>()
 const emit = defineEmits<{ 'update:close': [value: { status: boolean }] }>()
 
 let dialog = ref(false)
@@ -64,7 +64,7 @@ const debouncedCheck = (name: string) => {
       return
     }
     try {
-      const valid = await invokeCommand<boolean>('is_file_name_valid', { fileName: name })
+      const valid = await invokeCommand<boolean>('is_file_name_valid', { fileName: name, dir: props.dir })
       fileNameAsyncError.value = valid ? true : '文件名已被占用'
     } catch {
       fileNameAsyncError.value = '校验失败，请重试'
@@ -95,10 +95,11 @@ async function submit() {
         tag: ["新笔记"],
       },
       fileName: fileName.value,
+      dir: props.dir,
     });
     dialog.value = false;
     invalidateNoteSetEntries();
-    router.push(`/editor/${createdFileName}`)
+    router.push({ name: 'editor', params: { fileName: createdFileName }, query: props.dir ? { dir: props.dir } : {} })
   } catch(e) {
     LogError(getErrorMessage(e))
   }

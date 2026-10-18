@@ -1,7 +1,7 @@
 // 网页端没有 Tauri IPC，笔记文件层退化为 IndexedDB：正文与元信息按结构化克隆存取，不做 tar/压缩
 import type { InvokeArgs } from '@tauri-apps/api/core'
 
-import { buildMdrfBlob } from './mdrfArchive'
+import { buildMdrfBlob, parseMdrfArchive } from './mdrfArchive'
 
 const DB_NAME = 'mindrizzle-local'
 const DB_VERSION = 1
@@ -12,6 +12,10 @@ const NOTE_KEY_PREFIX = 'mindrizzle:note:'
 const COMPONENT_DATA_KEY_PREFIX = 'mindrizzle:component-data:'
 const TEST_NOTE_PREFIX = '性能测试_'
 const MDRF_EXTENSION = '.mdrf'
+const MDRF_EXTENSION_AT_END = /\.mdrf$/i
+const IMPORT_NAME_FORBIDDEN_CHARS = /[\\/:*?"<>|]/g
+const IMPORT_NAME_FALLBACK = '导入的笔记'
+const IMPORT_NAME_MAX_ATTEMPTS = 1000
 const FILE_NAME_MAX_LEN = 50
 const COMPONENT_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 const COMPONENT_PATH_MAX_LEN = 512
@@ -315,6 +319,54 @@ export const exportLocalNoteMdrf = async (fileName: string): Promise<string> => 
   const downloadName = `${resolved}${MDRF_EXTENSION}`
   triggerDownload(blob, downloadName)
   return downloadName
+}
+
+const sanitizeImportName = (raw: string): string => {
+  const cleaned = raw
+    .replace(IMPORT_NAME_FORBIDDEN_CHARS, '_')
+    .replace(/^ +/, '')
+    .replace(/[ .]+$/, '')
+    .slice(0, FILE_NAME_MAX_LEN)
+  return cleaned || IMPORT_NAME_FALLBACK
+}
+
+// 导入不覆盖已有笔记（含未入工作区的外部副本），同名时追加序号
+const allocateImportName = async (preferred: string): Promise<string> => {
+  const base = sanitizeImportName(preferred)
+  if (!(await readNote(base))) return base
+  for (let attempt = 2; attempt < IMPORT_NAME_MAX_ATTEMPTS; attempt++) {
+    const suffix = `_${attempt}`
+    const candidate = `${base.slice(0, FILE_NAME_MAX_LEN - suffix.length)}${suffix}`
+    if (!(await readNote(candidate))) return candidate
+  }
+  throw new Error('同名笔记过多，导入失败')
+}
+
+export const importLocalNoteMdrf = async (file: File): Promise<string> => {
+  const archive = await parseMdrfArchive(await file.arrayBuffer())
+  const fallbackName = file.name.replace(MDRF_EXTENSION_AT_END, '')
+  const fileName = await allocateImportName(archive.meta.title || fallbackName)
+  const note: NoteRecord = {
+    meta: { ...archive.meta, title: archive.meta.title || fileName },
+    content: archive.content,
+    updatedAt: Date.now(),
+  }
+  await runWrite((store) => store.put(note, noteKeyOf(fileName)))
+  const scopes = Object.entries(archive.componentData)
+  await Promise.all(
+    scopes.map(([uuid, files]) =>
+      runWrite((store) => store.put(files, `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`)),
+    ),
+  )
+  return fileName
+}
+
+// 外部笔记先不进工作区索引，用户点「移动到工作区」时才收录
+export const moveLocalNoteToWorkspace = async (fileName: string): Promise<void> => {
+  const { resolved } = await requireNote(fileName)
+  const fileNames = await readFileIndex()
+  if (fileNames.includes(resolved)) return
+  await writeFileIndex([...fileNames, resolved])
 }
 
 const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {

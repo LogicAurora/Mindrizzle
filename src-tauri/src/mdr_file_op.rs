@@ -4,12 +4,12 @@ use log::{info, warn};
 use quick_xml::de::from_str;
 use quick_xml::se::to_string;
 use std::fs::{self, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, UNIX_EPOCH};
 use tauri::{Emitter, Window};
 
-use crate::mdr_file_cache::MindrizzleFileCache;
+use crate::mdr_file_cache::{invalidate_named, MindrizzleFileCache};
 use crate::mdr_file_struct::{MindrizzleFileBody, MindrizzleFileMeta, MindrizzleFileMetaView};
 use crate::mdr_file_tar::{
     extract_meta, extract_to_cache, extract_to_cache_with_progress, is_mdrf_compressed, pack_cache,
@@ -45,14 +45,20 @@ pub(crate) fn lock_file_write() -> MutexGuard<'static, ()> {
 }
 
 tauri_cmd! {
-    pub fn get_mdr_file_meta(file_name: String) -> anyhow::Result<MindrizzleFileMetaView> {
-        let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
-        let path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
+    pub fn get_mdr_file_meta(
+        file_name: String,
+        dir: Option<String>,
+        file_path: Option<String>
+    ) -> anyhow::Result<MindrizzleFileMetaView> {
+        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+            .context("校验笔记文件位置")?;
+        let path = location.archive;
         if !path.is_file() {
             return Err(anyhow::anyhow!("文件不存在或者是个目录"));
         }
         let compressed = is_mdrf_compressed(&path).context("检测笔记压缩格式")?;
-        let file = File::open(&path).with_context(|| format!("打开笔记文件：{}", resolved_name))?;
+        let file = File::open(&path)
+            .with_context(|| format!("打开笔记文件：{}", location.note_name))?;
         let data = extract_meta(file, compressed).context("读取笔记元信息")?;
         let xml = String::from_utf8(data).context("转换笔记元信息编码")?;
         let meta = deserialize_mdr_file_meta_xml(&xml).context("解码笔记元信息")?;
@@ -60,20 +66,26 @@ tauri_cmd! {
         Ok(MindrizzleFileMetaView { meta, updated_at })
     }
 
-    pub fn set_mdr_file_body(file_name: String, content: String) -> anyhow::Result<()> {
+    pub fn set_mdr_file_body(
+        file_name: String,
+        content: String,
+        dir: Option<String>,
+        file_path: Option<String>
+    ) -> anyhow::Result<()> {
         let _guard = lock_file_write();
-        let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
-        let path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
+        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+            .context("校验笔记文件位置")?;
+        let path = location.archive;
         if !path.is_file() {
             return Err(anyhow::anyhow!("文件不存在或者是个目录"));
         }
         let compressed = is_mdrf_compressed(&path).context("检测笔记压缩格式")?;
-        let mut cache = MindrizzleFileCache::new_named(&resolved_name)
-            .with_context(|| format!("创建笔记缓存：{}", resolved_name))?;
+        let mut cache = MindrizzleFileCache::new_named(&cache_key_of(&path))
+            .with_context(|| format!("创建笔记缓存：{}", location.note_name))?;
         // 目录缺 body.json 说明此前未走 get 解包，所以在此补一次
         if !cache.path().join("body.json").is_file() {
-            warn!("笔记缓存缺少正文，重新解包：{}", resolved_name);
-            let file = File::open(&path).with_context(|| format!("打开笔记文件：{}", resolved_name))?;
+            warn!("笔记缓存缺少正文，重新解包：{}", location.note_name);
+            let file = File::open(&path).with_context(|| format!("打开笔记文件：{}", location.note_name))?;
             extract_to_cache(file, cache.path(), compressed).context("补充解包笔记正文")?;
         }
         let body_xml = serialize_mdr_file_body_xml(MindrizzleFileBody { content })
@@ -82,16 +94,18 @@ tauri_cmd! {
         // body 已更新，所以重新打包同步到 .mdrf
         pack_cache_atomic(&path, cache.path(), compressed).context("保存笔记文件")?;
         cache.cleanup();
-        info!("保存笔记正文成功：{}", resolved_name);
+        info!("保存笔记正文成功：{}", location.note_name);
         Ok(())
     }
 
     pub fn create_mdr_file(
         mdr_file_info: MindrizzleFileMeta,
-        file_name: String
+        file_name: String,
+        dir: Option<String>
     ) -> anyhow::Result<String> {
         let _guard = lock_file_write();
-        let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
+        let location = resolve_note_archive(&file_name, dir.as_deref(), None)
+            .context("校验笔记文件位置")?;
         let cache = MindrizzleFileCache::new().context("创建笔记缓存")?;
         let meta_xml = serialize_mdr_file_meta_xml(mdr_file_info)
             .context("编码笔记元信息")?;
@@ -102,14 +116,39 @@ tauri_cmd! {
         cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
         cache.write_file("body.json", body_xml.as_bytes()).context("写入初始笔记正文缓存")?;
 
-        let file_path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
+        let file_path = location.archive;
         // 前端已拦截同名，后端仍须防覆盖既有笔记
         if file_path.exists() {
             return Err(anyhow::anyhow!("同名文件已存在"));
         }
         pack_cache_atomic(&file_path, cache.path(), true).context("写入笔记文件")?;
-        info!("创建笔记成功：{}", resolved_name);
-        Ok(resolved_name)
+        info!("创建笔记成功：{}", location.note_name);
+        Ok(location.note_name)
+    }
+
+    pub fn move_mdrf_file(
+        file_path: String,
+        dir: Option<String>
+    ) -> anyhow::Result<String> {
+        let _guard = lock_file_write();
+        let source = resolve_note_archive("", None, Some(file_path.as_str()))
+            .context("校验外部笔记文件")?;
+        let target_dir = match dir.as_deref() {
+            Some(raw_dir) => resolve_workspace_dir(raw_dir)?,
+            None => mdr_file_dir::get_mdr_file_save_dir(),
+        };
+        let target = target_dir.join(format!("{}.mdrf", source.note_name));
+        if target.exists() {
+            return Err(anyhow::anyhow!("目标工作区已有同名笔记"));
+        }
+        // 跨分区时 rename 会失败，只能退回复制后删原文件
+        if fs::rename(&source.archive, &target).is_err() {
+            fs::copy(&source.archive, &target).context("复制笔记到目标工作区")?;
+            fs::remove_file(&source.archive).context("删除原外部笔记文件")?;
+        }
+        invalidate_named(&cache_key_of(&source.archive));
+        info!("笔记移入工作区：{} -> {}", source.note_name, target.display());
+        Ok(source.note_name)
     }
 }
 
@@ -117,10 +156,18 @@ tauri_cmd! {
 pub async fn get_mdr_file_body(
     window: Window,
     file_name: String,
+    dir: Option<String>,
+    file_path: Option<String>,
     debug_progress: Option<bool>,
 ) -> Result<MindrizzleFileBody, tauri::ipc::InvokeError> {
     let result = tauri::async_runtime::spawn_blocking(move || {
-        read_mdr_file_body(&window, &file_name, debug_progress.unwrap_or(false))
+        read_mdr_file_body(
+            &window,
+            &file_name,
+            dir.as_deref(),
+            file_path.as_deref(),
+            debug_progress.unwrap_or(false),
+        )
     })
     .await
     .map_err(|error| {
@@ -139,19 +186,22 @@ pub async fn get_mdr_file_body(
 fn read_mdr_file_body(
     window: &Window,
     file_name: &str,
+    dir: Option<&str>,
+    file_path: Option<&str>,
     is_debug_progress: bool,
 ) -> anyhow::Result<MindrizzleFileBody> {
     // 组件数据写入会失效同名暂存区，读取期间必须挡住它，否则解包到一半目录被删
     let _guard = lock_file_write();
     emit_file_load_progress(window, PROGRESS_VALIDATE, is_debug_progress);
-    let resolved_name = resolve_mdrf_file_name(file_name).context("校验笔记文件名")?;
-    let path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
+    let location = resolve_note_archive(file_name, dir, file_path).context("校验笔记文件位置")?;
+    let path = location.archive;
     if !path.is_file() {
         return Err(anyhow::anyhow!("文件不存在或者是个目录"));
     }
     let compressed = detect_file_compression(window, &path, is_debug_progress)?;
-    let mut cache = create_file_cache(window, &resolved_name, is_debug_progress)?;
-    let file = File::open(&path).with_context(|| format!("打开笔记文件：{}", resolved_name))?;
+    let mut cache = create_file_cache(window, &cache_key_of(&path), is_debug_progress)?;
+    let file = File::open(&path)
+        .with_context(|| format!("打开笔记文件：{}", location.note_name))?;
     emit_file_load_progress(window, PROGRESS_EXTRACT_START, is_debug_progress);
     extract_to_cache_with_progress(file, cache.path(), compressed, |value| {
         let progress = PROGRESS_EXTRACT_START + value * PROGRESS_EXTRACT_RANGE / PROGRESS_COMPLETE;
@@ -160,7 +210,7 @@ fn read_mdr_file_body(
     .context("解包笔记正文")?;
     cache.disable_cleanup();
     let body = read_cached_mdr_file_body(window, &mut cache, is_debug_progress)?;
-    info!("读取笔记正文成功：{}", resolved_name);
+    info!("读取笔记正文成功：{}", location.note_name);
     Ok(body)
 }
 
@@ -175,12 +225,12 @@ fn detect_file_compression(
 
 fn create_file_cache(
     window: &Window,
-    file_name: &str,
+    cache_key: &str,
     is_debug_progress: bool,
 ) -> anyhow::Result<MindrizzleFileCache> {
     emit_file_load_progress(window, PROGRESS_CREATE_CACHE, is_debug_progress);
-    MindrizzleFileCache::new_named(file_name)
-        .with_context(|| format!("创建笔记缓存：{}", file_name))
+    MindrizzleFileCache::new_named(cache_key)
+        .with_context(|| format!("创建笔记缓存：{cache_key}"))
 }
 
 fn read_cached_mdr_file_body(
@@ -202,6 +252,76 @@ fn emit_file_load_progress(window: &Window, progress: u32, is_debug_progress: bo
     if is_debug_progress {
         std::thread::sleep(DEBUG_PROGRESS_DELAY);
     }
+}
+
+/// 笔记的磁盘位置：默认工作区按文件名拼、自定义工作区按目录拼、外部文件直接用绝对路径
+pub(crate) struct NoteArchiveLocation {
+    pub archive: PathBuf,
+    pub note_name: String,
+}
+
+// 缓存目录名不能带路径分隔符，统一用归档绝对路径做 key，避免不同工作区同名笔记互相覆盖
+fn cache_key_of(archive: &Path) -> String {
+    archive.to_string_lossy().into_owned()
+}
+
+pub(crate) fn resolve_note_archive(
+    file_name: &str,
+    dir: Option<&str>,
+    file_path: Option<&str>,
+) -> anyhow::Result<NoteArchiveLocation> {
+    if let Some(raw_path) = file_path {
+        return resolve_external_archive(raw_path);
+    }
+    let note_name = resolve_mdrf_file_name(file_name)?;
+    let directory = match dir {
+        Some(raw_dir) => resolve_workspace_dir(raw_dir)?,
+        None => mdr_file_dir::get_mdr_file_save_dir(),
+    };
+    Ok(NoteArchiveLocation {
+        archive: directory.join(format!("{note_name}.mdrf")),
+        note_name,
+    })
+}
+
+// 外部路径来自文件对话框，仍须挡掉相对路径、目录与非 .mdrf 文件，避免命令被当成任意文件读写
+fn resolve_external_archive(raw_path: &str) -> anyhow::Result<NoteArchiveLocation> {
+    let path = PathBuf::from(raw_path);
+    if !path.is_absolute() {
+        return Err(anyhow::anyhow!("外部文件必须使用绝对路径"));
+    }
+    let archive = fs::canonicalize(&path).context("打开外部笔记文件")?;
+    if !archive.is_file() {
+        return Err(anyhow::anyhow!("文件不存在或者是个目录"));
+    }
+    let has_mdrf_ext = archive
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("mdrf"));
+    if !has_mdrf_ext {
+        return Err(anyhow::anyhow!("只能打开 .mdrf 文件"));
+    }
+    let note_name = archive
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("未命名笔记")
+        .to_string();
+    Ok(NoteArchiveLocation {
+        archive,
+        note_name,
+    })
+}
+
+pub(crate) fn resolve_workspace_dir(raw_dir: &str) -> anyhow::Result<PathBuf> {
+    let path = PathBuf::from(raw_dir);
+    if !path.is_absolute() {
+        return Err(anyhow::anyhow!("工作区目录必须使用绝对路径"));
+    }
+    let directory = fs::canonicalize(&path).context("打开工作区目录")?;
+    if !directory.is_dir() {
+        return Err(anyhow::anyhow!("工作区路径不是目录"));
+    }
+    Ok(directory)
 }
 
 /// IPC 入口的 file_name 会拼进磁盘路径，按前端同名规则校验，防路径穿越与任意文件覆盖

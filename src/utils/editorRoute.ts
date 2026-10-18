@@ -2,14 +2,23 @@ export const loadEditorComponent = () => import('../Views/Editor.vue')
 
 export type EditorBodyResult = { content: string } | { error: unknown }
 
-let pendingEditorBody: { fileName: string; bodyPromise: Promise<EditorBodyResult> } | null = null
-
-export function storePendingEditorBody(fileName: string, bodyPromise: Promise<EditorBodyResult>) {
-	pendingEditorBody = { fileName, bodyPromise }
+export interface EditorNoteRef {
+  fileName: string
+  dir?: string
+  filePath?: string
 }
 
-export function takePendingEditorBody(fileName: string) {
-	if (!pendingEditorBody || pendingEditorBody.fileName !== fileName) return null
+const noteKeyOf = (note: EditorNoteRef): string =>
+	`${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`
+
+let pendingEditorBody: { key: string; bodyPromise: Promise<EditorBodyResult> } | null = null
+
+export function storePendingEditorBody(note: EditorNoteRef, bodyPromise: Promise<EditorBodyResult>) {
+	pendingEditorBody = { key: noteKeyOf(note), bodyPromise }
+}
+
+export function takePendingEditorBody(note: EditorNoteRef) {
+	if (!pendingEditorBody || pendingEditorBody.key !== noteKeyOf(note)) return null
 	const bodyPromise = pendingEditorBody.bodyPromise
 	pendingEditorBody = null
 	return bodyPromise

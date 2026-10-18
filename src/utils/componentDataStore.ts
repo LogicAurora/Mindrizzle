@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 import { invokeCommand } from './invoke'
-import { getCurrentNoteFileName } from './noteContext'
+import { getCurrentNote } from './noteContext'
+
+// 外部文件与自定义工作区靠 dir/filePath 定位，组件数据命令必须带上同一份上下文
+const noteSourceOf = (): { dir?: string; filePath?: string } => {
+  const { dir, filePath } = getCurrentNote()
+  return { dir, filePath }
+}
 
 // URL 自带笔记名：块组件拿不到路由参数，且 URL 可能存进 config 后再读回
 export const MDRFCD_SCHEME = 'mdrfcd://'
@@ -76,7 +82,7 @@ export function parseMdrfcdUrl(url: string): MdrfcdLocation {
 export class ComponentDataStore {
   private readonly fileName: string
 
-  constructor(fileName: string = getCurrentNoteFileName()) {
+  constructor(fileName: string = getCurrentNote().fileName) {
     // 缺省绑定编辑页写入的当前笔记，显式传参便于测试或跨笔记操作
     this.fileName = fileName
   }
@@ -94,14 +100,14 @@ export class ComponentDataStore {
     validateComponentPath(location.path)
     const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content
     await invokeCommand('write_component_data_file', {
-      request: { ...location, contentBase64: encodeBase64(bytes) },
+      request: { ...location, ...noteSourceOf(), contentBase64: encodeBase64(bytes) },
     })
   }
 
   async readFile(url: string): Promise<Uint8Array> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
-    const encoded = await invokeCommand<string>('read_component_data_file', { request: location })
+    const encoded = await invokeCommand<string>('read_component_data_file', { request: { ...location, ...noteSourceOf() } })
     return decodeBase64(encoded)
   }
 
@@ -112,13 +118,13 @@ export class ComponentDataStore {
   async deleteFile(url: string): Promise<void> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
-    await invokeCommand('delete_component_data_file', { request: location })
+    await invokeCommand('delete_component_data_file', { request: { ...location, ...noteSourceOf() } })
   }
 
   async hasFile(url: string): Promise<boolean> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
-    return invokeCommand<boolean>('component_data_file_exists', { request: location })
+    return invokeCommand<boolean>('component_data_file_exists', { request: { ...location, ...noteSourceOf() } })
   }
 
   async listFiles(scope: string): Promise<string[]> {
@@ -130,7 +136,7 @@ export class ComponentDataStore {
       throw new Error('组件数据范围非法')
     }
     return invokeCommand<string[]>('list_component_data_files', {
-      request: { fileName: location.fileName, uuid: location.uuid },
+      request: { fileName: location.fileName, uuid: location.uuid, ...noteSourceOf() },
     })
   }
 }

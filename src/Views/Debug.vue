@@ -44,7 +44,7 @@ async function removeTestNotes() {
 async function measureNoteSetLoad(force: boolean) {
   isPerfBusy.value = true
   try {
-    await loadNoteSetEntries(force)
+    await loadNoteSetEntries(undefined, force)
     perfHint.value = ''
   } catch (error) {
     perfHint.value = `测量失败：${getErrorMessage(error)}`

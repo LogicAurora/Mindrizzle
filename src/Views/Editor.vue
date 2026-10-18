@@ -98,7 +98,7 @@ import { invokeCommand } from '../utils/invoke'
 import { getErrorMessage } from '../utils/getErrorMessage.ts'
 import { takePendingEditorBody } from '../utils/editorRoute'
 import { touchNoteSetUpdatedAt } from '../utils/noteSetStore'
-import { setCurrentNoteFileName } from '../utils/noteContext'
+import { setCurrentNote } from '../utils/noteContext'
 import { isDebugLoadingEnabled, noteLoadControllerKey } from '../utils/routeTransition'
 
 const noteLoadController = inject(noteLoadControllerKey)
@@ -381,17 +381,20 @@ const setZoom = (v: number | null) => {
 const route = useRoute()
 // route.params 可能是数组，所以统一取首项
 const fileName = Array.isArray(route.params.fileName) ? route.params.fileName[0] : route.params.fileName
-// 组件数据 store 拿不到路由参数，进编辑页先把笔记名写进上下文
-setCurrentNoteFileName(String(fileName ?? ''))
-const pendingEditorBody = takePendingEditorBody(String(fileName ?? ''))
+const dir = typeof route.query.dir === 'string' ? route.query.dir : undefined
+const filePath = typeof route.query.path === 'string' ? route.query.path : undefined
+const noteRef = { fileName: String(fileName ?? ''), dir, filePath }
+// 组件数据 store 拿不到路由参数，进编辑页先把笔记位置写进上下文
+setCurrentNote(noteRef)
+const pendingEditorBody = takePendingEditorBody(noteRef)
 
 const isSaving = ref(false)
 const saved = ref(false)
 const save = async () => {
   isSaving.value = true
   try {
-    await invokeCommand("set_mdr_file_body", { fileName, content: MdrCRef.value?.save() ?? '' })
-    touchNoteSetUpdatedAt(String(fileName ?? ''))
+    await invokeCommand("set_mdr_file_body", { ...noteRef, content: MdrCRef.value?.save() ?? '' })
+    touchNoteSetUpdatedAt(noteRef.fileName, dir)
   } catch (error) {
     logError(getErrorMessage(error))
   }
@@ -405,7 +408,7 @@ const load = async () => {
   const raw = pendingEditorBody
     ? await pendingEditorBody
     : await invokeCommand<{ content: string }>("get_mdr_file_body", {
-        fileName,
+        ...noteRef,
         debugProgress: isDebugLoadingEnabled.value,
       })
   if ('error' in raw) throw raw.error
