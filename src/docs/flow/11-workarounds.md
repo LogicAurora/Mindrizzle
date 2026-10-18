@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-18 -->
 # 11 Workarounds
 
 > 这些地方代码看不懂很正常——**它们不是逻辑，是 workaround**。给它们贴标签，比读懂它们更值。
@@ -10,7 +10,7 @@ flowchart TB
   A["ProseKit hover 200ms 节流"] --> A1["keepAlive setInterval 150ms"]
   B["ProseKit hover 失效缓冲"] --> B1["clearHoverViaExtension 派发 -9999 伪事件"]
   C["BCR 是否含 zoom 因浏览器而异"] --> C1["getCanvasScale 实测 domScale"]
-  D["多编辑器 hover 互相干扰"] --> D1["activeHandleBlockId 全局仲裁"]
+  D["多编辑器 hover 互相干扰"] --> D1["activeHandleUuid 全局仲裁"]
   E["跨编辑器全局抑制 UI"] --> E1["document.body.classList<br/>block-handle-dragging"]
   F["popup 与块间空隙丢 hover"] --> F1["popup::before 桥接区<br/>syncBridgeGap 实测宽度"]
   G["滚动条被 popup 桥接区吞掉"] --> G1["syncScrollbarHover 手动加 force-hover"]

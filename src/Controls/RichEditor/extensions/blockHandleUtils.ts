@@ -230,7 +230,7 @@ export function findPositionerEl(view: any): HTMLElement | null {
   const wrapper = view?.dom?.closest?.('.editor-wrapper') as HTMLElement | null
   const inWrapper = wrapper?.querySelector('.block-handle-positioner') as HTMLElement | null
   if (inWrapper) return inWrapper
-  const id = (view?.dom?.closest?.('.drag-wrapper') as HTMLElement | null)?.dataset.id
+  const id = (view?.dom?.closest?.('.drag-wrapper') as HTMLElement | null)?.dataset.uuid
   if (!id) return null
   return document.querySelector<HTMLElement>(`.block-handle-positioner[data-owner="${id}"]`)
 }

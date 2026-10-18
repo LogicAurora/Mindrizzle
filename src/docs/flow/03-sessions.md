@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-18 -->
 # 03 交互会话状态机（MdrCanvas 内部）
 
 > 这个文件里有 5 个会话变量互相抢鼠标，是 bug 高发区。
@@ -44,8 +44,8 @@ flowchart TB
   subgraph 会话变量
     P["panSession<br/>active, startClientX/Y, startPanX/Y"]
     S["selectionState<br/>active, startX/Y, currentX/Y, extend"]
-    D["customDrag<br/>active, sourceItemId, draggingIds, placementLocked"]
-    R["resizeSession<br/>itemId, handle, starts, lastBase"]
+    D["customDrag<br/>active, sourceUuid, draggingUuids, placementLocked"]
+    R["resizeSession<br/>uuid, handle, starts, lastBase"]
     A["autoPan<br/>active"]
   end
   subgraph 监听器

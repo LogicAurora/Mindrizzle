@@ -190,16 +190,16 @@ const startHorizontalScrollbar = (event: PointerEvent) => {
 let scrollbarDrag: { axis: 'vertical' | 'horizontal'; start: number; scroll: number } | null = null
 const startVerticalThumb = (event: PointerEvent) => startScrollbarDrag('vertical', event)
 const startHorizontalThumb = (event: PointerEvent) => startScrollbarDrag('horizontal', event)
-// 块内事件需块 id，逐层上溯到 wrapper 的 data-id
-const blockId = (): string | null => {
+// 块内事件需块 uuid，逐层上溯到 wrapper 的 data-uuid
+const blockUuid = (): string | null => {
   let el: HTMLElement | null = wrapperRef.value ?? null
   while (el && !el.classList.contains('drag-wrapper')) el = el.parentElement
-  return el?.getAttribute('data-id') ?? null
+  return el?.getAttribute('data-uuid') ?? null
 }
 // 拖拽滚动条时指针会滑出块行、原生 hover 扩展反复清/置 hover 致 popup 与滚动条闪烁，所以通知本块收起 popup
 const notifyScrollbarDrag = (active: boolean) => {
-  const id = blockId()
-  if (id) window.dispatchEvent(new CustomEvent('Mindrizzle:scrollbar-drag', { detail: { active, blockId: id } }))
+  const uuid = blockUuid()
+  if (uuid) window.dispatchEvent(new CustomEvent('Mindrizzle:scrollbar-drag', { detail: { active, uuid } }))
 }
 
 const startScrollbarDrag = (axis: 'vertical' | 'horizontal', event: PointerEvent) => {

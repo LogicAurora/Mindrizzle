@@ -85,11 +85,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, inject, nextTick } from 'vue'
-import { mdiFormatHeader1, mdiFormatUnderline, mdiFormatBold, mdiFormatItalic, mdiMouse, mdiNoteText, mdiCodeBraces, mdiFlaskOutline, mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
+import { mdiFormatHeader1, mdiFormatUnderline, mdiFormatBold, mdiFormatItalic, mdiMouse, mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { error as logError } from '@tauri-apps/plugin-log'
 import MdrCanvas, { type ComponentController } from '../Controls/MdrCanvas.vue'
+import { CANVAS_COMPONENTS } from '../Controls/canvasComponents.ts'
 import { screenToContent } from '../utils/canvasCoords'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY } from '../Controls/RichEditor/extensions/blockHandleUtils.ts'
 import { useRoute } from 'vue-router'
@@ -110,15 +111,11 @@ const componentOf = computed(() => {
   const ids = MdrCRef.value?.state.selectedIds ?? new Set<string>()
   if (ids.size !== 1) return false
   const id = Array.from(ids)[0]
-  return MdrCRef.value?.state.items.find((it) => it.id === id)?.component
+  return MdrCRef.value?.state.items.find((it) => it.uuid === id)?.component
 })
 
 // 添加类型单源
-const ADD_OPTIONS = [
-  { key: 'RichTextEditor', label: '富文本', icon: mdiNoteText, addId: 'add-rich' },
-  { key: 'EditableCodeBlock', label: '代码块', icon: mdiCodeBraces, addId: 'add-code' },
-  { key: 'CanvasTestBench', label: '测试台', icon: mdiFlaskOutline, addId: 'add-test' },
-] as const
+const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, label, icon, addId }) => ({ key, label, icon, addId }))
 const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0)
 // 添加类型单选索引
 const addIdx = ref(0)
@@ -199,7 +196,7 @@ const cycleOption = (e: WheelEvent) => {
 const selectionInBlock = (): boolean => {
   const sel = window.getSelection()
   const id = Array.from(MdrCRef.value!.state.selectedIds)[0]
-  const block = document.querySelector(`[data-id="${id}"]`)
+  const block = document.querySelector(`[data-uuid="${id}"]`)
   return !!sel && !sel.isCollapsed && !!block &&
     !!sel.anchorNode && !!sel.focusNode && block.contains(sel.anchorNode) && block.contains(sel.focusNode)
 }
@@ -443,7 +440,7 @@ const batchToggleUnderline = () => {
 const deleteSelected = () => {
   if (!MdrCRef.value?.isEditMode || MdrCRef.value.state.selectedIds.size === 0) return
   const ids = Array.from(MdrCRef.value!.state.selectedIds)
-  MdrCRef.value!.state.items = MdrCRef.value!.state.items.filter((it) => !ids.includes(it.id))
+  MdrCRef.value!.state.items = MdrCRef.value!.state.items.filter((it) => !ids.includes(it.uuid))
   MdrCRef.value!.state.selectedIds = new Set()
   const refs = getComponentRefs()
   ids.forEach(id => { delete refs[id] })

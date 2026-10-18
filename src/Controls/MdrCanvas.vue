@@ -11,9 +11,9 @@
         <div v-for="line in linkedConnections" :key="line.key" class="connection-segment"
           :style="connectionSegmentStyle(line)" />
       </div>
-      <component v-for="item in state.items" :key="`${item.id}-${mobileMode ? 'm' : 'd'}`"
+      <component v-for="item in state.items" :key="`${item.uuid}-${mobileMode ? 'm' : 'd'}`"
         :is="componentMap[item.component]" :ref="componentRefOf(item)" :config="item.config"
-        :virtualized="isVirtualized(item.id)" :snapshot="virtualSnapshots[item.id] ?? ''"
+        :virtualized="isVirtualized(item.uuid)" :snapshot="virtualSnapshots[item.uuid] ?? ''"
         :base="blockBasePropsOf(item)" @resizestart="resizeCallbacksOf(item).start"
         @resizing="resizeCallbacksOf(item).resizing" @resizestop="resizeCallbacksOf(item).resizestop"
         @dragstart="onFloatingHandleDown(item, $event)" />
@@ -22,10 +22,10 @@
         <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle"></div>
       </v-fade-transition>
 
-      <!-- 描边需在拖拽栏之上保持连贯，所以用独立高层 overlay 渲染（data-id 供拖拽期命令式跟随） -->
-      <template v-for="item in selectedOutlineItems" :key="`outline-${item.id}`">
+      <!-- 描边需在拖拽栏之上保持连贯，所以用独立高层 overlay 渲染（data-uuid 供拖拽期命令式跟随） -->
+      <template v-for="item in selectedOutlineItems" :key="`outline-${item.uuid}`">
         <v-fade-transition :duration="120">
-          <div class="selected-outline" :data-id="item.id" :style="selectedOutlineStyle(item)" />
+          <div class="selected-outline" :data-uuid="item.uuid" :style="selectedOutlineStyle(item)" />
         </v-fade-transition>
       </template>
 
@@ -70,7 +70,7 @@ import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, 
 
 import { mdiPaperclip, mdiArrowUp } from '@mdi/js'
 import {
-  ADDABLE_COMPONENTS,
+  CANVAS_COMPONENTS,
   DEFAULT_COMPONENT_KEY,
   componentLabelOf,
   componentMap,
@@ -149,7 +149,7 @@ const bringToTop = (id: string) => {
 const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 const blockZ = (id: string): number => {
   const isSelected = isEditMode.value && state.selectedIds.has(id)
-  const isDragging = customDrag.active && customDrag.draggingIds.has(id)
+  const isDragging = customDrag.active && customDrag.draggingUuids.has(id)
   const base = isSelected ? SELECTED_Z_BASE : 0
   return Math.max(itemZ(id), isDragging ? Z_LAYER.dragHandle : base)
 }
@@ -327,7 +327,7 @@ const updateMousePos = (e: MouseEvent) => {
 const restrictResizeAutoPan = (vx: number, vy: number): { vx: number; vy: number } => {
   const rs = resizeSession
   if (!rs) return { vx, vy }
-  const item = state.items.find((it) => it.id === rs.itemId)
+  const item = state.items.find((it) => it.uuid === rs.uuid)
   if (!item) return { vx, vy }
   const handle = rs.handle
   const c = constraintsOf(item)
@@ -546,7 +546,7 @@ const componentRefHandlers = new WeakMap<CanvasItem, (el: unknown) => void>()
 const componentRefOf = (item: CanvasItem) => {
   const cached = componentRefHandlers.get(item)
   if (cached) return cached
-  const handler = (el: unknown) => setComponentRef(item.id, el)
+  const handler = (el: unknown) => setComponentRef(item.uuid, el)
   componentRefHandlers.set(item, handler)
   return handler
 }
@@ -556,8 +556,7 @@ const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
   const layout = layoutOf(item)
   const c = constraintsOf(item)
   return {
-    itemId: item.id,
-    uuid: item.id,
+    uuid: item.uuid,
     x: layout.x,
     y: layout.y,
     width: layout.w,
@@ -567,17 +566,17 @@ const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
     maxWidth: c.maxWidth,
     maxHeight: c.maxHeight,
     compact: mobileMode.value,
-    active: isActive(item.id),
-    dragging: customDrag.draggingIds.has(item.id),
-    showHandle: floatingHandleItem.value?.id === item.id,
-    showSettings: sideSettingsItem.value?.id === item.id,
+    active: isActive(item.uuid),
+    dragging: customDrag.draggingUuids.has(item.uuid),
+    showHandle: floatingHandleItem.value?.uuid === item.uuid,
+    showSettings: sideSettingsItem.value?.uuid === item.uuid,
     handles: resizeHandlesOf(item),
-    zIndex: blockZ(item.id),
+    zIndex: blockZ(item.uuid),
     zoom: zoom.value,
     placement: placementOf(item),
-    popupOpen: popupBlockId.value === item.id,
-    cornerStyle: cornerStyleOf(item.id),
-    masks: masksOf(item.id),
+    popupOpen: popupBlockUuid.value === item.uuid,
+    cornerStyle: cornerStyleOf(item.uuid),
+    masks: masksOf(item.uuid),
     readOnly: !isEditMode.value,
     draggable: isEditMode.value,
     handlers: interactionHandlersOf(item),
@@ -609,11 +608,11 @@ const EDGE_TOL = 1
 const computeEdgeMasks = (): Record<string, EdgeMask[]> => {
   const map: Record<string, EdgeMask[]> = {}
   const items = state.items
-  items.forEach((it) => { map[it.id] = [] })
+  items.forEach((it) => { map[it.uuid] = [] })
   for (const a of items) {
     const ra = layoutOf(a)
     for (const b of items) {
-      if (a.id === b.id) continue
+      if (a.uuid === b.uuid) continue
       const rb = layoutOf(b)
       const yOverlap = Math.max(ra.y, rb.y) < Math.min(ra.y + ra.h, rb.y + rb.h)
       const xOverlap = Math.max(ra.x, rb.x) < Math.min(ra.x + ra.w, rb.x + rb.w)
@@ -621,16 +620,16 @@ const computeEdgeMasks = (): Record<string, EdgeMask[]> => {
         const y0 = Math.max(ra.y, rb.y)
         const len = Math.min(ra.y + ra.h, rb.y + rb.h) - y0
         if (len > 0) {
-          map[a.id].push({ side: 'l', start: y0 - ra.y, len })
-          map[b.id].push({ side: 'r', start: y0 - rb.y, len })
+          map[a.uuid].push({ side: 'l', start: y0 - ra.y, len })
+          map[b.uuid].push({ side: 'r', start: y0 - rb.y, len })
         }
       }
       if (xOverlap && Math.abs(rb.y + rb.h - ra.y) <= EDGE_TOL) {
         const x0 = Math.max(ra.x, rb.x)
         const len = Math.min(ra.x + ra.w, rb.x + rb.w) - x0
         if (len > 0) {
-          map[a.id].push({ side: 't', start: x0 - ra.x, len })
-          map[b.id].push({ side: 'b', start: x0 - rb.x, len })
+          map[a.uuid].push({ side: 't', start: x0 - ra.x, len })
+          map[b.uuid].push({ side: 'b', start: x0 - rb.x, len })
         }
       }
     }
@@ -645,23 +644,23 @@ const ROUNDED = 4
 const computeCornerHits = (): Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }> => {
   const map: Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }> = {}
   const items = state.items
-  items.forEach((it) => { map[it.id] = { tl: false, tr: false, bl: false, br: false } })
+  items.forEach((it) => { map[it.uuid] = { tl: false, tr: false, bl: false, br: false } })
   items.forEach((it) => {
     const { w, h } = layoutOf(it)
-    ;(edgeMasksMap.value[it.id] ?? []).forEach((m) => {
+    ;(edgeMasksMap.value[it.uuid] ?? []).forEach((m) => {
       const endHit = m.start + m.len
       if (m.side === 'l') {
-        if (m.start <= EDGE_TOL) map[it.id].tl = true
-        if (endHit >= h - EDGE_TOL) map[it.id].bl = true
+        if (m.start <= EDGE_TOL) map[it.uuid].tl = true
+        if (endHit >= h - EDGE_TOL) map[it.uuid].bl = true
       } else if (m.side === 'r') {
-        if (m.start <= EDGE_TOL) map[it.id].tr = true
-        if (endHit >= h - EDGE_TOL) map[it.id].br = true
+        if (m.start <= EDGE_TOL) map[it.uuid].tr = true
+        if (endHit >= h - EDGE_TOL) map[it.uuid].br = true
       } else if (m.side === 't') {
-        if (m.start <= EDGE_TOL) map[it.id].tl = true
-        if (endHit >= w - EDGE_TOL) map[it.id].tr = true
+        if (m.start <= EDGE_TOL) map[it.uuid].tl = true
+        if (endHit >= w - EDGE_TOL) map[it.uuid].tr = true
       } else {
-        if (m.start <= EDGE_TOL) map[it.id].bl = true
-        if (endHit >= w - EDGE_TOL) map[it.id].br = true
+        if (m.start <= EDGE_TOL) map[it.uuid].bl = true
+        if (endHit >= w - EDGE_TOL) map[it.uuid].br = true
       }
     })
   })
@@ -702,7 +701,7 @@ const handlePlacementOf = (item: CanvasItem): HandlePlacement =>
 
 // 拖拽中块位置持续变化会让上方空间翻转、手柄与块分离，所以拖拽期锁定放置
 const placementOf = (item: CanvasItem): HandlePlacement => {
-  if (customDrag.active && customDrag.sourceItemId === item.id) {
+  if (customDrag.active && customDrag.sourceUuid === item.uuid) {
     return customDrag.placementLocked ? 'bottom' : 'top'
   }
   return handlePlacementOf(item)
@@ -712,7 +711,7 @@ const placementOf = (item: CanvasItem): HandlePlacement => {
 const selectedOutlineStyle = (item: CanvasItem): CSSProperties => {
   const l = layoutOf(item)
   // 归属块拖拽栏需盖住别的块高亮又不遮断自己，所以其描边环用 outline（1002）
-  const zIndex = outlineOwnerId.value === item.id ? Z_LAYER.outline : Z_LAYER.dragHandle - 1
+  const zIndex = outlineOwnerId.value === item.uuid ? Z_LAYER.outline : Z_LAYER.dragHandle - 1
   return {
     left: `${roundToPx(l.x) - roundToPx(OUTLINE_PX)}px`,
     top: `${roundToPx(l.y) - roundToPx(OUTLINE_PX)}px`,
@@ -724,10 +723,10 @@ const selectedOutlineStyle = (item: CanvasItem): CSSProperties => {
 // #endregion 手柄与描边样式
 
 // #region 自定义拖拽与联结
-const getSelectedItemIds = (item: CanvasItem) =>
-  state.selectedIds.has(item.id) && state.selectedIds.size > 1
+const getSelectedUuids = (item: CanvasItem) =>
+  state.selectedIds.has(item.uuid) && state.selectedIds.size > 1
     ? Array.from(state.selectedIds)
-    : [item.id]
+    : [item.uuid]
 
 // 块世界坐标 = 初始 + 鼠标位移 - (pan - panStart)，无需改 VDR 内部
 const customDrag = reactive({
@@ -737,9 +736,9 @@ const customDrag = reactive({
   panStartX: 0,
   panStartY: 0,
   placementLocked: false,
-  sourceItemId: null as string | null,
+  sourceUuid: null as string | null,
   // 被拖块会盖住落点处的编辑器，所以拖拽中让其命中穿透
-  draggingIds: new Set<string>(),
+  draggingUuids: new Set<string>(),
 })
 const richTextDropTargetId = ref<string | null>(null)
 // 拖入富文本块的落点线与插入位置，随块内滚动每帧重算
@@ -770,7 +769,7 @@ const richTextDropLineStyle = computed<CSSProperties>(() => {
 })
 const richTextDropTargetStyle = computed<CSSProperties>(() => {
   const id = richTextDropTargetId.value
-  const item = id ? state.items.find((target) => target.id === id) : null
+  const item = id ? state.items.find((target) => target.uuid === id) : null
   if (!item) return { display: 'none' }
   const layout = layoutOf(item)
   return {
@@ -885,7 +884,7 @@ const toConnection = (seg: ConnSegment): LinkedConnection => {
 // layout 已非响应式，所以显式订阅版本号，使块移动后联结线重算
 const linkedConnections = computed<LinkedConnection[]>(() => {
   void layoutVersion.value
-  const itemMap = new Map(state.items.map((item) => [item.id, item]))
+  const itemMap = new Map(state.items.map((item) => [item.uuid, item]))
   const segments: ConnSegment[] = []
   linkedPairs.value.forEach((key) => {
     const [startId, endId] = key.split('|')
@@ -926,7 +925,7 @@ const connectionSegmentStyle = (line: LinkedConnection): CSSProperties => {
   }
 }
 
-const collectLinkedIds = (rootId: string): Set<string> => {
+const collectLinkedUuids = (rootId: string): Set<string> => {
   const out = new Set<string>()
   const queue = [rootId]
   while (queue.length) {
@@ -972,11 +971,11 @@ const applyElStyle = (el: HTMLElement, style: CSSProperties) => { Object.assign(
 // 圆整规则要与 ResizeBox.boxStyle 一致，否则松手瞬间会跳位
 const translateOf = (layout: Rect) => `translate(${roundToPx(layout.x)}px, ${roundToPx(layout.y)}px)`
 
-const indexByDataId = (root: HTMLElement, selector: string) => {
+const indexByUuid = (root: HTMLElement, selector: string) => {
   const map = new Map<string, HTMLElement>()
   root.querySelectorAll<HTMLElement>(selector).forEach((el) => {
-    const id = el.dataset.id
-    if (id) map.set(id, el)
+    const uuid = el.dataset.uuid
+    if (uuid) map.set(uuid, el)
   })
   return map
 }
@@ -987,14 +986,14 @@ const cacheDragDom = () => {
   dragHandleEl = null
   dragSettingsEl = null
   if (!canvas) return
-  const wrappers = indexByDataId(canvas, '.drag-wrapper')
-  const outlines = indexByDataId(canvas, '.selected-outline')
-  const sourceId = customDrag.sourceItemId
+  const wrappers = indexByUuid(canvas, '.drag-wrapper')
+  const outlines = indexByUuid(canvas, '.selected-outline')
+  const sourceId = customDrag.sourceUuid
   customDragItems.forEach((_, id) => {
     dragDom.set(id, { wrapper: wrappers.get(id) ?? null, outline: outlines.get(id) ?? null })
   })
-  dragHandleEl = sourceId ? indexByDataId(canvas, '.floating-handle').get(sourceId) ?? null : null
-  dragSettingsEl = sourceId ? indexByDataId(canvas, '.side-settings').get(sourceId) ?? null : null
+  dragHandleEl = sourceId ? indexByUuid(canvas, '.floating-handle').get(sourceId) ?? null : null
+  dragSettingsEl = sourceId ? indexByUuid(canvas, '.side-settings').get(sourceId) ?? null : null
 }
 
 const syncDragDom = () => {
@@ -1004,7 +1003,7 @@ const syncDragDom = () => {
     if (dom.wrapper) dom.wrapper.style.transform = translateOf(layoutOf(item))
     if (dom.outline) applyElStyle(dom.outline, selectedOutlineStyle(item))
   })
-  const source = customDrag.sourceItemId ? customDragItems.get(customDrag.sourceItemId) : null
+  const source = customDrag.sourceUuid ? customDragItems.get(customDrag.sourceUuid) : null
   if (!source) return
   // zoom 变化会让子组件用冻结的 prop 重写 transform，所以拖拽中按最新 layout 补写浮层位置
   const geometry = { layout: layoutOf(source), placement: placementOf(source), round: roundToPx }
@@ -1027,9 +1026,9 @@ const flushDragLayout = () => {
 const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
   if (e.button !== 0) return
   if (!isEditMode.value) return
-  selectForDrag(item.id, e)
+  selectForDrag(item.uuid, e)
   customDrag.active = true
-  customDrag.sourceItemId = item.id
+  customDrag.sourceUuid = item.uuid
   customDrag.startClientX = e.clientX
   customDrag.startClientY = e.clientY
   // 落点解析由 rAF 驱动、按下未移动也会读坐标，所以以按下点初始化
@@ -1040,8 +1039,8 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
   customDrag.placementLocked = handlePlacementOf(item) === 'bottom'
   customDragGroup = {}
   customDragItems = new Map()
-  getSelectedItemIds(item).forEach((id) => {
-    const target = state.items.find((it) => it.id === id)
+  getSelectedUuids(item).forEach((id) => {
+    const target = state.items.find((it) => it.uuid === id)
     if (target) {
       customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y }
       customDragItems.set(id, target)
@@ -1049,9 +1048,9 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
   })
   // 粘贴的块需随被拖块一起移动，所以把链接可达的块加入拖拽组（仅桌面端）
   if (!mobileMode.value) {
-    collectLinkedIds(item.id).forEach((id) => {
+    collectLinkedUuids(item.uuid).forEach((id) => {
       if (customDragGroup[id]) return
-      const target = state.items.find((it) => it.id === id)
+      const target = state.items.find((it) => it.uuid === id)
       if (target) {
         customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y }
         customDragItems.set(id, target)
@@ -1066,7 +1065,7 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
   cacheDragDom()
   window.addEventListener('mousemove', onCustomDragMove, true)
   window.addEventListener('mouseup', onCustomDragUp)
-  customDrag.draggingIds = new Set(Object.keys(customDragGroup))
+  customDrag.draggingUuids = new Set(Object.keys(customDragGroup))
   e.preventDefault()
   document.body.classList.add('block-handle-dragging')
   // 只加 body 类要等下次 state-change 才收起，所以立即向所有编辑器派发块外指针事件
@@ -1092,7 +1091,7 @@ const onCustomDragMove = (e: MouseEvent) => {
 }
 
 const findRichTextDropTarget = (): string | null => {
-  const source = state.items.find((item) => item.id === customDrag.sourceItemId)
+  const source = state.items.find((item) => item.uuid === customDrag.sourceUuid)
   const viewport = viewRect.value
   if (!source || !componentNodeOf(source) || !viewport) return null
   const sourceLayout = layoutOf(source)
@@ -1102,7 +1101,7 @@ const findRichTextDropTarget = (): string | null => {
   )
   for (const target of state.items) {
     // 只有声明可接收落点的组件才参与命中（如富文本）
-    if (target.id === source.id || !componentMetaOf(target.component)?.acceptsDrop) continue
+    if (target.uuid === source.uuid || !componentMetaOf(target.component)?.acceptsDrop) continue
     const targetLayout = layoutOf(target)
     const targetTopLeft = contentToScreen(canvasTransform(), viewport, targetLayout.x, targetLayout.y)
     const targetBottomRight = contentToScreen(
@@ -1110,7 +1109,7 @@ const findRichTextDropTarget = (): string | null => {
     )
     const overlapWidth = Math.min(sourceBottomRight.x, targetBottomRight.x) - Math.max(sourceTopLeft.x, targetTopLeft.x)
     const overlapHeight = Math.min(sourceBottomRight.y, targetBottomRight.y) - Math.max(sourceTopLeft.y, targetTopLeft.y)
-    if (overlapWidth > 0 && overlapHeight > 0) return target.id
+    if (overlapWidth > 0 && overlapHeight > 0) return target.uuid
   }
   return null
 }
@@ -1129,8 +1128,8 @@ interface RichTextTarget {
 }
 
 const richTextTargetOf = (id: string): RichTextTarget | null => {
-  const item = state.items.find((it) => it.id === id)
-  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-id="${id}"]`)
+  const item = state.items.find((it) => it.uuid === id)
+  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"]`)
   const scroll = wrapper?.querySelector<HTMLElement>('.editor-scroll') ?? null
   const pm = wrapper?.querySelector<HTMLElement>('.ProseMirror') ?? null
   const { resolveDropAtElement, scrollContent } = componentRefs.value[id] ?? {}
@@ -1309,7 +1308,7 @@ const SNAP_TOLERANCE = 10
 const PAPERCLIP_PROXIMITY = 32
 const snapLayoutToOthers = (target: CanvasItem, layout: Rect) => {
   const hasOverlap = state.items.some((other) => {
-    if (other.id === target.id || customDragGroup[other.id]) return false
+    if (other.uuid === target.uuid || customDragGroup[other.uuid]) return false
     const o = layoutOf(other)
     return layout.x < o.x + o.w && layout.x + layout.w > o.x && layout.y < o.y + o.h && layout.y + layout.h > o.y
   })
@@ -1318,7 +1317,7 @@ const snapLayoutToOthers = (target: CanvasItem, layout: Rect) => {
   const candidatesX: number[] = []
   const candidatesY: number[] = []
   state.items.forEach((other) => {
-    if (other.id === target.id || customDragGroup[other.id]) return
+    if (other.uuid === target.uuid || customDragGroup[other.uuid]) return
     const o = layoutOf(other)
     candidatesX.push(
       o.x - layout.x, o.x + o.w - layout.x,
@@ -1374,7 +1373,7 @@ const HANDLES_ALL = ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br']
 // 手柄已 Teleport 脱离 .drag-wrapper（CSS 隐藏规则失效），所以按 popup 显隐过滤 tm 手柄；可变形由 base 按 changable 收窄
 const resizeHandlesOf = (item: CanvasItem): string[] => {
   if (mobileMode.value) return HANDLES_MOBILE
-  if (popupBlockId.value === item.id) return HANDLES_NO_TOP_MIDDLE
+  if (popupBlockUuid.value === item.uuid) return HANDLES_NO_TOP_MIDDLE
   return HANDLES_ALL
 }
 
@@ -1407,8 +1406,8 @@ const moveBlockBy = (item: CanvasItem, dx: number, dy: number) => {
   const deltaX = mobileMode.value ? 0 : Math.round(dx)
   const deltaY = Math.round(dy)
   if (!deltaX && !deltaY) return
-  const targets = mobileMode.value ? [item.id] : Array.from(collectLinkedIds(item.id))
-  const itemMap = new Map(state.items.map((it) => [it.id, it]))
+  const targets = mobileMode.value ? [item.uuid] : Array.from(collectLinkedUuids(item.uuid))
+  const itemMap = new Map(state.items.map((it) => [it.uuid, it]))
   targets.forEach((id) => {
     const target = itemMap.get(id)
     if (!target) return
@@ -1482,13 +1481,13 @@ interface PaperclipCandidate {
 
 // popup 上侧开启会盖住曲别针，所以此时清空
 const paperclipCandidateOf = (first: CanvasItem, second: CanvasItem): PaperclipCandidate | null => {
-  const key = pairKey(first.id, second.id)
+  const key = pairKey(first.uuid, second.uuid)
   const linked = linkedPairs.value.has(key)
   const rectA = layoutOf(first)
   const rectB = layoutOf(second)
   if (!linked && !isAdjacent(rectA, rectB)) return null
   const pt = connectionPoint(rectA, rectB)
-  return { key, a: first.id, b: second.id, x: pt.x, y: pt.y, linked }
+  return { key, a: first.uuid, b: second.uuid, x: pt.x, y: pt.y, linked }
 }
 
 const computePaperclipCandidates = (): PaperclipCandidate[] => {
@@ -1529,15 +1528,15 @@ const updateNearClip = (clientX: number, clientY: number) => {
 const resolveDragConflict = () => {
   const draggedIds = new Set(Object.keys(customDragGroup))
   state.items.forEach((target) => {
-    if (!draggedIds.has(target.id)) return
+    if (!draggedIds.has(target.uuid)) return
     const layout = layoutOf(target)
     const conflict = state.items.some((other) => {
-      if (other.id === target.id || draggedIds.has(other.id)) return false
+      if (other.uuid === target.uuid || draggedIds.has(other.uuid)) return false
       const ol = layoutOf(other)
       return layout.x < ol.x + ol.w && layout.x + layout.w > ol.x && layout.y < ol.y + ol.h && layout.y + layout.h > ol.y
     })
     if (conflict) {
-      const origin = customDragGroup[target.id]
+      const origin = customDragGroup[target.uuid]
       layout.x = origin.x
       layout.y = origin.y
     }
@@ -1549,17 +1548,17 @@ const componentNodeOf = (item: CanvasItem) =>
   componentMetaOf(item.component)?.toNode?.(item.config) ?? null
 
 const insertDraggedComponent = (targetId: string, sourceId: string, pos: number | null): boolean => {
-  const target = state.items.find((item) => item.id === targetId)
-  const source = state.items.find((item) => item.id === sourceId)
+  const target = state.items.find((item) => item.uuid === targetId)
+  const source = state.items.find((item) => item.uuid === sourceId)
   const component = source ? componentNodeOf(source) : null
   if (!target || !component) return false
-  const commands = componentRefs.value[target.id]?.commands
+  const commands = componentRefs.value[target.uuid]?.commands
   // 落点可能解析失败，所以无指示线时回退到按当前选区插入
   const inserted = (pos != null && commands?.insertVueComponentAt?.(pos, component.name, component.props))
     || !!commands?.insertVueComponent?.(component.name, component.props)
   if (!inserted) return false
   const removedIds = new Set([sourceId])
-  state.items = state.items.filter((item) => !removedIds.has(item.id))
+  state.items = state.items.filter((item) => !removedIds.has(item.uuid))
   state.selectedIds = new Set()
   delete componentRefs.value[sourceId]
   linkedPairs.value = new Set([...linkedPairs.value].filter((key) => {
@@ -1575,7 +1574,7 @@ let dragJustFinished = false
 const onCustomDragUp = (e?: MouseEvent) => {
   dragJustFinished = true
   const targetId = findRichTextDropTarget()
-  const sourceId = customDrag.sourceItemId
+  const sourceId = customDrag.sourceUuid
   const drop = targetId ? resolveDropForTarget(targetId, e) : null
   const inserted = targetId && sourceId ? insertDraggedComponent(targetId, sourceId, drop?.pos ?? null) : false
   richTextDropTargetId.value = null
@@ -1586,11 +1585,11 @@ const onCustomDragUp = (e?: MouseEvent) => {
   flushDragLayout()
   clearDragDom()
   customDrag.active = false
-  customDrag.sourceItemId = null
+  customDrag.sourceUuid = null
   // 残留块会被框选自动滚动误补偿，所以结束即清空拖拽组
   customDragGroup = {}
   customDragItems = new Map()
-  customDrag.draggingIds = new Set()
+  customDrag.draggingUuids = new Set()
   if (customDragRafId) {
     cancelAnimationFrame(customDragRafId)
     customDragRafId = 0
@@ -1612,7 +1611,7 @@ const onCustomDragUp = (e?: MouseEvent) => {
 // resize 会话（坐标全为 content 世界坐标）
 // #region 尺寸调整与联结传播
 interface ResizeSession {
-  itemId: string
+  uuid: string
   handle: string
   starts: Map<string, Rect>
   lastBase: Rect
@@ -1680,7 +1679,7 @@ const snapResizeEdges = (handle: string, rect: Rect, c: Required<ResizeConstrain
   const xs: number[] = []
   const ys: number[] = []
   state.items.forEach((other) => {
-    if (other.id === resizeSession?.itemId) return
+    if (other.uuid === resizeSession?.uuid) return
     const o = layoutOf(other)
     xs.push(o.x, o.x + o.w, o.x + o.w / 2)
     ys.push(o.y, o.y + o.h, o.y + o.h / 2)
@@ -1737,7 +1736,7 @@ const applyResizeLayout = (item: CanvasItem, propagate: boolean) => {
 const compensateResizeAutoPan = () => {
   const rs = resizeSession
   if (!rs) return
-  const item = state.items.find((it) => it.id === rs.itemId)
+  const item = state.items.find((it) => it.uuid === rs.uuid)
   if (item) applyResizeLayout(item, false)
 }
 
@@ -1749,25 +1748,25 @@ const clampVal = (v: number, min: number, max: number | null) => {
 
 const syncLinkedEdges = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
   const rs = resizeSession
-  if (!rs || rs.itemId !== item.id) return
+  if (!rs || rs.uuid !== item.uuid) return
   propagateLinkedEdges(item, { x, y, w, h }, rs.starts)
 }
 
 // 沿链接图 BFS 传播共享边：尺寸按自身 min/max 钳制（与 VDR min=minWidth+8 一致），位置按起始 + 父块总位移重算（不逐帧累加，防错位）
 const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, Rect>): Set<string> => {
   const positions: Record<string, Rect> = {}
-  const itemMap = new Map(state.items.map((target) => [target.id, target]))
+  const itemMap = new Map(state.items.map((target) => [target.uuid, target]))
   const neighborMap = linkedNeighborMap.value
   // autoPan 改变了 layout，所以 positions 用当前布局初始化，方位判定仍基于 starts
   starts.forEach((start, id) => {
     const target = itemMap.get(id)
     positions[id] = target ? { ...layoutOf(target) } : { ...start }
   })
-  positions[item.id] = { ...rect }
+  positions[item.uuid] = { ...rect }
   // 分维 BFS：右/下邻居正向传播（跟右/下缘），左/上邻居反向跟当前块，保持整链贴合
-  const queue = [item.id]
-  const seenX = new Set([item.id])
-  const seenY = new Set([item.id])
+  const queue = [item.uuid]
+  const seenX = new Set([item.uuid])
+  const seenY = new Set([item.uuid])
   while (queue.length) {
     const pid = queue.shift()!
     const pRect = positions[pid]
@@ -1831,7 +1830,7 @@ const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, 
   // A 的坐标已由 compensateResizeAutoPan 补偿，所以传播结果直接写回内容坐标即可
   const changedIds = new Set<string>()
   Object.keys(positions).forEach((id) => {
-    if (id === item.id) return
+    if (id === item.uuid) return
     const target = itemMap.get(id)
     if (!target) return
     const p = positions[id]
@@ -1845,10 +1844,10 @@ const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, 
   return changedIds
 }
 
-const captureLinkedStarts = (itemId: string): Map<string, Rect> => {
+const captureLinkedStarts = (uuid: string): Map<string, Rect> => {
   const starts = new Map<string, Rect>()
-  collectLinkedIds(itemId).forEach((id) => {
-    const target = state.items.find((entry) => entry.id === id)
+  collectLinkedUuids(uuid).forEach((id) => {
+    const target = state.items.find((entry) => entry.uuid === id)
     if (target) starts.set(id, { ...layoutOf(target) })
   })
   return starts
@@ -1856,9 +1855,9 @@ const captureLinkedStarts = (itemId: string): Map<string, Rect> => {
 
 const onResizeStart = (item: CanvasItem, handle: string) => {
   // 移动端不启用块联结，仅桌面端收集
-  const starts = mobileMode.value ? new Map<string, Rect>() : captureLinkedStarts(item.id)
+  const starts = mobileMode.value ? new Map<string, Rect>() : captureLinkedStarts(item.uuid)
   resizeSession = {
-    itemId: item.id,
+    uuid: item.uuid,
     handle,
     starts,
     lastBase: { ...layoutOf(item) },
@@ -1870,7 +1869,7 @@ const onResizeStart = (item: CanvasItem, handle: string) => {
 // resize 到视口边缘时启动 autoPan（startAutoPan 幂等）
 const onResizing = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
   const rs = resizeSession
-  if (!rs || rs.itemId !== item.id) return
+  if (!rs || rs.uuid !== item.uuid) return
   rs.lastBase = { x, y, w, h }
   // 用会话累计 pan 变化判定会让 B 永久冻结，所以用实时是否在滚动判定
   const { vx: rx, vy: ry } = restrictedPanVelocity()
@@ -1880,7 +1879,7 @@ const onResizing = (item: CanvasItem, x: number, y: number, w: number, h: number
 
 const onResizeStop = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
   const rs = resizeSession
-  if (rs && rs.itemId === item.id) {
+  if (rs && rs.uuid === item.uuid) {
     rs.lastBase = { x, y, w, h }
     // 松手瞬间就要恢复联结传播，所以先停 autoPan 再落位
     stopAutoPan()
@@ -1903,7 +1902,7 @@ const onResizeStop = (item: CanvasItem, x: number, y: number, w: number, h: numb
 const shiftBlocksBelow = (item: CanvasItem, delta: number) => {
   if (delta === 0) return
   state.items
-    .filter((it) => it.id !== item.id && it.layout.mobile.y > item.layout.mobile.y)
+    .filter((it) => it.uuid !== item.uuid && it.layout.mobile.y > item.layout.mobile.y)
     .sort((a, b) => a.layout.mobile.y - b.layout.mobile.y)
     .forEach((it) => { it.layout.mobile.y += delta })
 }
@@ -1916,8 +1915,8 @@ interface LinkedShift {
 }
 
 const buildShiftContext = (): LinkedShift => ({
-  starts: new Map(state.items.map((it) => [it.id, { ...layoutOf(it) }])),
-  itemMap: new Map(state.items.map((it) => [it.id, it])),
+  starts: new Map(state.items.map((it) => [it.uuid, { ...layoutOf(it) }])),
+  itemMap: new Map(state.items.map((it) => [it.uuid, it])),
   moved: new Set(),
 })
 
@@ -1955,7 +1954,7 @@ const shiftLinkedGroup = (rootId: string, delta: number, shift: LinkedShift) => 
 const pushColumnBelow = (root: CanvasItem, shift: LinkedShift) => {
   const rootLayout = layoutOf(root)
   const column = state.items
-    .filter((other) => other.id !== root.id && isOverlappingX(rootLayout, layoutOf(other)))
+    .filter((other) => other.uuid !== root.uuid && isOverlappingX(rootLayout, layoutOf(other)))
     .sort((a, b) => layoutOf(a).y - layoutOf(b).y)
   let cursor = rootLayout.y + rootLayout.h
   column.forEach((other) => {
@@ -1963,15 +1962,15 @@ const pushColumnBelow = (root: CanvasItem, shift: LinkedShift) => {
     // 只推动下方块；上方块即使水平重叠也不在推动方向上
     if (layout.y + layout.h <= rootLayout.y + EDGE_TOL) return
     // 已随联结链就位的块不再推，但要推进推动线，否则其下方块会漏推
-    if (shift.moved.has(other.id)) {
+    if (shift.moved.has(other.uuid)) {
       cursor = Math.max(cursor, layout.y + layout.h)
       return
     }
     if (layout.y >= cursor) return
     const delta = cursor - layout.y
     layout.y = cursor
-    shift.moved.add(other.id)
-    shiftLinkedGroup(other.id, delta, shift)
+    shift.moved.add(other.uuid)
+    shiftLinkedGroup(other.uuid, delta, shift)
     cursor = layout.y + layout.h
   })
 }
@@ -1999,7 +1998,7 @@ const applyBlockSize = (item: CanvasItem, width: number, height: number) => {
     return
   }
   const shift = buildShiftContext()
-  shift.moved.add(item.id)
+  shift.moved.add(item.uuid)
   layout.w = width
   layout.h = height
   if (linkedPairs.value.size > 0) {
@@ -2221,7 +2220,7 @@ const resetCanvasScroll = () => {
 const focusBlockContent = (id: string) => {
   nextTick(() => {
     resetCanvasScroll()
-    const wrapper = document.querySelector(`.drag-wrapper[data-id="${id}"]`)
+    const wrapper = document.querySelector(`.drag-wrapper[data-uuid="${id}"]`)
     const pm = wrapper?.querySelector('.ProseMirror') as HTMLElement | null
     if (pm) {
       pm.focus({ preventScroll: true })
@@ -2233,28 +2232,28 @@ const focusBlockContent = (id: string) => {
 }
 // #endregion 选中与聚焦
 
-// 记录 popup 所在块 id，以便只隐藏该块的 tm 手柄
+// 记录 popup 所在块 uuid，以便只隐藏该块的 tm 手柄
 // #region 弹层与命中测试
-const popupBlockId = ref<string | null>(null)
+const popupBlockUuid = ref<string | null>(null)
 const onBlockPopupChange = (e: Event) => {
-  const detail = (e as CustomEvent).detail as { open?: boolean; blockId?: string | null }
-  // 旧块关闭事件会误清新块状态，所以仅当 id 匹配时才清除
-  if (detail.open && detail.blockId) {
-    popupBlockId.value = detail.blockId
-  } else if (!detail.open && detail.blockId && popupBlockId.value === detail.blockId) {
-    popupBlockId.value = null
+  const detail = (e as CustomEvent).detail as { open?: boolean; uuid?: string | null }
+  // 旧块关闭事件会误清新块状态，所以仅当 uuid 匹配时才清除
+  if (detail.open && detail.uuid) {
+    popupBlockUuid.value = detail.uuid
+  } else if (!detail.open && detail.uuid && popupBlockUuid.value === detail.uuid) {
+    popupBlockUuid.value = null
   }
 }
 
-// popupBlockId 仅表示覆盖 tm 手柄，所以另设 popupActiveBlockId 表示 popup 是否弹出
-const popupActiveBlockId = ref<string | null>(null)
+// popupBlockUuid 仅表示覆盖 tm 手柄，所以另设 popupActiveUuid 表示 popup 是否弹出
+const popupActiveUuid = ref<string | null>(null)
 const onBlockHandleActiveChange = (e: Event) => {
-  const detail = (e as CustomEvent).detail as { active?: boolean; blockId?: string | null }
-  // 旧块关闭事件会误清新块状态，所以仅当 id 匹配时才清除
-  if (detail.active && detail.blockId) {
-    popupActiveBlockId.value = detail.blockId
-  } else if (!detail.active && detail.blockId && popupActiveBlockId.value === detail.blockId) {
-    popupActiveBlockId.value = null
+  const detail = (e as CustomEvent).detail as { active?: boolean; uuid?: string | null }
+  // 旧块关闭事件会误清新块状态，所以仅当 uuid 匹配时才清除
+  if (detail.active && detail.uuid) {
+    popupActiveUuid.value = detail.uuid
+  } else if (!detail.active && detail.uuid && popupActiveUuid.value === detail.uuid) {
+    popupActiveUuid.value = null
   }
 }
 
@@ -2298,16 +2297,16 @@ const settingsBarRectOf = (rectOf: ScreenRectFactory, item: CanvasItem): ScreenR
 
 // 三个命中判定都只在选中块里找，所以先取选中块小集合（原实现每次 pointermove 都遍历全量块、随块数线性劣化）
 const selectedBlockItems = (): CanvasItem[] =>
-  state.selectedIds.size === 0 ? [] : state.items.filter((it) => state.selectedIds.has(it.id))
+  state.selectedIds.size === 0 ? [] : state.items.filter((it) => state.selectedIds.has(it.uuid))
 
 const hitSettingsBar = (clientX: number, clientY: number): string | null => {
   const rectOf = screenRectFactory()
   const hit = selectedBlockItems().find((item) => {
-    if (!isActive(item.id)) return false
+    if (!isActive(item.uuid)) return false
     const rect = settingsBarRectOf(rectOf, item)
     return !!rect && insideScreenRect(rect, clientX, clientY)
   })
-  return hit?.id ?? null
+  return hit?.uuid ?? null
 }
 
 const RESIZE_HANDLE_HIT_MARGIN = 2
@@ -2339,19 +2338,19 @@ const makeResizeHandleHitTest = (clientX: number, clientY: number) => {
 
 const hitResizeHandle = (clientX: number, clientY: number): string | null => {
   const test = makeResizeHandleHitTest(clientX, clientY)
-  return selectedBlockItems().find((item) => isActive(item.id) && test(item))?.id ?? null
+  return selectedBlockItems().find((item) => isActive(item.uuid) && test(item))?.uuid ?? null
 }
 
 const hitHandle = (clientX: number, clientY: number): string | null => {
   for (const item of selectedBlockItems()) {
-    const el = document.querySelector<HTMLElement>(`.floating-handle[data-id="${item.id}"]`)
+    const el = document.querySelector<HTMLElement>(`.floating-handle[data-uuid="${item.uuid}"]`)
     if (!el) continue
     const rect = el.getBoundingClientRect()
-    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) return item.id
+    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) return item.uuid
     const inGapY = handlePlacementOf(item) === 'top'
       ? clientY >= rect.bottom && clientY <= rect.bottom + HANDLE_GAP
       : clientY <= rect.top && clientY >= rect.top - HANDLE_GAP
-    if (clientX >= rect.left && clientX <= rect.right && inGapY) return item.id
+    if (clientX >= rect.left && clientX <= rect.right && inGapY) return item.uuid
   }
   return null
 }
@@ -2359,9 +2358,9 @@ const hitHandle = (clientX: number, clientY: number): string | null => {
 // 鼠标移向 popup 会经过块间空隙被判为块外，所以按坐标（4px 容差）命中 popup
 const POPUP_HIT_MARGIN = 4
 // 遍历全部 popup 读矩形会强制布局，所以只按 id 定向查询已激活的 popup
-const popupHitId = (id: string | null, clientX: number, clientY: number): string | null => {
+const popupHitUuid = (id: string | null, clientX: number, clientY: number): string | null => {
   if (!id) return null
-  const el = document.querySelector<HTMLElement>(`.block-handle-popup[data-block-id="${id}"]`)
+  const el = document.querySelector<HTMLElement>(`.block-handle-popup[data-uuid="${id}"]`)
   const r = el?.getBoundingClientRect()
   if (!r) return null
   const inX = clientX >= r.left - POPUP_HIT_MARGIN && clientX <= r.right + POPUP_HIT_MARGIN
@@ -2370,19 +2369,19 @@ const popupHitId = (id: string | null, clientX: number, clientY: number): string
 }
 
 const hitPopupBlock = (clientX: number, clientY: number): string | null =>
-  popupHitId(popupActiveBlockId.value, clientX, clientY) ?? popupHitId(popupBlockId.value, clientX, clientY)
+  popupHitUuid(popupActiveUuid.value, clientX, clientY) ?? popupHitUuid(popupBlockUuid.value, clientX, clientY)
 
 // 命中优先级：设置栏 → 缩放手柄 → popup → 拖拽栏/缝隙 → 块本体；先走 O(1) closest，空白处才几何命中
 const resolvePointerHit = (e: MouseEvent): string | null => {
   const target = e.target as HTMLElement
-  const directId = target.closest<HTMLElement>('.side-settings, .handle, .drag-handle, .drag-wrapper')?.dataset.id
+  const directId = target.closest<HTMLElement>('.side-settings, .handle, .drag-handle, .drag-wrapper')?.dataset.uuid
   if (directId) return directId
   return hitSettingsBar(e.clientX, e.clientY) ?? hitResizeHandle(e.clientX, e.clientY)
     ?? hitPopupBlock(e.clientX, e.clientY) ?? hitHandle(e.clientX, e.clientY)
 }
 
 // 按鼠标到各选中块矩形的最小距离取最近者（仅空白命中时调用）
-const nearestSelectedBlockId = (clientX: number, clientY: number): string | null => {
+const nearestSelectedUuid = (clientX: number, clientY: number): string | null => {
   // 预览开启时高频触发，所以无选中块时短路
   if (state.selectedIds.size === 0) return null
   if (!viewRect.value) return null
@@ -2390,7 +2389,7 @@ const nearestSelectedBlockId = (clientX: number, clientY: number): string | null
   let bestId: string | null = null
   let bestDist = Infinity
   state.items.forEach((item) => {
-    if (!state.selectedIds.has(item.id)) return
+    if (!state.selectedIds.has(item.uuid)) return
     const l = layoutOf(item)
     const rect = rectOf(l.x, l.y, l.w, l.h)
     if (!rect) return
@@ -2399,32 +2398,32 @@ const nearestSelectedBlockId = (clientX: number, clientY: number): string | null
     const dist = Math.hypot(dx, dy)
     if (dist < bestDist) {
       bestDist = dist
-      bestId = item.id
+      bestId = item.uuid
     }
   })
   return bestId
 }
 
 // 选中只由点击/框选决定，悬停仅切换浮层归属
-const hoveredBlockId = ref<string | null>(null)
-const outlineOwnerId = computed(() => customDrag.active ? customDrag.sourceItemId : hoveredBlockId.value)
+const hoveredUuid = ref<string | null>(null)
+const outlineOwnerId = computed(() => customDrag.active ? customDrag.sourceUuid : hoveredUuid.value)
 
 // 逐块 v-if 每帧为全部块求值会掉帧，所以先算出小集合再渲染
 const floatingOwnerId = computed(() => {
   if (!isEditMode.value) return null
-  const id = customDrag.active ? customDrag.sourceItemId : hoveredBlockId.value
+  const id = customDrag.active ? customDrag.sourceUuid : hoveredUuid.value
   return id && state.selectedIds.has(id) ? id : null
 })
-const floatingOwnerItem = computed(() => state.items.find((it) => it.id === floatingOwnerId.value) ?? null)
+const floatingOwnerItem = computed(() => state.items.find((it) => it.uuid === floatingOwnerId.value) ?? null)
 // popup 弹出时块顶部手柄隐藏，拖拽栏一并隐藏以免争位
 const floatingHandleItem = computed(() => {
   const item = floatingOwnerItem.value
-  return item && popupBlockId.value !== item.id ? item : null
+  return item && popupBlockUuid.value !== item.uuid ? item : null
 })
 // 设置栏是否出现由块组件自身是否提供设置插槽决定
 const sideSettingsItem = computed(() => floatingOwnerItem.value)
 const selectedOutlineItems = computed(() =>
-  isEditMode.value ? state.items.filter((it) => state.selectedIds.has(it.id)) : []
+  isEditMode.value ? state.items.filter((it) => state.selectedIds.has(it.uuid)) : []
 )
 
 const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
@@ -2433,13 +2432,13 @@ const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
 
 // 归属块必须是选中块，否则取最近选中块，避免鼠标扫过未选中块时拖拽栏全消失
 const applyFloatingOwner = (hitId: string | null, clientX: number, clientY: number) => {
-  const owner = hitId && state.selectedIds.has(hitId) ? hitId : nearestSelectedBlockId(clientX, clientY)
-  if (owner !== hoveredBlockId.value) hoveredBlockId.value = owner
+  const owner = hitId && state.selectedIds.has(hitId) ? hitId : nearestSelectedUuid(clientX, clientY)
+  if (owner !== hoveredUuid.value) hoveredUuid.value = owner
 }
 
 const isHoverOwnerLocked = (e: MouseEvent): boolean =>
   !isEditMode.value || e.button !== 0 || !!resizeSession || selectionState.active || customDrag.active
-  || !!popupActiveBlockId.value || e.ctrlKey || e.shiftKey || e.altKey || e.metaKey
+  || !!popupActiveUuid.value || e.ctrlKey || e.shiftKey || e.altKey || e.metaKey
 
 // 悬停只切换浮层归属
 const updateHoverOwner = (e: MouseEvent) => {
@@ -2455,7 +2454,7 @@ const finishSelection = () => {
   stopAutoPan()
   const rect = selectionBox.value
   if (rect) {
-    const matchedIds = state.items.filter((item) => isRectIntersectingItem(rect, item)).map((item) => item.id)
+    const matchedIds = state.items.filter((item) => isRectIntersectingItem(rect, item)).map((item) => item.uuid)
     if (selectionState.extend) {
       const next = new Set(state.selectedIds)
       matchedIds.forEach((id) => next.add(id))
@@ -2475,7 +2474,7 @@ const FOCUS_SKIP_SELECTOR =
   'button, a, input, select, textarea, [contenteditable="true"], [role="button"], .v-btn, .v-menu, .v-overlay, .block-handle-positioner'
 
 const focusBlockOnClick = (id: string, target: HTMLElement) => {
-  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-id="${id}"]`)
+  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"]`)
   if (!wrapper || wrapper.contains(document.activeElement)) return
   if (target.closest(FOCUS_SKIP_SELECTOR)) return
   focusBlockContent(id)
@@ -2489,8 +2488,8 @@ const handleCanvasClick = (e: MouseEvent) => {
     return
   }
   if (target.closest('.handle, .drag-handle, .side-settings, .snap-paperclip, .toolbar')) return
-  const id = target.closest<HTMLElement>('.drag-wrapper')?.dataset.id
-  if (id && state.items.some((item) => item.id === id)) {
+  const id = target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid
+  if (id && state.items.some((item) => item.uuid === id)) {
     if (!isEditMode.value) return
     selectOnClick(id, e)
     bringToTop(id)
@@ -2505,9 +2504,9 @@ const handleCanvasClick = (e: MouseEvent) => {
 // 选中由 click 统一处理，所以 focusin 只提升层级
 const handleCanvasFocusin = (e: FocusEvent) => {
   const wrapper = (e.target as HTMLElement).closest<HTMLElement>('.drag-wrapper')
-  const id = wrapper?.dataset.id
+  const id = wrapper?.dataset.uuid
   if (!id || !isEditMode.value) return
-  if (!state.items.some((item) => item.id === id)) return
+  if (!state.items.some((item) => item.uuid === id)) return
   bringToTop(id)
 }
 // #endregion 框选收尾与点击
@@ -2515,7 +2514,7 @@ const handleCanvasFocusin = (e: FocusEvent) => {
 // #region 数据同步与布局刷新
 const syncComponentData = () => {
   state.items.forEach((item) => {
-    const inst = componentRefs.value[item.id]
+    const inst = componentRefs.value[item.uuid]
     const saved = inst?.saveConfig?.()
     if (saved) {
       item.config = { ...item.config, ...saved } as WidgetConfig
@@ -2523,8 +2522,9 @@ const syncComponentData = () => {
   })
 }
 
-const generateId = () =>
-  Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+const generateBlockUuid = () =>
+  // crypto.randomUUID 只在安全上下文可用，局域网 http 访问时降级为时间戳随机串
+  globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
 const ARRANGE_GAP = 16
 const ARRANGE_TOP = 16
@@ -2586,7 +2586,7 @@ watch(mobileMode, () => {
 
 // 块删除后其曲别针链接失效，随 items 变化自动清理
 watch(
-  () => state.items.map((it) => it.id),
+  () => state.items.map((it) => it.uuid),
   (ids) => {
     const idSet = new Set(ids)
     linkedPairs.value = new Set(
@@ -2601,7 +2601,7 @@ watch(
 // 编辑器嵌在块内拿不到画布选中态，所以选中集变化时派发全局事件
 watch(
   () => [...state.selectedIds].sort().join(','),
-  () => window.dispatchEvent(new CustomEvent('Mindrizzle:block-selection', { detail: { ids: [...state.selectedIds] } })),
+  () => window.dispatchEvent(new CustomEvent('Mindrizzle:block-selection', { detail: { uuids: [...state.selectedIds] } })),
 )
 
 const onResize = () => {
@@ -2703,7 +2703,7 @@ const freeSpotFor = (w: number, h: number): { x: number; y: number } => {
 
 // 让块中心落在视口中心：按 屏幕 = 坐标*zoom + origin + pan 反解 pan
 const panToBlock = (id: string) => {
-  const item = state.items.find((it) => it.id === id)
+  const item = state.items.find((it) => it.uuid === id)
   if (!item) return
   const layout = layoutOf(item)
   const cont = canvasContainerRef.value
@@ -2768,12 +2768,12 @@ const resolveAddSpot = (key: CanvasItem['component'], at?: { x: number; y: numbe
 const addComponent = (key: CanvasItem['component'], at?: { x: number; y: number }, config?: WidgetConfig): string | null => {
   const meta = componentMetaOf(key)
   if (!meta) return null
-  const id = generateId()
+  const uuid = generateBlockUuid()
   const { spot } = resolveAddSpot(key, at)
   const { x, y } = spot
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   const newItem: CanvasItem = markRaw({
-    id,
+    uuid,
     component: key,
     config: config ?? meta.defaultConfig(),
     layout: {
@@ -2786,16 +2786,16 @@ const addComponent = (key: CanvasItem['component'], at?: { x: number; y: number 
   if (mobileMode.value && canvasWidth.value > 0) {
     stretchMobileWidth(newItem)
   }
-  if (!isRectVisibleInViewport(layoutOf(newItem))) panToBlock(newItem.id)
+  if (!isRectVisibleInViewport(layoutOf(newItem))) panToBlock(newItem.uuid)
   recomputeMasks()
-  return id
+  return uuid
 }
 // #endregion 自动布局与添加
 
 // #region 插入组件拖出成块
 // 节点名 → 块注册项由注册表声明，画布不感知具体组件类型
 const extractMetaOf = (nodeName: string) =>
-  ADDABLE_COMPONENTS.find((meta) => meta.extractFromNode?.nodeName === nodeName)
+  CANVAS_COMPONENTS.find((meta) => meta.extractFromNode?.nodeName === nodeName)
 
 // 仅编辑态且落点在画布内才新增块，经 detail.accepted 同步回填结果
 type ExtractDetail = {
@@ -2856,17 +2856,17 @@ const isBlockNearViewport = (item: CanvasItem): boolean => {
 }
 
 // 焦点在块内时销毁实例会丢光标与未提交输入，所以按 activeElement 反查（整轮只查一次）
-const focusedBlockId = (): string | null =>
-  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.drag-wrapper')?.dataset.id ?? null
+const focusedUuid = (): string | null =>
+  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid ?? null
 
 // 选中/拖拽/resize/popup/联结落点都依赖活实例，所以在可见性之外额外固定
 const isBlockPinned = (item: CanvasItem): boolean =>
-  state.selectedIds.has(item.id) ||
-  customDrag.draggingIds.has(item.id) ||
-  resizeSession?.itemId === item.id ||
-  popupBlockId.value === item.id ||
-  popupActiveBlockId.value === item.id ||
-  richTextDropTargetId.value === item.id
+  state.selectedIds.has(item.uuid) ||
+  customDrag.draggingUuids.has(item.uuid) ||
+  resizeSession?.uuid === item.uuid ||
+  popupBlockUuid.value === item.uuid ||
+  popupActiveUuid.value === item.uuid ||
+  richTextDropTargetId.value === item.uuid
 
 // 克隆里残留的 contenteditable/tabindex 会让快照仍可聚焦与输入，所以要剔除
 const sanitizeSnapshot = (html: string): string => {
@@ -2894,12 +2894,12 @@ const scrollRecordsOf = (root: HTMLElement): ScrollRecord[] => {
 
 // 销毁前必须先把内容与视觉搬走——实例一去，doc 与 DOM 都取不到
 const virtualizeBlock = (item: CanvasItem): string => {
-  const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-id="${item.id}"] .inner-component`)
+  const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${item.uuid}"] .inner-component`)
   if (!root) return ''
-  const config = componentRefs.value[item.id]?.saveConfig?.()
+  const config = componentRefs.value[item.uuid]?.saveConfig?.()
   if (config) item.config = { ...item.config, ...config } as WidgetConfig
   const records = scrollRecordsOf(root)
-  if (records.length) virtualScrolls.set(item.id, records)
+  if (records.length) virtualScrolls.set(item.uuid, records)
   return sanitizeSnapshot(root.outerHTML)
 }
 
@@ -2913,11 +2913,11 @@ const applyScrollRecords = (root: HTMLElement | null, records: ScrollRecord[]): 
   })
 }
 
-// 快照克隆与重建后的实例同为 .inner-component，所以还原入口只需块 id
+// 快照克隆与重建后的实例同为 .inner-component，所以还原入口只需块 uuid
 const applyBlockScrolls = (id: string): void => {
   const records = virtualScrolls.get(id)
   if (!records) return
-  const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-id="${id}"] .inner-component`) ?? null
+  const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"] .inner-component`) ?? null
   applyScrollRecords(root, records)
 }
 
@@ -2927,29 +2927,29 @@ const restoreScrollsSoon = (ids: string[]): void => {
   requestAnimationFrame(() => ids.forEach(applyBlockScrolls))
 }
 
-const sameBlockIds = (first: Record<string, unknown>, second: Record<string, unknown>): boolean => {
+const sameBlockUuids = (first: Record<string, unknown>, second: Record<string, unknown>): boolean => {
   const keys = Object.keys(first)
   if (keys.length !== Object.keys(second).length) return false
   return keys.every((key) => key in second)
 }
 
 const reconcileVirtualBlocks = () => {
-  const focused = focusedBlockId()
+  const focused = focusedUuid()
   const nextSnapshots: Record<string, string> = {}
   const touchedIds: string[] = []
   state.items.forEach((item) => {
-    if (focused === item.id || isBlockPinned(item) || isBlockNearViewport(item)) {
-      if (isVirtualized(item.id)) touchedIds.push(item.id)
+    if (focused === item.uuid || isBlockPinned(item) || isBlockNearViewport(item)) {
+      if (isVirtualized(item.uuid)) touchedIds.push(item.uuid)
       return
     }
-    if (isVirtualized(item.id)) {
-      nextSnapshots[item.id] = virtualSnapshots.value[item.id]
+    if (isVirtualized(item.uuid)) {
+      nextSnapshots[item.uuid] = virtualSnapshots.value[item.uuid]
       return
     }
-    nextSnapshots[item.id] = virtualizeBlock(item)
-    touchedIds.push(item.id)
+    nextSnapshots[item.uuid] = virtualizeBlock(item)
+    touchedIds.push(item.uuid)
   })
-  if (sameBlockIds(nextSnapshots, virtualSnapshots.value)) return
+  if (sameBlockUuids(nextSnapshots, virtualSnapshots.value)) return
   virtualSnapshots.value = nextSnapshots
   // 换手两边的 DOM 都是新渲染的，所以都要把块内滚动还原
   if (touchedIds.length) restoreScrollsSoon(touchedIds)
@@ -2991,7 +2991,7 @@ const save = () => {
   })
   // 移动端宽度运行时拉伸，不持久化
   const serializable = state.items.map((it) => ({
-    id: it.id,
+    uuid: it.uuid,
     component: it.component,
     config: it.config,
     layout: {
@@ -3032,7 +3032,7 @@ const normalizeLoadedItem = (it: any): CanvasItem => {
   }
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   return markRaw({
-    id: typeof it.id === 'string' && it.id ? it.id : generateId(),
+    uuid: typeof it.uuid === 'string' && it.uuid ? it.uuid : generateBlockUuid(),
     component,
     config: (it.config ?? componentMetaOf(component)?.defaultConfig() ?? {}) as WidgetConfig,
     layout: { desktop, mobile },
@@ -3085,7 +3085,7 @@ const load = async (raw: string) => {
   // 排列改了 layout，所以要按落定后的位置再定一次虚拟集（首次渲染那次用的是文件里的旧坐标）
   reconcileVirtualBlocks()
   state.items.forEach((item) => {
-    componentRefs.value[item.id]?.loadConfig?.(item.config)
+    componentRefs.value[item.uuid]?.loadConfig?.(item.config)
   })
   recomputeMasks()
 }
@@ -3101,7 +3101,7 @@ const batchToggleHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
 const deleteSelected = () => {
   if (!isEditMode.value || state.selectedIds.size === 0) return
   const ids = Array.from(state.selectedIds)
-  state.items = state.items.filter((it) => !ids.includes(it.id))
+  state.items = state.items.filter((it) => !ids.includes(it.uuid))
   state.selectedIds = new Set()
   ids.forEach(id => { delete componentRefs.value[id] })
   recomputeMasks() // 删除块会改变贴合关系，刷新遮罩
@@ -3173,7 +3173,7 @@ defineExpose({
   canvasStyle,
   containerStyle,
   selectionBoxStyle,
-  ADDABLE_COMPONENTS,
+  CANVAS_COMPONENTS,
   isEditMode,
   forceMobile,
   componentRefs,

@@ -15,6 +15,11 @@
         </v-chip>
       </div>
 
+      <div class="bench-uuid">
+        <b>uuid</b>
+        <code data-test="block-uuid">{{ props.base.uuid }}</code>
+      </div>
+
       <div v-if="showViewport" class="bench-metrics">
         <span v-for="metric in metrics" :key="metric.label">
           <b>{{ metric.label }}</b> {{ metric.value }}
@@ -252,6 +257,18 @@ defineExpose({
   gap: 2px 8px;
   font-size: 11px;
   line-height: 1.4;
+}
+
+.bench-uuid {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.bench-uuid code {
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 
 .bench-config {

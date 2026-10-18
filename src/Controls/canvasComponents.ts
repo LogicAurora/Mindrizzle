@@ -1,5 +1,7 @@
 import type { NodeJSON } from '@prosekit/core'
-import { defineAsyncComponent } from 'vue'
+import { mdiCodeBraces, mdiFlaskOutline, mdiNoteText } from '@mdi/js'
+import { defineAsyncComponent, type Component } from 'vue'
+
 import type { EditorCommands } from './RichEditor/extension.ts'
 import RichTextEditor, { isHeightChangable as isRichTextHeightChangable } from './RichEditor/RichTextEditor.vue'
 import CanvasTestBench from './EditorComponents/CanvasTestBench.vue'
@@ -26,9 +28,6 @@ export interface TestBenchConfig {
 }
 
 export type WidgetConfig = RichTextConfig | CodeBlockConfig | TestBenchConfig
-export type ComponentKey = 'RichTextEditor' | 'EditableCodeBlock' | 'CanvasTestBench'
-
-export const DEFAULT_COMPONENT_KEY: ComponentKey = 'RichTextEditor'
 
 // 块配置 ↔ 富文本内可插入节点的映射，具体组件在注册项里声明
 export interface ComponentNodeMapping {
@@ -52,7 +51,7 @@ export interface Rect {
 }
 
 export interface CanvasItem {
-  id: string
+  uuid: string
   component: ComponentKey
   config: WidgetConfig
   layout: {
@@ -65,54 +64,61 @@ export interface CanvasItem {
   }
 }
 
-export interface AddableComponentMeta {
-  key: ComponentKey
+export interface CanvasComponentDefinition<TConfig extends WidgetConfig = WidgetConfig> {
+  key: string
   label: string
+  icon: string
   addId: string
-  defaultConfig: () => WidgetConfig
+  component: Component
+  constraints?: ResizeConstraints
+  defaultConfig(): TConfig
   defaultSize: { w: number; h: number }
-  widthChangableOf?: (config: WidgetConfig) => boolean
-  heightChangableOf?: (config: WidgetConfig) => boolean
+  widthChangableOf?(config: TConfig): boolean
+  heightChangableOf?(config: TConfig): boolean
   // 可接收画布拖拽落点（如富文本）
   acceptsDrop?: boolean
   // 块配置转为富文本内可插入的节点（把块拖入富文本用）
-  toNode?: (config: WidgetConfig) => ComponentNodeMapping | null
+  toNode?(config: TConfig): ComponentNodeMapping | null
   // 富文本节点拖出成块（从富文本抽出块用）
   extractFromNode?: {
     nodeName: string
-    toConfig: (props: Record<string, unknown>) => WidgetConfig
+    toConfig(props: Record<string, unknown>): TConfig
   }
 }
 
-export const componentMap = {
-  RichTextEditor,
-  EditableCodeBlock,
-  CanvasTestBench,
-}
+// 泛型入口让每个注册项按自己的 config 类型校验回调，省掉调用处的断言
+const defineCanvasComponent = <TConfig extends WidgetConfig>(definition: CanvasComponentDefinition<TConfig>) =>
+  definition
 
-export const ADDABLE_COMPONENTS: AddableComponentMeta[] = [
-  {
+export const CANVAS_COMPONENTS = [
+  defineCanvasComponent<RichTextConfig>({
     key: 'RichTextEditor',
     label: '富文本',
+    icon: mdiNoteText,
     addId: 'add-rich',
+    component: RichTextEditor,
+    constraints: RICH_TEXT_CONSTRAINTS,
     defaultConfig: () => ({ content: null }),
     defaultSize: { w: 400, h: 300 },
-    heightChangableOf: (config) => isRichTextHeightChangable(config as RichTextConfig),
+    heightChangableOf: isRichTextHeightChangable,
     acceptsDrop: true,
-  },
-  {
+  }),
+  defineCanvasComponent<CodeBlockConfig>({
     key: 'EditableCodeBlock',
     label: '代码块',
+    icon: mdiCodeBraces,
     addId: 'add-code',
+    component: EditableCodeBlock,
+    constraints: CODE_BLOCK_CONSTRAINTS,
     defaultConfig: () => ({
       code: '// 在此编写代码',
       language: 'javascript',
     }),
     defaultSize: { w: 400, h: 250 },
-    toNode: (config) => {
-      const codeConfig = config as CodeBlockConfig
-      return { name: 'CodeBlock', props: { modelValue: codeConfig.code, language: codeConfig.language } }
-    },
+    toNode: (config) => ({
+      name: 'CodeBlock',
+      props: { modelValue: config.code, language: config.language },
+    }),
     extractFromNode: {
       nodeName: 'CodeBlock',
       toConfig: (props) => ({
@@ -120,18 +126,29 @@ export const ADDABLE_COMPONENTS: AddableComponentMeta[] = [
         language: (props.language as string | undefined) ?? 'javascript',
       }),
     },
-  },
-  {
+  }),
+  defineCanvasComponent<TestBenchConfig>({
     key: 'CanvasTestBench',
     label: '测试台',
+    icon: mdiFlaskOutline,
     addId: 'add-test',
+    component: CanvasTestBench,
+    constraints: TEST_BENCH_CONSTRAINTS,
     defaultConfig: () => ({ counter: 0, note: '', showViewport: true }),
     defaultSize: { w: 420, h: 360 },
-  },
-]
+  }),
+] as const
 
-export const componentMetaOf = (key: ComponentKey) =>
-  ADDABLE_COMPONENTS.find((component) => component.key === key)
+export type ComponentKey = (typeof CANVAS_COMPONENTS)[number]['key']
+
+export const DEFAULT_COMPONENT_KEY: ComponentKey = 'RichTextEditor'
+
+export const componentMap = Object.fromEntries(
+  CANVAS_COMPONENTS.map((meta) => [meta.key, meta.component]),
+) as Record<ComponentKey, Component>
+
+export const componentMetaOf = (key: ComponentKey): CanvasComponentDefinition | undefined =>
+  CANVAS_COMPONENTS.find((component) => component.key === key)
 
 export const componentLabelOf = (key: ComponentKey) =>
   componentMetaOf(key)?.label ?? key
@@ -143,12 +160,6 @@ export const heightChangableOf = (item: Pick<CanvasItem, 'component' | 'config'>
 export const widthChangableOf = (item: Pick<CanvasItem, 'component' | 'config'>): boolean =>
   componentMetaOf(item.component)?.widthChangableOf?.(item.config) ?? true
 
-const componentConstraints: Partial<Record<ComponentKey, ResizeConstraints>> = {
-  RichTextEditor: RICH_TEXT_CONSTRAINTS,
-  EditableCodeBlock: CODE_BLOCK_CONSTRAINTS,
-  CanvasTestBench: TEST_BENCH_CONSTRAINTS,
-}
-
 const CANVAS_DEFAULT_CONSTRAINTS: Required<ResizeConstraints> = {
   minWidth: 100,
   maxWidth: null,
@@ -157,6 +168,6 @@ const CANVAS_DEFAULT_CONSTRAINTS: Required<ResizeConstraints> = {
 }
 
 export const constraintsOf = (item: Pick<CanvasItem, 'component'>): Required<ResizeConstraints> => {
-  const raw = componentConstraints[item.component]
+  const raw = componentMetaOf(item.component)?.constraints
   return raw ? normalizeConstraints(raw) : CANVAS_DEFAULT_CONSTRAINTS
 }

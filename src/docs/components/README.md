@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-10-18 -->
 # 画布组件开发指南
 
 > 面向新增块类型的开发者。目标：只写「这个块是什么」，不碰画布几何、会话与浮层。
@@ -53,7 +53,7 @@ const baseRef = ref<{ controller: BlockComponentController; canvasController: Bl
 
 | 属性 | 说明 |
 | --- | --- |
-| `itemId` / `uuid` | 块标识，同时输出到根元素 `data-id` / `data-uuid` |
+| `uuid` | 块唯一标识，放置时生成、持久化在 `.mdrf`，并输出到根元素 `data-uuid` |
 | `x` `y` `width` `height` | content 坐标与尺寸 |
 | `minWidth` `minHeight` `maxWidth` `maxHeight` | 已含画布内边距的尺寸约束 |
 | `widthChangable` / `heightChangable` | 该轴是否允许被联结/手柄改变；`false` 时对应手柄自动收掉 |
@@ -91,25 +91,28 @@ baseRef.value?.controller.resizeTo({ height })
 
 ## 注册表（`canvasComponents.ts`）
 
-新增块类型要同时登记：
+`CANVAS_COMPONENTS` 是唯一注册入口：组件本体、添加菜单信息、尺寸约束与能力声明都写在同一项里，
+`ComponentKey`、`componentMap`、`constraintsOf` 均由它自动派生。
 
 | 字段 | 必需 | 说明 |
 | --- | --- | --- |
-| `key` | 是 | `ComponentKey`，持久化在 `.mdrf` 中，不可随意改 |
-| `label` / `addId` | 是 | 添加按钮文案与 DOM id |
+| `key` | 是 | 持久化在 `.mdrf` 中，不可随意改；`ComponentKey` 由注册项字面量推导 |
+| `label` / `icon` / `addId` | 是 | 添加按钮文案、图标与 DOM id |
+| `component` | 是 | 组件本体；重型依赖用 `defineAsyncComponent` 包裹后再填这里 |
+| `constraints` | 否 | 尺寸约束，缺省走画布默认值 |
 | `defaultConfig` / `defaultSize` | 是 | 新块初始配置与尺寸 |
 | `widthChangableOf` / `heightChangableOf` | 否 | 由 config 推导尺寸可变性（缺省 `true`） |
 | `acceptsDrop` | 否 | 可作为画布拖拽落点（富文本为 `true`） |
 | `toNode` | 否 | 块配置 → 富文本内节点（把块拖入富文本） |
 | `extractFromNode` | 否 | 富文本节点 → 块配置（把节点拖出成块） |
 
-同时在 `componentMap` 登记组件本体；重型依赖用 `defineAsyncComponent` 包裹。
+注册项经 `defineCanvasComponent<自身 config 类型>()` 包裹，回调参数直接得到精确类型，不需要 `as` 断言。
 
 ## 接入清单
 
 1. 新建组件，根为 `MdrCanvasComponentBase`，内容节点带 `inner-component`。
 2. 声明 `config` 类型并加入 `WidgetConfig` 联合。
-3. 在注册表补 `defaultConfig`、`defaultSize` 与可选能力。
+3. 在 `CANVAS_COMPONENTS` 追加一项（`defineCanvasComponent<自身 config 类型>`），填 `component`、`constraints`、`defaultConfig`、`defaultSize` 与可选能力。
 4. 需要画布操作时用 `baseRef` 取 controller。
 5. 需要保存/加载时 `defineExpose({ saveConfig, loadConfig })`。
 6. 需要拖入落点时提供 `resolveDropAtElement(el, preferBefore)` 与 `scrollContent(deltaY)`，并登记 `acceptsDrop`。
@@ -118,7 +121,7 @@ baseRef.value?.controller.resizeTo({ height })
 ## 虚拟化约定
 
 - 画布传入 `virtualized` 与 `snapshot`；块组件在 `virtualized` 时只渲染快照，不挂真实实例。
-- 被克隆的内容必须带 `inner-component` 类，画布按 `.drag-wrapper[data-id] .inner-component` 取节点。
+- 被克隆的内容必须带 `inner-component` 类，画布按 `.drag-wrapper[data-uuid] .inner-component` 取节点。
 - 快照需 `display: contents`，并让整棵子树 `pointer-events: none`（克隆里的交互层会吞事件）。
 - 销毁前画布调用 `saveConfig()` 写回内容；块内滚动由画布按类名记录并还原。
 

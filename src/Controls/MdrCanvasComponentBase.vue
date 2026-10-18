@@ -1,12 +1,12 @@
 <template>
-  <ResizeBox ref="resizeBoxRef" :item-id="itemId" :x="x" :y="y" :w="width" :h="height" :min-width="minWidth"
+  <ResizeBox ref="resizeBoxRef" :uuid="uuid" :x="x" :y="y" :w="width" :h="height" :min-width="minWidth"
     :min-height="minHeight" :max-width="maxWidth" :max-height="maxHeight" :handles="effectiveHandles"
     :disabled="!draggable || readOnly" :active="active" :dragging="dragging" :z-index="zIndex" :zoom="zoom"
     class="drag-wrapper mdr-canvas-component" :class="{
       selected: active,
       'popup-open': popupOpen,
       'drag-passthrough': dragging,
-    }" :data-id="itemId" :data-uuid="uuid"
+    }" :data-uuid="uuid"
     @resizestart="(handle: string) => emit('resizestart', handle)"
     @resizing="(rx: number, ry: number, rw: number, rh: number) => emit('resizing', rx, ry, rw, rh)"
     @resizestop="(rx: number, ry: number, rw: number, rh: number) => emit('resizestop', rx, ry, rw, rh)">
@@ -22,7 +22,7 @@
     <Teleport :to="canvasEl" :disabled="!canvasEl">
       <Transition name="pop-up">
         <div v-if="showFloatingHandle" class="floating-handle drag-handle"
-          :class="{ 'handle-bottom': placement === 'bottom' }" :data-id="itemId" :style="handleStyle"
+          :class="{ 'handle-bottom': placement === 'bottom' }" :data-uuid="uuid" :style="handleStyle"
           @mousedown="onHandleDown">
           <v-icon size="16" color="on-surface-variant" :icon="icon" class="mr-1" />
           <span class="text-caption text-medium-emphasis user-select-none">{{ title }}</span>
@@ -31,7 +31,7 @@
 
       <Transition name="pop-up">
         <div v-if="showFloatingSettings" class="side-settings"
-          :class="{ 'handle-bottom': placement === 'bottom' }" :data-id="itemId" :style="settingsStyle">
+          :class="{ 'handle-bottom': placement === 'bottom' }" :data-uuid="uuid" :style="settingsStyle">
           <v-btn size="x-small" variant="tonal" color="grey" icon title="块设置" @mousedown.stop
             @click.stop="onSettingsToggle">
             <v-icon :icon="mdiCogOutline" size="13" />

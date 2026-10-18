@@ -4,7 +4,6 @@ import type { BlockInteractionHandlers } from './canvasComponentControllers.ts'
 
 /** 画布壳层属性：几何、层级、交互态与控制器回调，不含任何块类型语义。 */
 export interface MdrCanvasComponentBaseProps {
-  itemId: string
   uuid: string
   x: number
   y: number

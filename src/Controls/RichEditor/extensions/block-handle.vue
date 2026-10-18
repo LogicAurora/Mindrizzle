@@ -13,7 +13,7 @@ import { createOverlayStoreResolver, createStoreResolver, getScrollEl, getView, 
 import { useHoverState } from './useHoverState'
 import { useHoverUi } from './useHoverUi'
 import { useBlockDrag } from './useBlockDrag'
-import { activeHandleBlockId } from './blockHandleOwner'
+import { activeHandleUuid } from './blockHandleOwner'
 
 interface Props {
   dir?: 'ltr' | 'rtl'
@@ -60,41 +60,41 @@ const scrollbarDragging = ref(false)
 const showPopup = computed(() => handleVisible.value && !scrollbarDragging.value)
 
 // setup 阶段 editor 尚未挂载、closest('.drag-wrapper') 为空，所以监听 editor 变化后再赋值
-const blockId = ref<string | null>(null)
+const blockUuid = ref<string | null>(null)
 watch(
   () => props.editor,
   async () => {
     await nextTick()
     const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-    blockId.value = wrapper?.dataset.id ?? null
+    blockUuid.value = wrapper?.dataset.uuid ?? null
   },
   { immediate: true },
 )
 
 // computed 会因 editor 引用不变而取到过期的 null，所以用函数实时查 DOM
-const currentBlockId = () => getView(props.editor)?.dom?.closest('.drag-wrapper')?.dataset.id ?? null
+const currentUuid = () => getView(props.editor)?.dom?.closest('.drag-wrapper')?.dataset.uuid ?? null
 
 // 任一实例改 owner 时其余实例立即收到更新并收起自己，保证只显示最后激活的块
-watch(activeHandleBlockId, (ownerId) => {
-  if (!ownerId) return
-  const id = currentBlockId()
-  if (id && ownerId !== id) suppressUI()
+watch(activeHandleUuid, (ownerUuid) => {
+  if (!ownerUuid) return
+  const uuid = currentUuid()
+  if (uuid && ownerUuid !== uuid) suppressUI()
 })
 
 // 仅在确实显示时占有 owner，避免隐藏块残留占用
 watch(showPopup, (visible) => {
-  const id = currentBlockId()
-  if (visible && id) {
-    activeHandleBlockId.value = id
-  } else if (!visible && activeHandleBlockId.value === id) {
-    activeHandleBlockId.value = null
+  const uuid = currentUuid()
+  if (visible && uuid) {
+    activeHandleUuid.value = uuid
+  } else if (!visible && activeHandleUuid.value === uuid) {
+    activeHandleUuid.value = null
   }
 })
 
 // 卸载时释放 owner，避免残留 id 阻塞其他块
 onUnmounted(() => {
-  if (activeHandleBlockId.value === currentBlockId()) {
-    activeHandleBlockId.value = null
+  if (activeHandleUuid.value === currentUuid()) {
+    activeHandleUuid.value = null
   }
 })
 
@@ -120,9 +120,9 @@ function syncTmOverlap() {
   tmSyncRaf = requestAnimationFrame(() => {
     tmSyncRaf = requestAnimationFrame(() => {
       const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-      const blockId = wrapper?.dataset.id ?? null
+      const uuid = wrapper?.dataset.uuid ?? null
       const open = !!showPopup.value && popupOverlapsTm()
-      window.dispatchEvent(new CustomEvent('Mindrizzle:block-popup', { detail: { open, blockId } }))
+      window.dispatchEvent(new CustomEvent('Mindrizzle:block-popup', { detail: { open, uuid } }))
     })
   })
 }
@@ -133,9 +133,9 @@ let bridgeRaf = 0
 function syncBridgeGap() {
   const measure = () => {
     const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-    // 多块各自都渲染 popup，所以必须按块 id 精确取，否则会量到别的隐藏 popup
-    const id = wrapper?.dataset.id
-    const popup = id ? document.querySelector<HTMLElement>(`.block-handle-popup[data-block-id="${id}"]`) : null
+    // 多块各自都渲染 popup，所以必须按块 uuid 精确取，否则会量到别的隐藏 popup
+    const uuid = wrapper?.dataset.uuid
+    const popup = uuid ? document.querySelector<HTMLElement>(`.block-handle-popup[data-uuid="${uuid}"]`) : null
     if (!wrapper || !popup) return
     const pr = popup.getBoundingClientRect()
     if (pr.width <= 0 || pr.height <= 0) return
@@ -165,10 +165,10 @@ watch([showPopup, handlePlacement], () => {
 // 鼠标移向 popup 会经过上方组件、焦点被切走会让 popup 消失，所以派发"该块 popup 激活"让画布暂停 hover 聚焦
 watch(showPopup, (visible) => {
   const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-  const blockId = wrapper?.dataset.id ?? null
+  const uuid = wrapper?.dataset.uuid ?? null
   // popup 关闭后桥接区消失，所以手动补上的滚动条 hover 必须一并撤回
   if (!visible) clearScrollbarHover()
-  window.dispatchEvent(new CustomEvent('Mindrizzle:block-handle-active', { detail: { active: !!visible, blockId } }))
+  window.dispatchEvent(new CustomEvent('Mindrizzle:block-handle-active', { detail: { active: !!visible, uuid } }))
 })
 
 // 滚动条是 overlay（原生已隐藏，offsetWidth-clientWidth 恒为 0），popup 压住滚动条时 wheel 滚不动，
@@ -223,8 +223,8 @@ const onPopupPointerMove = (e: PointerEvent) => {
 }
 
 const onScrollbarDrag = (e: Event) => {
-  const detail = (e as CustomEvent<{ active?: boolean; blockId?: string | null }>).detail
-  if (detail?.blockId && detail.blockId !== currentBlockId()) return
+  const detail = (e as CustomEvent<{ active?: boolean; uuid?: string | null }>).detail
+  if (detail?.uuid && detail.uuid !== currentUuid()) return
   scrollbarDragging.value = !!detail?.active
   if (scrollbarDragging.value) clearScrollbarHover()
 }
@@ -240,7 +240,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
       <BlockHandlePositioner
         :placement="handlePlacement"
         :hide="false"
-        :data-owner="blockId"
+        :data-owner="blockUuid"
         :class="['block-handle-positioner', `placement-${handlePlacement}`, { interactive: showPopup }]"
         :style="{ '--block-handle-shift': popupShiftPx + 'px', '--block-handle-hshift': popupHShiftPx + 'px' }"
         @pointerenter="onPopupEnter"
@@ -248,7 +248,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
       >
       <BlockHandlePopup
         class="block-handle-popup"
-        :data-block-id="blockId"
+        :data-uuid="blockUuid"
         :class="{ 'popup-keep': popupKeep, 'forced-open': showPopup, 'ui-hidden': !showPopup }"
         @pointerenter="onPopupEnter"
         @pointerleave="onPopupLeave(); clearScrollbarHover()"

@@ -9,7 +9,7 @@ interface Rect {
   y: number
   w: number
   h: number
-  itemId?: string
+  uuid?: string
 }
 
 interface ResizeSession {
@@ -21,7 +21,7 @@ interface ResizeSession {
 }
 
 const props = withDefaults(defineProps<{
-  itemId?: string
+  uuid?: string
   x: number
   y: number
   w: number
@@ -184,7 +184,7 @@ defineExpose({ rootEl })
     <!-- 手柄需固定视觉尺寸且不被邻块盖住，所以 Teleport 到 .canvas 顶层 -->
     <Teleport :to="canvasEl" :disabled="!canvasEl">
       <template v-if="showHandles">
-        <div v-for="h in handles" :key="h" class="handle" :class="`handle-${h}`" :data-id="itemId"
+        <div v-for="h in handles" :key="h" class="handle" :class="`handle-${h}`" :data-uuid="uuid"
           :style="handleStyle(h)" @mousedown.prevent.stop="onHandleDown(h, $event)" />
       </template>
     </Teleport>

@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-10-18 -->
 # 06 悬浮手柄与 popup
 
 ## 图 6.1 hover 状态解析流程
@@ -72,20 +72,20 @@ flowchart TD
   L["popup 关闭 / 滚动条拖拽"] --> M["clearScrollbarHover()"]
 ```
 
-## 图 6.5 activeHandleBlockId 仲裁
+## 图 6.5 activeHandleUuid 仲裁
 
 ```mermaid
 flowchart TD
   A["块 A showPopup = true"] --> B["watch(showPopup)"]
-  B --> C["activeHandleBlockId.value = A.id"]
-  C --> D["块 B watch(activeHandleBlockId)"]
-  D --> E{"ownerId !== B.id?"}
+  B --> C["activeHandleUuid.value = A.uuid"]
+  C --> D["块 B watch(activeHandleUuid)"]
+  D --> E{"ownerUuid !== B.uuid?"}
   E -->|是| F["B.suppressUI()"]
   E -->|否| G["保持"]
-  H["块 A 卸载"] --> I["清空 activeHandleBlockId"]
+  H["块 A 卸载"] --> I["清空 activeHandleUuid"]
 ```
 
-> 多选时 keepAlive 会让已激活 popup 残留、互相"折叠"，用模块级 `activeHandleBlockId` 仲裁。
+> 多选时 keepAlive 会让已激活 popup 残留、互相"折叠"，用模块级 `activeHandleUuid` 仲裁。
 
 ## 图 6.6 popup 遮挡 tm 手柄检测
 
@@ -96,7 +96,7 @@ flowchart TD
   C --> D["查 .drag-wrapper .handle-tm"]
   D --> E["取两者 BCR"]
   E --> F{"矩形相交？"}
-  F -->|是| G["派发 Mindrizzle:block-popup<br/>{open: true, blockId}"]
+  F -->|是| G["派发 Mindrizzle:block-popup<br/>{open: true, uuid}"]
   F -->|否| H["派发 open: false"]
 ```
 

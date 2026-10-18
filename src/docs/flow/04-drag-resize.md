@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-10-18 -->
 # 04 拖拽与缩放
 
 ## 图 4.1 拖拽主流程
@@ -9,7 +9,7 @@ flowchart TD
   A2 --> B["MdrCanvas startCustomDrag(item, e)"]
   B --> C["selectForDrag 选中"]
   C --> C2["收集 customDragGroup"]
-  C2 --> D["collectLinkedIds 联结块"]
+  C2 --> D["collectLinkedUuids 联结块"]
   D --> E["cacheDragDom 缓存 DOM 引用"]
   E --> F["挂 window pointermove/mousemove 捕获"]
   F --> G["startAutoPan()"]
@@ -54,7 +54,7 @@ flowchart LR
 ```mermaid
 flowchart TD
   A["onResizeStart(item, handle)"] --> B["captureLinkedStarts<br/>收集联结块起始 Rect"]
-  B --> C["resizeSession = {itemId, handle, starts, lastBase, panStart}"]
+  B --> C["resizeSession = {uuid, handle, starts, lastBase, panStart}"]
   C --> D["onResizing(item, x, y, w, h)"]
   D --> E["rs.lastBase = {x, y, w, h}"]
   E --> F["restrictedPanVelocity()"]
@@ -79,7 +79,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["propagateLinkedEdges(item, rect, starts)"] --> B["positions 用当前 layout 初始化"]
-  B --> C["queue = [item.id]"]
+  B --> C["queue = [item.uuid]"]
   C --> D{"queue 非空？"}
   D -->|是| E["取 pid, pRect, pStart"]
   E --> F["遍历 neighborMap.get(pid)"]

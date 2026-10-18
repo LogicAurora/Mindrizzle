@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-18 -->
 # 01 坐标系
 
 ## 三句话
@@ -30,7 +30,7 @@ flowchart LR
   end
 
   S <-.->|"同一物"| VP
-  C -.->|"经 .drag-wrapper[data-id]<br/>与块 DOM 对齐"| L
+  C -.->|"经 .drag-wrapper[data-uuid]<br/>与块 DOM 对齐"| L
 ```
 
 ## 图 1.2 getCanvasScale 系数推导

@@ -31,14 +31,14 @@ export function useHoverUi(options: {
   // 编辑器嵌在块内拿不到画布选中态，所以由画布派发选中事件同步（重挂时按 selected 类兜底）
   const blockSelected = ref(false)
 
-  function currentBlockId(): string | null {
-    return (view()?.dom?.closest('.drag-wrapper') as HTMLElement | null)?.dataset.id ?? null
+  function currentUuid(): string | null {
+    return (view()?.dom?.closest('.drag-wrapper') as HTMLElement | null)?.dataset.uuid ?? null
   }
 
   function onBlockSelectionChange(event: Event) {
-    const ids = (event as CustomEvent<{ ids?: string[] }>).detail?.ids
-    const id = currentBlockId()
-    blockSelected.value = !!id && !!ids?.includes(id)
+    const uuids = (event as CustomEvent<{ uuids?: string[] }>).detail?.uuids
+    const uuid = currentUuid()
+    blockSelected.value = !!uuid && !!uuids?.includes(uuid)
   }
 
   function syncBlockSelectedFromDom() {

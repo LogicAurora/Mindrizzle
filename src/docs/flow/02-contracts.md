@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-10-18 -->
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -53,10 +53,10 @@ flowchart TB
   subgraph 定义方
     MC["MdrCanvas 定义<br/>.canvas-container<br/>.canvas<br/>.handle-tm<br/>.selected-outline"]
     MCB["MdrCanvasComponentBase 定义<br/>.floating-handle<br/>.side-settings<br/>.block-container"]
-    RB["ResizeBox 定义<br/>.drag-wrapper[data-id]"]
+    RB["ResizeBox 定义<br/>.drag-wrapper[data-uuid]"]
     RTE["RichTextEditor 定义<br/>.editor-wrapper<br/>.editor-scroll<br/>.editor-scroll-shell<br/>.custom-scrollbar"]
     PK["ProseKit 定义<br/>.ProseMirror"]
-    BH["block-handle 定义<br/>.block-handle-popup[data-block-id]<br/>.block-handle-positioner[data-owner]"]
+    BH["block-handle 定义<br/>.block-handle-popup[data-uuid]<br/>.block-handle-positioner[data-owner]"]
   end
 
   subgraph 读取方
@@ -91,13 +91,12 @@ flowchart TB
 |---|---|---|
 | `.canvas-container` | MdrCanvas | useBlockDrag / blockHandleUtils / useHoverState |
 | `.canvas` | MdrCanvas | block-handle（Teleport 目标） / blockHandleUtils |
-| `.drag-wrapper[data-id]` | ResizeBox | 几乎全部 |
-| `.mdr-canvas-component[data-uuid]` | MdrCanvasComponentBase | 调试 / 块实例定位 |
+| `.drag-wrapper[data-uuid]` | ResizeBox | 几乎全部 |
 | `.component-settings-menu` | MdrCanvasComponentBase | 块设置菜单（挂 body、视觉坐标） |
 | `.editor-wrapper` | RichTextEditor | useBlockDrag / useHoverUi |
 | `.editor-scroll` | RichTextEditor | blockHandleUtils / useHoverUi |
 | `.ProseMirror` | ProseKit | 所有 hook |
-| `.block-handle-popup[data-block-id]` | block-handle | block-handle / useBlockDrag |
+| `.block-handle-popup[data-uuid]` | block-handle | block-handle / useBlockDrag |
 | `.block-handle-positioner[data-owner]` | block-handle | blockHandleUtils |
 | `.handle-tm` / `.floating-handle` / `.side-settings` | MdrCanvas（`.handle-tm`）/ MdrCanvasComponentBase（浮层） | useHoverState / useHoverUi |
 | `.custom-scrollbar` / `.editor-scroll-shell` | RichTextEditor | block-handle |

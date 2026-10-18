@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-10-18 -->
 # 05 块生命周期
 
 ## 三种状态
@@ -25,13 +25,13 @@ stateDiagram-v2
 flowchart TD
   A["isBlockPinned(item)"] --> B{"state.selectedIds.has?"}
   B -->|是| Z["true 不虚拟化"]
-  B -->|否| C{"customDrag.draggingIds.has?"}
+  B -->|否| C{"customDrag.draggingUuids.has?"}
   C -->|是| Z
-  C -->|否| D{"resizeSession.itemId === item.id?"}
+  C -->|否| D{"resizeSession.uuid === item.uuid?"}
   D -->|是| Z
-  D -->|否| E{"popupBlockId / popupActiveBlockId === item.id?"}
+  D -->|否| E{"popupBlockUuid / popupActiveUuid === item.uuid?"}
   E -->|是| Z
-  E -->|否| F{"richTextDropTargetId === item.id?"}
+  E -->|否| F{"richTextDropTargetId === item.uuid?"}
   F -->|是| Z
   F -->|否| G{"isBlockNearViewport?"}
   G -->|是| Z
@@ -44,7 +44,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["reconcileVirtualBlocks()"] --> B["focusedBlockId()"]
+  A["reconcileVirtualBlocks()"] --> B["focusedUuid()"]
   B --> C["遍历 state.items"]
   C --> D{"等于 focused?"}
   D -->|是| E["保持 active"]
@@ -55,7 +55,7 @@ flowchart TD
   G -->|否| H{"已虚拟化？"}
   H -->|是| I["保留旧快照"]
   H -->|否| J["virtualizeBlock 生成快照"]
-  E --> K["sameBlockIds 对比"]
+  E --> K["sameBlockUuids 对比"]
   I --> K
   J --> K
   K -->|相同| L["提前返回"]
@@ -68,7 +68,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["virtualizeBlock(item)"] --> B["查 .drag-wrapper[data-id] .inner-component"]
+  A["virtualizeBlock(item)"] --> B["查 .drag-wrapper[data-uuid] .inner-component"]
   B --> C{"存在？"}
   C -->|否| Z["返回空串"]
   C -->|是| D["saveConfig 落回 config"]
