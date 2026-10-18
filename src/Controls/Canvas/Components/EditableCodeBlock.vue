@@ -51,7 +51,7 @@
   </component>
 </template>
 <script lang="ts">
-export { CODE_BLOCK_CONSTRAINTS as resizeConstraints } from '../componentConstraints.ts'
+export { CODE_BLOCK_CONSTRAINTS as resizeConstraints } from '../Registry/componentConstraints.ts';
 
 export const CODE_BLOCK_LABEL = '代码块'
 </script>
@@ -60,9 +60,9 @@ import { ref, onMounted, watch, nextTick, computed, onBeforeUnmount } from 'vue'
 import { useTheme } from 'vuetify';
 import { mdiContentCopy, mdiCheck, mdiCodeBraces } from '@mdi/js';
 import hljs from 'highlight.js/lib/core';
-import MdrCanvasComponentBase from '../MdrCanvasComponentBase.vue';
-import type { MdrCanvasComponentShellProps } from '../MdrCanvasComponentBase.types.ts';
-import type { CodeBlockConfig, WidgetConfig } from '../canvasComponents.ts';
+import MdrCanvasComponentBase from '../Core/MdrCanvasComponentBase.vue';
+import type { MdrCanvasComponentShellProps } from '../Core/MdrCanvasComponentBase.types.ts';
+import type { CodeBlockConfig, WidgetConfig } from '../Registry/canvasComponents.ts';
 
 import githubCss from 'highlight.js/styles/github.css?raw';
 import atomDarkCss from 'highlight.js/styles/atom-one-dark.css?raw';

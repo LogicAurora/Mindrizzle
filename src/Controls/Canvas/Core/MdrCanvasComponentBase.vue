@@ -59,7 +59,7 @@ import { computed, nextTick, onMounted, onUnmounted, provide, ref, useSlots, wat
 import { mdiCogOutline } from '@mdi/js'
 import ResizeBox from './ResizeBox.vue'
 import { handleBarStyleOf, maskStyleOf, sideSettingsStyleOf } from './blockFloatGeometry.ts'
-import { layoutToViewportX, layoutToViewportY } from './RichEditor/extensions/blockHandleUtils.ts'
+import { layoutToViewportX, layoutToViewportY } from '../Components/RichEditor/extensions/blockHandleUtils.ts'
 import { Z_LAYER } from './zIndex.ts'
 import type { MdrCanvasComponentBaseProps } from './MdrCanvasComponentBase.types.ts'
 import {

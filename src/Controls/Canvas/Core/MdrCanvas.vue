@@ -62,7 +62,7 @@ export type {
   RichTextConfig,
   CodeBlockConfig,
   WidgetConfig,
-} from './canvasComponents.ts'
+} from '../Registry/canvasComponents.ts'
 </script>
 
 <script setup lang="ts">
@@ -82,7 +82,7 @@ import {
   type ComponentController,
   type Rect,
   type WidgetConfig,
-} from './canvasComponents.ts'
+} from '../Registry/canvasComponents.ts'
 import {
   handleBarStyleOf,
   sideSettingsStyleOf,
@@ -95,10 +95,10 @@ import {
 } from './blockFloatGeometry.ts'
 import type { BlockInteractionHandlers, BlockSize, CanvasViewData } from './canvasComponentControllers.ts'
 import type { MdrCanvasComponentShellProps } from './MdrCanvasComponentBase.types.ts'
-import type { ResizeConstraints } from './resizeConstraints.ts'
+import type { ResizeConstraints } from '../Registry/resizeConstraints.ts'
 import { Z_LAYER } from './zIndex.ts'
-import { roundToVisual, contentToScreen, screenToContent, contentToVisual, type CanvasTransform, type Point, type ViewportOrigin } from '../utils/canvasCoords.ts'
-import { getVisibleBlockRect, isFullyVisibleInCanvas, invalidateCanvasScaleCache } from './RichEditor/extensions/blockHandleUtils.ts'
+import { roundToVisual, contentToScreen, screenToContent, contentToVisual, type CanvasTransform, type Point, type ViewportOrigin } from '../../../utils/canvasCoords.ts'
+import { getVisibleBlockRect, isFullyVisibleInCanvas, invalidateCanvasScaleCache } from '../Components/RichEditor/extensions/blockHandleUtils.ts'
 
 import { useDisplay } from 'vuetify'
 

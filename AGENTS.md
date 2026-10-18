@@ -65,15 +65,18 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 
 | 路径 | 职责 |
 | --- | --- |
-| `src/Controls/MdrCanvas.vue` | 画布核心：平移/缩放/框选/拖拽/联结/贴合遮罩/自动布局 |
-| `src/Controls/ResizeBox.vue` | 单块容器与缩放手柄（手柄 Teleport 到 `.canvas` 顶层） |
-| `src/Controls/RichEditor/` | 富文本编辑器、block-handle 扩展、插入组件节点视图 |
-| `src/Controls/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
+| `src/Controls/Canvas/Core/` | 画布本体：`MdrCanvas.vue`、块壳、缩放手柄、浮层几何与 z-index |
+| `src/Controls/Canvas/Core/MdrCanvas.vue` | 画布核心：平移/缩放/框选/拖拽/联结/贴合遮罩/自动布局 |
+| `src/Controls/Canvas/Core/ResizeBox.vue` | 单块容器与缩放手柄（手柄 Teleport 到 `.canvas` 顶层） |
+| `src/Controls/Canvas/Core/MdrCanvasComponentBase.vue` | 块通用壳：几何、拖拽栏、设置插槽、controller（见 `src/docs/components/`） |
+| `src/Controls/Canvas/Core/canvasComponentControllers.ts` | 块 ↔ 画布控制器契约（移动 / 改尺寸 / 平移 / 缩放 / 视图） |
+| `src/Controls/Canvas/Core/blockFloatGeometry.ts` | 拖拽栏、设置栏、遮罩几何与浮层 z 的唯一来源 |
+| `src/Controls/Canvas/Core/zIndex.ts` | 叠加层 z-index 的唯一事实来源 |
+| `src/Controls/Canvas/Registry/` | 可注册组件的唯一注册表（`canvasComponents.ts`）与尺寸约束 |
+| `src/Controls/Canvas/Components/` | 可注册的块组件：富文本、代码块、测试台 |
+| `src/Controls/Canvas/Components/RichEditor/` | 富文本编辑器、block-handle 扩展、插入组件节点视图 |
+| `src/Controls/Canvas/Components/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
 | `src/utils/canvasCoords.ts` | content ↔ 视口坐标换算的唯一来源 |
-| `src/Controls/zIndex.ts` | 叠加层 z-index 的唯一事实来源 |
-| `src/Controls/MdrCanvasComponentBase.vue` | 块通用壳：几何、拖拽栏、设置插槽、controller（见 `src/docs/components/`） |
-| `src/Controls/canvasComponentControllers.ts` | 块 ↔ 画布控制器契约（移动 / 改尺寸 / 平移 / 缩放 / 视图） |
-| `src/Controls/blockFloatGeometry.ts` | 拖拽栏、设置栏、遮罩几何与浮层 z 的唯一来源 |
 | `src/Views/Editor.vue` | 路由页面与工具栏交互（滚轮切工具、选区确认 overlay） |
 | `src-tauri/src/mdr_file_*.rs` | `.mdrf` 归档读写、缓存目录、IPC 命令 |
 
@@ -100,7 +103,7 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 
 - `.canvas` 用 CSS `zoom` 缩放；**禁止给块加 `translate3d`**（位图纹理放大会让文字发虚），用普通 `translate`。
 - `.canvas-container` 必须 `overflow: clip`（保留 `overflow: hidden` 作旧引擎回退）：`hidden` 下 ProseMirror 的 `scrollIntoView` 会改写 `scrollLeft/Top`，导致点阵露白与坐标偏移。
-- 叠加层 z-index 全部登记在 `src/Controls/zIndex.ts`；TS 常量与 CSS 硬编码值必须一致，改一处要同步另一处。
+- 叠加层 z-index 全部登记在 `src/Controls/Canvas/Core/zIndex.ts`；TS 常量与 CSS 硬编码值必须一致，改一处要同步另一处。
 - block-handle popup 的 `Root` 必须 Teleport 到 `.canvas`（**不是** `.canvas-container`），否则 store context 会丢、reference 与定位不处于同一布局坐标空间。
 - 贴合遮罩、圆角、曲别针候选都是 `layout` 推导的 O(N²) 结果，统一由 `recomputeMasks()` 刷新；交互期间冻结，收尾再刷新。增删块、布局落定后不要忘记调用。
 - 浮层渲染走小集合（`floatingOwnerId` / `sideSettingsItem` / `selectedOutlineItems`），禁止整表 `v-for` + 逐块 `v-if`。

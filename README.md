@@ -111,7 +111,12 @@ cd src-tauri && cargo test
 
 ```text
 src/
-├── Controls/              # 画布、富文本编辑器、代码块与对话框
+├── Controls/
+│   ├── Canvas/
+│   │   ├── Core/          # 画布本体、块壳、浮层几何与 z-index
+│   │   ├── Registry/      # 组件注册表与尺寸约束
+│   │   └── Components/    # 可注册块组件与富文本编辑器
+│   └── NewFileDialog.vue  # 新建便签对话框
 ├── Views/                 # 便签集、编辑器、设置与调试页面
 ├── utils/                 # 画布坐标、路由、存储与 Tauri 调用封装
 └── App.vue                # 应用外壳与导航

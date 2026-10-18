@@ -84,15 +84,15 @@ export const TEST_BENCH_LABEL = '测试台'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { mdiFlaskOutline } from '@mdi/js'
 
-import MdrCanvasComponentBase from '../MdrCanvasComponentBase.vue'
-import type { MdrCanvasComponentContentProps } from '../MdrCanvasComponentBase.types.ts'
+import MdrCanvasComponentBase from '../Core/MdrCanvasComponentBase.vue'
+import type { MdrCanvasComponentContentProps } from '../Core/MdrCanvasComponentBase.types.ts'
 import type {
   BlockCanvasController,
   BlockComponentController,
   CanvasViewData,
   SizeChangeable,
-} from '../canvasComponentControllers.ts'
-import type { TestBenchConfig } from '../canvasComponents.ts'
+} from '../Core/canvasComponentControllers.ts'
+import type { TestBenchConfig } from '../Registry/canvasComponents.ts'
 
 const props = defineProps<MdrCanvasComponentContentProps<TestBenchConfig> & {
   virtualized?: boolean

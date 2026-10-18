@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'vue'
-import type { Rect } from './canvasComponents.ts'
+import type { Rect } from '../Registry/canvasComponents.ts'
 import { Z_LAYER } from './zIndex.ts'
 
 export type HandlePlacement = 'top' | 'bottom'

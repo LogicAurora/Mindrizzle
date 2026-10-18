@@ -43,9 +43,9 @@
   </MdrCanvasComponentBase>
 </template>
 <script lang="ts">
-import type { RichTextConfig } from '../canvasComponents.ts'
+import type { RichTextConfig } from '../../Registry/canvasComponents.ts'
 
-export { RICH_TEXT_CONSTRAINTS as resizeConstraints } from '../componentConstraints.ts'
+export { RICH_TEXT_CONSTRAINTS as resizeConstraints } from '../../Registry/componentConstraints.ts'
 
 export const RICH_TEXT_LABEL = '富文本'
 
@@ -67,10 +67,10 @@ import { mdiNoteText } from '@mdi/js'
 import { defineExtension } from './extension.ts'
 import { createEditor, NodeJSON } from '@prosekit/core'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY, viewportToLayout } from './extensions/blockHandleUtils.ts'
-import MdrCanvasComponentBase from '../MdrCanvasComponentBase.vue'
-import type { MdrCanvasComponentContentProps } from '../MdrCanvasComponentBase.types.ts'
-import type { WidgetConfig } from '../canvasComponents.ts'
-import type { BlockCanvasController, BlockComponentController } from '../canvasComponentControllers.ts'
+import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue'
+import type { MdrCanvasComponentContentProps } from '../../Core/MdrCanvasComponentBase.types.ts'
+import type { WidgetConfig } from '../../Registry/canvasComponents.ts'
+import type { BlockCanvasController, BlockComponentController } from '../../Core/canvasComponentControllers.ts'
 
 const props = defineProps<MdrCanvasComponentContentProps<WidgetConfig> & {
   virtualized?: boolean

@@ -2,14 +2,14 @@ import type { NodeJSON } from '@prosekit/core'
 import { mdiCodeBraces, mdiFlaskOutline, mdiNoteText } from '@mdi/js'
 import { defineAsyncComponent, type Component } from 'vue'
 
-import type { EditorCommands } from './RichEditor/extension.ts'
-import RichTextEditor, { isHeightChangable as isRichTextHeightChangable } from './RichEditor/RichTextEditor.vue'
-import CanvasTestBench from './EditorComponents/CanvasTestBench.vue'
+import type { EditorCommands } from '../Components/RichEditor/extension.ts'
+import RichTextEditor, { isHeightChangable as isRichTextHeightChangable } from '../Components/RichEditor/RichTextEditor.vue'
+import CanvasTestBench from '../Components/CanvasTestBench.vue'
 import { CODE_BLOCK_CONSTRAINTS, RICH_TEXT_CONSTRAINTS, TEST_BENCH_CONSTRAINTS } from './componentConstraints.ts'
 import { normalizeConstraints, type ResizeConstraints } from './resizeConstraints.ts'
 
 // highlight.js 内核与十余种语言语法包体积超过主包，所以仅在渲染代码块时按需加载
-const EditableCodeBlock = defineAsyncComponent(() => import('./EditorComponents/EditableCodeBlock.vue'))
+const EditableCodeBlock = defineAsyncComponent(() => import('../Components/EditableCodeBlock.vue'))
 
 export interface RichTextConfig {
   content: NodeJSON | null

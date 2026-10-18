@@ -46,7 +46,7 @@ onMounted(async () => {
 
 import { isDebugLoadingEnabled, noteLoadControllerKey, routeTransition, startEditorTransitionKey } from './utils/routeTransition'
 import { loadTitleRollDirection, titleRollDirection } from './utils/uiPreference'
-import { Z_LAYER } from './Controls/zIndex'
+import { Z_LAYER } from './Controls/Canvas/Core/zIndex'
 const transitionClassMap = {
   VSlideXTransition: 'slide-x-transition',
   VSlideXReverseTransition: 'slide-x-reverse-transition',

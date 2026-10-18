@@ -1,5 +1,5 @@
 import type { InjectionKey } from 'vue'
-import type { Rect, WidgetConfig } from './canvasComponents.ts'
+import type { Rect, WidgetConfig } from '../Registry/canvasComponents.ts'
 
 export interface BlockSize {
   width: number
