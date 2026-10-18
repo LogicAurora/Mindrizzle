@@ -143,42 +143,44 @@ async function loadNoteSets() {
 loadNoteSets();
 </script>
 <template>
-  <v-sheet class="pa-4" elevation="0">
+  <v-sheet class="note-sets-page" elevation="0">
     <v-snackbar v-model="isError" timeout="2000">
       Oh no!便签怎么皱成一团了！
     </v-snackbar>
-    <template v-if="isLoading">
-      <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" class="mb-4" />
-    </template>
-    <v-empty-state v-else-if="noteSets.length === 0"
-    :icon="mdiNoteOffOutline"
-    title = "还没有便签……"
-    text = "点击右下角的 + 按钮创建新的便签集" />
-    <v-list v-else class="overflow-visible">
-      <v-card v-for="noteSet in visibleNoteSets" :key="noteSet.fileName" class="mb-4">
-        <v-card-title>
-          {{ noteSet.name }}
-        </v-card-title>
-        <v-card-subtitle>
-          上次编辑：{{ formatUpdatedAt(noteSet.updatedAt) }}
-        </v-card-subtitle>
-        <v-card-text>
-          {{ noteSet.description }}
-        </v-card-text>
-        <v-card-actions>
-          <v-btn
-            @click="openEditor(noteSet)"
-            @pointerenter="preloadEditor"
-            @focus="preloadEditor"
-            :icon="mdiPencil"
-            :loading="noteSet.loading"
-            class="ms-2"
-            variant="text"
-          ></v-btn>
-        </v-card-actions>
-      </v-card>
-      <div ref="listSentinel" />
-    </v-list>
+    <div class="note-sets-scroll pa-4">
+      <template v-if="isLoading">
+        <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" class="mb-4" />
+      </template>
+      <v-empty-state v-else-if="noteSets.length === 0"
+        :icon="mdiNoteOffOutline"
+        title="还没有便签……"
+        text="点击右下角的 + 按钮创建新的便签集" />
+      <v-list v-else class="overflow-visible">
+        <v-card v-for="noteSet in visibleNoteSets" :key="noteSet.fileName" class="mb-4">
+          <v-card-title>
+            {{ noteSet.name }}
+          </v-card-title>
+          <v-card-subtitle>
+            上次编辑：{{ formatUpdatedAt(noteSet.updatedAt) }}
+          </v-card-subtitle>
+          <v-card-text>
+            {{ noteSet.description }}
+          </v-card-text>
+          <v-card-actions>
+            <v-btn
+              @click="openEditor(noteSet)"
+              @pointerenter="preloadEditor"
+              @focus="preloadEditor"
+              :icon="mdiPencil"
+              :loading="noteSet.loading"
+              class="ms-2"
+              variant="text"
+            ></v-btn>
+          </v-card-actions>
+        </v-card>
+        <div ref="listSentinel" />
+      </v-list>
+    </div>
     <v-fab
       :icon="mdiPlus"
       color="primary"
@@ -189,3 +191,31 @@ loadNoteSets();
     <NewFileDialog :is-open="isCreateDialogOpen" @update:close="isCreateDialogOpen = $event.status" />
   </v-sheet>
 </template>
+
+<style scoped>
+.note-sets-page {
+  height: 100%;
+}
+
+/* 滚动交给列表自身：页面容器留在原位，FAB 与路由内容不随滚动移位 */
+.note-sets-scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  /* 跟随 Vuetify 主题：深色下是白、浅色下是黑 */
+  scrollbar-color: rgba(var(--v-border-color), 0.3) transparent;
+}
+
+.note-sets-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.note-sets-scroll::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(var(--v-border-color), 0.3);
+}
+
+.note-sets-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+</style>
