@@ -42,6 +42,39 @@ pub fn remove_setting(key: String) -> Result<(), String> {
     write_settings(&settings)
 }
 
+const DMABUF_RENDERER_MODE_SETTING_KEY: &str = "advanced.dmabufRendererMode";
+const DMABUF_RENDERER_MODE_DISABLE_RENDERER: &str = "disable-renderer";
+const DMABUF_RENDERER_MODE_FORCE_SHM: &str = "force-shm";
+
+/// 在 GTK/WebKitGTK 初始化前套用需要重启才生效的图形开关。
+pub fn apply_startup_env() {
+    #[cfg(target_os = "linux")]
+    if let Err(error) = apply_linux_graphics_settings() {
+        // 日志插件此时尚未初始化，只能写标准错误
+        eprintln!("应用图形设置失败：{error}");
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn apply_linux_graphics_settings() -> Result<(), String> {
+    let settings = read_settings()?;
+    let mode = settings
+        .get(DMABUF_RENDERER_MODE_SETTING_KEY)
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    // WebKitGTK 在 Wayland 下走 DMABUF 会整帧回退致窗口闪烁，只能在进程启动时用环境变量切换缓冲路径
+    match mode {
+        DMABUF_RENDERER_MODE_DISABLE_RENDERER => {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+        }
+        DMABUF_RENDERER_MODE_FORCE_SHM => {
+            std::env::set_var("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1")
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn lock_settings() -> Result<std::sync::MutexGuard<'static, ()>, String> {
     SETTINGS_LOCK
         .get_or_init(|| Mutex::new(()))

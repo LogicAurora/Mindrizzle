@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { mdiInformationOutline, mdiPalette, mdiSwapVertical } from '@mdi/js'
+import { mdiInformationOutline, mdiPalette, mdiSwapVertical, mdiTuneVariant } from '@mdi/js'
 
 import about from './SettingTabs/About.vue'
+import advanced from './SettingTabs/Advanced.vue'
 import appearance from './SettingTabs/Appearance.vue'
 import interfaceTab from './SettingTabs/Interface.vue'
 
@@ -11,6 +12,7 @@ const SETTINGS_TABS = [
   { value: 'about', label: '关于', component: about, icon: mdiInformationOutline },
   { value: 'appearance', label: '外观', component: appearance, icon: mdiPalette },
   { value: 'interface', label: '界面', component: interfaceTab, icon: mdiSwapVertical },
+  { value: 'advanced', label: '高级', component: advanced, icon: mdiTuneVariant },
 ] as const
 const DEFAULT_SETTINGS_TAB = SETTINGS_TABS[0].value
 

@@ -57,6 +57,9 @@ fn get_git_commit() -> &'static str {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 环境变量必须在 GTK/WebKitGTK 初始化前写入
+    settings_store::apply_startup_env();
+
     // 清扫历史退出残留的孤儿缓存目录；启动早期本进程尚未创建缓存，删除安全
     mdr_file_cache::cleanup_orphan_caches();
 
