@@ -5,6 +5,7 @@ use quick_xml::de::from_str;
 use quick_xml::se::to_string;
 use std::fs::{self, File};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, UNIX_EPOCH};
 use tauri::{Emitter, Window};
 
@@ -34,6 +35,15 @@ const PROGRESS_RETURN_BODY: u32 = 90;
 const PROGRESS_COMPLETE: u32 = 100;
 const DEBUG_PROGRESS_DELAY: Duration = Duration::from_millis(180);
 
+// .mdrf 是整包重写，并发保存会让后写者覆盖前者的块数据，所以写入串行化
+static FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn lock_file_write() -> MutexGuard<'static, ()> {
+    FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 tauri_cmd! {
     pub fn get_mdr_file_meta(file_name: String) -> anyhow::Result<MindrizzleFileMetaView> {
         let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
@@ -51,6 +61,7 @@ tauri_cmd! {
     }
 
     pub fn set_mdr_file_body(file_name: String, content: String) -> anyhow::Result<()> {
+        let _guard = lock_file_write();
         let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
         let path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
         if !path.is_file() {
@@ -79,6 +90,7 @@ tauri_cmd! {
         mdr_file_info: MindrizzleFileMeta,
         file_name: String
     ) -> anyhow::Result<String> {
+        let _guard = lock_file_write();
         let resolved_name = resolve_mdrf_file_name(&file_name).context("校验笔记文件名")?;
         let cache = MindrizzleFileCache::new().context("创建笔记缓存")?;
         let meta_xml = serialize_mdr_file_meta_xml(mdr_file_info)
@@ -129,6 +141,8 @@ fn read_mdr_file_body(
     file_name: &str,
     is_debug_progress: bool,
 ) -> anyhow::Result<MindrizzleFileBody> {
+    // 组件数据写入会失效同名暂存区，读取期间必须挡住它，否则解包到一半目录被删
+    let _guard = lock_file_write();
     emit_file_load_progress(window, PROGRESS_VALIDATE, is_debug_progress);
     let resolved_name = resolve_mdrf_file_name(file_name).context("校验笔记文件名")?;
     let path = mdr_file_dir::get_mdr_file_dir(resolved_name.clone());
@@ -191,7 +205,7 @@ fn emit_file_load_progress(window: &Window, progress: u32, is_debug_progress: bo
 }
 
 /// IPC 入口的 file_name 会拼进磁盘路径，按前端同名规则校验，防路径穿越与任意文件覆盖
-fn resolve_mdrf_file_name(file_name: &str) -> anyhow::Result<String> {
+pub(crate) fn resolve_mdrf_file_name(file_name: &str) -> anyhow::Result<String> {
     let resolved = if file_name.is_empty() {
         // 文件名可留空，留空时以时间戳生成默认名
         format!("我的笔记_{}", Local::now().format("%Y-%m-%d_%H-%M-%S"))
@@ -229,7 +243,7 @@ fn read_file_modified_millis(path: &Path) -> anyhow::Result<i64> {
 }
 
 /// 直接截断原文件再打包失败会损坏 .mdrf，所以先写同目录临时文件再 rename 原子替换
-fn pack_cache_atomic(path: &Path, root: &Path, compressed: bool) -> anyhow::Result<()> {
+pub(crate) fn pack_cache_atomic(path: &Path, root: &Path, compressed: bool) -> anyhow::Result<()> {
     let tmp_path = path.with_extension("mdrf.tmp");
     let packed = File::create(&tmp_path).and_then(|writer| pack_cache(root, writer, compressed));
     if let Err(e) = packed {

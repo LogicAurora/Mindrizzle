@@ -56,8 +56,14 @@ flowchart TD
   J --> K
 ```
 
-## 兼容规则速查
+## 组件私有文件（ComponentsData）
 
+- 归档内固定结构：`meta.json`、`body.json`、`ComponentsData/<组件 UUID>/<相对路径>`，随 `.mdrf` 一起打包。
+- 前端唯一入口 `src/utils/componentDataStore.ts`，URL 形如 `mdrfcd://<笔记名>/<组件 UUID>/<相对路径>`。
+- 写入/删除：解包到临时缓存 → 改文件 → 原子重打包，并失效同名暂存区（否则后续保存会用旧缓存覆盖组件数据）。
+- 读取/list/exists 直接从归档流里找条目，不落盘。
+
+## 兼容规则速查
 - 块标识字段为 `uuid`（放置时生成、持久化），不做旧 `id` 字段兼容
 - 旧扁平格式（`it.x/y/w/h`）→ 转为 `layout.desktop`
 - `origin` 坐标归一化：保存时减去块群中心，加载时归零 pan

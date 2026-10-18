@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-18 -->
 # 10 工具函数索引
 
 ## 图 10.1 blockHandleUtils 函数分类
@@ -46,6 +46,16 @@ flowchart LR
   A --> C["screenToContent(t, viewport, x, y)"]
   A --> D["contentToVisual(t, x, y)"]
   E["roundToVisual(zoom, v)"] --> D
+```
+
+## 图 10.3 ComponentDataStore
+
+```mermaid
+flowchart LR
+  A["urlOf(uuid, path)"] --> U["mdrfcd://笔记名/uuid/path"]
+  U --> B["writeFile / readFile / readText"]
+  U --> C["deleteFile / hasFile"]
+  D["listFiles(uuid 或根 URL)"] --> E["归档 ComponentsData/uuid/"]
 ```
 
 ## 使用原则

@@ -118,6 +118,36 @@ baseRef.value?.controller.resizeTo({ height })
 6. 需要拖入落点时提供 `resolveDropAtElement(el, preferBefore)` 与 `scrollContent(deltaY)`，并登记 `acceptsDrop`。
 7. 运行 `bunx vue-tsc --noEmit`，并在浏览器实操选中、拖拽、缩放手柄与只读态。
 
+## 组件私有文件（`mdrfcd://`）
+
+组件需要附件、图片或大数据时用 `src/utils/componentDataStore.ts`，文件落在当前 `.mdrf` 归档的
+`ComponentsData/<组件 UUID>/` 下，随笔记一起保存。
+
+```ts
+import { ComponentDataStore } from '../../../utils/componentDataStore'
+
+const store = new ComponentDataStore() // 默认取编辑页写入的当前笔记
+const url = store.urlOf(props.base.uuid, 'assets/data.json')
+await store.writeFile(url, JSON.stringify({ rows }))
+const rows = JSON.parse(await store.readText(url))
+const files = await store.listFiles(props.base.uuid)
+```
+
+| 方法 | 说明 |
+| --- | --- |
+| `urlOf(uuid, path)` | 生成 `mdrfcd://<笔记名>/<UUID>/<相对路径>` |
+| `writeFile(url, string \| Uint8Array)` | 写入文本或二进制，单文件上限 64 MiB |
+| `readFile(url)` / `readText(url)` | 读二进制 / UTF-8 文本 |
+| `listFiles(uuid 或根 URL)` | 列出该组件目录下的相对路径 |
+| `deleteFile(url)` / `hasFile(url)` | 删除（不存在时无操作）/ 是否存在 |
+
+注意：
+
+- URL 自带笔记名，可安全存进 `config`；不要手写字符串，统一用 `urlOf`。
+- 路径不得含 `..`、反斜杠与平台非法字符；组件 UUID 只允许字母、数字、`-`、`_`。
+- 写入会重打整个 `.mdrf`，别在逐帧或高频输入里调用，缓存/防抖后再写。
+- 只读态由组件自行判断（`props.base.readOnly`），store 不做拦截。
+
 ## 虚拟化约定
 
 - 画布传入 `virtualized` 与 `snapshot`；块组件在 `virtualized` 时只渲染快照，不挂真实实例。

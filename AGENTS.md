@@ -77,6 +77,7 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 | `src/Controls/Canvas/Components/RichEditor/` | 富文本编辑器、block-handle 扩展、插入组件节点视图 |
 | `src/Controls/Canvas/Components/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
 | `src/utils/canvasCoords.ts` | content ↔ 视口坐标换算的唯一来源 |
+| `src/utils/componentDataStore.ts` | 组件私有文件 `mdrfcd://` 读写唯一入口（归档内 `ComponentsData/<uuid>/`） |
 | `src/Views/Editor.vue` | 路由页面与工具栏交互（滚轮切工具、选区确认 overlay） |
 | `src-tauri/src/mdr_file_*.rs` | `.mdrf` 归档读写、缓存目录、IPC 命令 |
 

@@ -39,18 +39,11 @@ impl MindrizzleFileCache {
 
     /// 依据稳定 key 生成可复用的缓存目录，供读写共享同一暂存区
     pub fn new_named(key: &str) -> io::Result<Self> {
-        let dir_name = format!(
-            "Mindrizzle_{:x}_{}",
-            std::process::id(),
-            sanitize_cache_key(key)
-        );
-        Self::new_in(&dir_name)
+        Self::new_in(&named_dir_name(key))
     }
 
     fn new_in(dir_name: &str) -> io::Result<Self> {
-        let cache_base = AppDirs::new(Some("Mindrizzle"), false)
-            .expect("无法解析系统缓存目录")
-            .cache_dir;
+        let cache_base = cache_base_dir().expect("无法解析系统缓存目录");
         let root = cache_base.join(dir_name);
         fs::create_dir_all(&root)?;
         Ok(Self {
@@ -95,6 +88,26 @@ impl Drop for MindrizzleFileCache {
     }
 }
 
+/// 外部改写 .mdrf 后同名暂存区已过期，所以删掉它让下次保存重新解包
+pub fn invalidate_named(key: &str) {
+    let Some(cache_base) = cache_base_dir() else {
+        return;
+    };
+    remove_cache_dir(&cache_base.join(named_dir_name(key)));
+}
+
+fn named_dir_name(key: &str) -> String {
+    format!(
+        "Mindrizzle_{:x}_{}",
+        std::process::id(),
+        sanitize_cache_key(key)
+    )
+}
+
+fn cache_base_dir() -> Option<PathBuf> {
+    AppDirs::new(Some("Mindrizzle"), false).map(|dirs| dirs.cache_dir)
+}
+
 /// 目录可能已被外部删除，清理失败需静默忽略
 fn remove_cache_dir(root: &Path) {
     if root.exists() {
@@ -104,8 +117,7 @@ fn remove_cache_dir(root: &Path) {
 
 /// 进程异常退出或只读不存会残留孤儿目录，所以启动早期清扫一次（此刻本进程尚未建目录，删除安全）
 pub fn cleanup_orphan_caches() {
-    let Some(cache_base) = AppDirs::new(Some("Mindrizzle"), false).map(|dirs| dirs.cache_dir)
-    else {
+    let Some(cache_base) = cache_base_dir() else {
         return;
     };
     let Ok(entries) = fs::read_dir(cache_base) else {

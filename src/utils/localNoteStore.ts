@@ -3,8 +3,12 @@ import type { InvokeArgs } from '@tauri-apps/api/core'
 
 const FILE_INDEX_KEY = 'mindrizzle:file-index'
 const NOTE_KEY_PREFIX = 'mindrizzle:note:'
+const COMPONENT_DATA_KEY_PREFIX = 'mindrizzle:component-data:'
 const TEST_NOTE_PREFIX = '性能测试_'
 const FILE_NAME_MAX_LEN = 50
+const COMPONENT_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+const COMPONENT_PATH_MAX_LEN = 512
+const COMPONENT_PATH_FORBIDDEN_CHARS = /[\\:*?"<>|\u0000-\u001f]/
 const FILE_NAME_FORBIDDEN_CHARS = /[\\/:*?"<>|]/
 // 与后端 resolve_mdrf_file_name 对齐：首字符不得空格，尾字符不得空格或点
 const FILE_NAME_EDGE_CHARS = /^ |[ .]$/
@@ -109,7 +113,7 @@ const createFile = (meta: NoteMeta, fileName: string): string => {
 // 调试页清空测试存档用，只删除本模块写入的键
 export const clearLocalNotes = (): void => {
   const noteKeys = Object.keys(localStorage).filter(
-    (key) => key === FILE_INDEX_KEY || key.startsWith(NOTE_KEY_PREFIX),
+    (key) => key === FILE_INDEX_KEY || key.startsWith(NOTE_KEY_PREFIX) || key.startsWith(COMPONENT_DATA_KEY_PREFIX),
   )
   noteKeys.forEach((key) => localStorage.removeItem(key))
 }
@@ -136,6 +140,76 @@ export const clearTestNotes = (): number => {
   return testNames.length
 }
 
+// 笔记 + 组件一条键，值是该组件所有文件的 base64 映射；路径层级直接存在键名字符串里
+interface ComponentScope {
+  key: string
+  uuid: string
+}
+
+const resolveComponentScope = (args: NoteCommandArgs): ComponentScope => {
+  const request = args.request as { fileName: string; uuid: string }
+  const fileName = resolveFileName(String(request.fileName))
+  const uuid = String(request.uuid)
+  if (!COMPONENT_UUID_PATTERN.test(uuid)) throw new Error('组件 UUID 非法')
+  return { key: `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`, uuid }
+}
+
+// 浏览器端没有真实路径，入口校验仍与后端保持一致，避免两端行为漂移
+const resolveComponentFile = (args: NoteCommandArgs): ComponentScope & { path: string } => {
+  const scope = resolveComponentScope(args)
+  const path = String((args.request as { path?: string }).path ?? '')
+  const hasBadSegment =
+    path === '' ||
+    path.length > COMPONENT_PATH_MAX_LEN ||
+    COMPONENT_PATH_FORBIDDEN_CHARS.test(path) ||
+    path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')
+  if (hasBadSegment) throw new Error('组件数据路径为空或含非法片段')
+  return { ...scope, path }
+}
+
+const readComponentFiles = (key: string): Record<string, string> => {
+  const raw = localStorage.getItem(key)
+  return raw ? (JSON.parse(raw) as Record<string, string>) : {}
+}
+
+const writeComponentFiles = (key: string, files: Record<string, string>): void => {
+  localStorage.setItem(key, JSON.stringify(files))
+}
+
+const listComponentFiles = (args: NoteCommandArgs): string[] => {
+  const { key } = resolveComponentScope(args)
+  return Object.keys(readComponentFiles(key)).sort()
+}
+
+const readComponentFile = (args: NoteCommandArgs): string => {
+  const { key, path } = resolveComponentFile(args)
+  const content = readComponentFiles(key)[path]
+  if (content === undefined) throw new Error('组件数据文件不存在')
+  return content
+}
+
+const writeComponentFile = (args: NoteCommandArgs): void => {
+  const { key, path } = resolveComponentFile(args)
+  const contentBase64 = String((args.request as { contentBase64?: string }).contentBase64 ?? '')
+  const files = readComponentFiles(key)
+  files[path] = contentBase64
+  writeComponentFiles(key, files)
+}
+
+const deleteComponentFile = (args: NoteCommandArgs): void => {
+  const { key, path } = resolveComponentFile(args)
+  const files = readComponentFiles(key)
+  if (!(path in files)) return
+  delete files[path]
+  if (Object.keys(files).length) writeComponentFiles(key, files)
+  else localStorage.removeItem(key)
+}
+
+const componentFileExists = (args: NoteCommandArgs): boolean => {
+  const { key, path } = resolveComponentFile(args)
+  return path in readComponentFiles(key)
+}
+
 const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {
   fetch_file_list: () => fetchFileList(),
   is_file_name_valid: (args) => isFileNameValid(String(args.fileName)),
@@ -143,6 +217,11 @@ const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {
   get_mdr_file_body: (args) => getFileBody(String(args.fileName)),
   set_mdr_file_body: (args) => setFileBody(String(args.fileName), String(args.content)),
   create_mdr_file: (args) => createFile(args.mdrFileInfo as NoteMeta, String(args.fileName)),
+  list_component_data_files: listComponentFiles,
+  read_component_data_file: readComponentFile,
+  write_component_data_file: writeComponentFile,
+  delete_component_data_file: deleteComponentFile,
+  component_data_file_exists: componentFileExists,
 }
 
 export async function invokeLocalNoteCommand<T>(command: string, args?: InvokeArgs): Promise<T> {

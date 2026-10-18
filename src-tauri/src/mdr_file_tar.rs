@@ -53,20 +53,7 @@ pub fn extract_to_cache<R: Read>(reader: R, target: &Path, compressed: bool) -> 
     let mut archive = Archive::new(boxed_reader);
     for entry in archive.entries()? {
         let mut entry = entry?;
-        let entry_path = entry.path()?.into_owned();
-        // .mdrf 可能来自外部，拒绝含 `..`、绝对路径或盘符的条目防路径穿越
-        if entry_path.components().any(|c| {
-            matches!(
-                c,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        }) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "tar 条目包含不安全的路径",
-            ));
-        }
-        entry.unpack(target.join(entry_path))?;
+        unpack_entry(&mut entry, target)?;
     }
     Ok(())
 }
@@ -100,6 +87,18 @@ fn validate_archive_entry_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
+// tar 不会为文件条目补父目录，而 pack_cache 只写文件不写目录条目，嵌套路径必须先建父目录
+fn unpack_entry<R: Read>(entry: &mut tar::Entry<'_, R>, target: &Path) -> Result<()> {
+    let entry_path = entry.path()?.into_owned();
+    validate_archive_entry_path(&entry_path)?;
+    let destination = target.join(entry_path);
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    entry.unpack(destination)?;
+    Ok(())
+}
+
 /// 先统计条目大小才能按解包占比上报进度，所以 reader 需要支持回卷
 pub fn extract_to_cache_with_progress<R: Read + Seek>(
     mut reader: R,
@@ -120,10 +119,8 @@ pub fn extract_to_cache_with_progress<R: Read + Seek>(
     let mut extracted_size = 0_u64;
     for entry in archive.entries()? {
         let mut entry = entry?;
-        let entry_path = entry.path()?.into_owned();
-        validate_archive_entry_path(&entry_path)?;
         extracted_size = extracted_size.saturating_add(entry.size());
-        entry.unpack(target.join(entry_path))?;
+        unpack_entry(&mut entry, target)?;
         if total_size > 0 {
             let percent = (u128::from(extracted_size) * u128::from(PROGRESS_COMPLETE)
                 / u128::from(total_size))
@@ -146,7 +143,8 @@ pub fn extract_meta<R: Read>(reader: R, compressed: bool) -> Result<Vec<u8>> {
     let mut archive = Archive::new(boxed_reader);
     for entry in archive.entries()? {
         let mut entry = entry?;
-        if entry.path()?.ends_with("meta.json") {
+        // 组件数据也可能叫 meta.json，所以只认归档根目录的那一份
+        if entry.path()?.as_ref() == Path::new("meta.json") {
             let mut buf = Vec::new();
             entry.read_to_end(&mut buf)?;
             return Ok(buf);
@@ -168,11 +166,56 @@ pub fn is_mdrf_compressed(path: &Path) -> Result<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_to_cache_with_progress, PROGRESS_COMPLETE};
+    use super::{
+        extract_meta, extract_to_cache, extract_to_cache_with_progress, PROGRESS_COMPLETE,
+    };
     use std::fs;
     use std::io::Cursor;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
     use tar::{Builder, Header};
+
+    fn temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{unique}"))
+    }
+
+    fn append_entry(builder: &mut Builder<Vec<u8>>, path: &str, content: &[u8]) {
+        let mut header = Header::new_gnu();
+        header.set_size(content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, path, content).unwrap();
+    }
+
+    #[test]
+    fn extracts_nested_entries_without_directory_headers() {
+        let mut builder = Builder::new(Vec::new());
+        append_entry(&mut builder, "ComponentsData/any/test/hello.txt", b"nested");
+        let archive = builder.into_inner().unwrap();
+        let target = temp_dir("mindrizzle-nested");
+
+        extract_to_cache(Cursor::new(archive), &target, false).unwrap();
+
+        let extracted = fs::read(target.join("ComponentsData/any/test/hello.txt")).unwrap();
+        assert_eq!(extracted, b"nested");
+        fs::remove_dir_all(target).unwrap();
+    }
+
+    #[test]
+    fn extract_meta_ignores_component_files() {
+        let mut builder = Builder::new(Vec::new());
+        append_entry(&mut builder, "ComponentsData/any/meta.json", b"<wrong/>");
+        append_entry(&mut builder, "meta.json", b"<meta/>");
+        let archive = builder.into_inner().unwrap();
+
+        let meta = extract_meta(Cursor::new(archive), false).unwrap();
+
+        assert_eq!(meta, b"<meta/>");
+    }
 
     #[test]
     fn extracts_archive_and_reports_progress() {
@@ -189,11 +232,7 @@ mod tests {
             .append_data(&mut header, FILE_NAME, FILE_CONTENT)
             .unwrap();
         let archive = builder.into_inner().unwrap();
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let target = std::env::temp_dir().join(format!("mindrizzle-progress-{unique}"));
+        let target = temp_dir("mindrizzle-progress");
         let mut progress = Vec::new();
 
         extract_to_cache_with_progress(Cursor::new(archive), &target, false, |value| {

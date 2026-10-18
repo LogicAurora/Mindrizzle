@@ -1,3 +1,4 @@
+mod mdr_component_data;
 mod mdr_file_cache;
 mod mdr_file_dir;
 mod mdr_file_op;
@@ -98,6 +99,11 @@ pub fn run() {
             mdr_file_op::get_mdr_file_body,
             mdr_file_op::set_mdr_file_body,
             mdr_file_op::create_mdr_file,
+            mdr_component_data::list_component_data_files,
+            mdr_component_data::read_component_data_file,
+            mdr_component_data::write_component_data_file,
+            mdr_component_data::delete_component_data_file,
+            mdr_component_data::component_data_file_exists,
             settings_store::get_setting,
             settings_store::set_setting,
             settings_store::remove_setting,

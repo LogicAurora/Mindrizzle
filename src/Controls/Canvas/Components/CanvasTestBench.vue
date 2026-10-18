@@ -59,6 +59,22 @@
           hide-details :readonly="props.base.readOnly" @update:model-value="onNoteInput" />
       </div>
 
+      <div class="bench-data">
+        <div class="bench-data-title">组件数据 mdrfcd://</div>
+        <v-text-field v-model="dataPath" label="相对路径" density="compact" variant="outlined" hide-details
+          :readonly="props.base.readOnly" />
+        <v-textarea v-model="dataContent" label="内容" rows="2" density="compact" variant="outlined" hide-details
+          :readonly="props.base.readOnly" />
+        <div class="bench-actions">
+          <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="writeData">写入</v-btn>
+          <v-btn size="x-small" variant="tonal" @click="readData">读取</v-btn>
+          <v-btn size="x-small" variant="tonal" @click="listData">列出</v-btn>
+          <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="deleteData">删除</v-btn>
+        </div>
+        <div class="bench-data-status" data-test="component-data-status">{{ dataStatus }}</div>
+        <div v-if="dataFiles.length" class="bench-data-files">{{ dataFiles.join(' · ') }}</div>
+      </div>
+
       <div class="bench-scroll">
         <div v-for="row in SCROLL_ROWS" :key="row">滚动测试行 {{ row }}</div>
       </div>
@@ -86,6 +102,8 @@ import { mdiFlaskOutline } from '@mdi/js'
 
 import MdrCanvasComponentBase from '../Core/MdrCanvasComponentBase.vue'
 import type { MdrCanvasComponentContentProps } from '../Core/MdrCanvasComponentBase.types.ts'
+import { ComponentDataStore } from '../../../utils/componentDataStore.ts'
+import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
 import type {
   BlockCanvasController,
   BlockComponentController,
@@ -103,6 +121,10 @@ const MOVE_STEP = 40
 const RESIZE_STEP = 40
 const PAN_STEP = 60
 const ZOOM_PRESETS = [0.5, 1, 2, 3]
+// 测试台是手动验收入口，默认值要能直接点通
+const DATA_TEST_PATH = 'test/hello.txt'
+const DATA_TEST_CONTENT = 'hello mdrfcd'
+const DATA_TEST_IDLE = '未测试'
 const SCROLL_ROWS = Array.from({ length: 60 }, (_, index) => index + 1)
 
 interface BaseExposed {
@@ -118,6 +140,12 @@ const showViewport = ref(config.value.showViewport !== false)
 const sizeSnapshot = ref({ width: 0, height: 0 })
 const changeableSnapshot = ref<SizeChangeable>({ width: true, height: true })
 const viewSnapshot = ref<CanvasViewData | null>(null)
+// 构造时捕获当前笔记名，组件被虚拟化重建后也不会跟到别的笔记
+const componentData = new ComponentDataStore()
+const dataPath = ref(DATA_TEST_PATH)
+const dataContent = ref(DATA_TEST_CONTENT)
+const dataStatus = ref(DATA_TEST_IDLE)
+const dataFiles = ref<string[]>([])
 
 const metrics = computed(() => {
   const view = viewSnapshot.value
@@ -201,6 +229,37 @@ const onShowViewportToggle = (value: unknown) => {
   props.base.handlers.updateConfig({ showViewport: showViewport.value })
 }
 
+const dataUrlOf = (): string => componentData.urlOf(props.base.uuid, dataPath.value)
+
+const runDataStep = async (step: () => Promise<string>) => {
+  // 点击回调就是错误边界，失败显示到状态行，不能打断整个块
+  try {
+    dataStatus.value = await step()
+  } catch (error) {
+    dataStatus.value = getErrorMessage(error)
+  }
+}
+
+const writeData = () => runDataStep(async () => {
+  await componentData.writeFile(dataUrlOf(), dataContent.value)
+  return `已写入 ${dataPath.value}`
+})
+
+const readData = () => runDataStep(async () => {
+  dataContent.value = await componentData.readText(dataUrlOf())
+  return `已读取 ${dataPath.value}`
+})
+
+const listData = () => runDataStep(async () => {
+  dataFiles.value = await componentData.listFiles(props.base.uuid)
+  return `共 ${dataFiles.value.length} 个文件`
+})
+
+const deleteData = () => runDataStep(async () => {
+  await componentData.deleteFile(dataUrlOf())
+  return `已删除 ${dataPath.value}`
+})
+
 const onCanvasTransform = () => refreshViewModel()
 
 onMounted(() => {
@@ -282,6 +341,29 @@ defineExpose({
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+.bench-data {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bench-data-title,
+.bench-data-status {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.bench-data-status {
+  overflow-wrap: anywhere;
+}
+
+.bench-data-files {
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  opacity: 0.8;
 }
 
 .bench-scroll {
