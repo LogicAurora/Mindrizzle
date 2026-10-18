@@ -92,8 +92,9 @@ flowchart TD
   F -->|是| G["shiftBlocksBelow 下方堆叠块跟随"]
   F -->|否| H["propagateLinkedEdges 联结群<br/>heightChangable=false 的块不改高"]
   H --> I["pushOverlapped<br/>按起始方位：右侧推右 / 下方推下"]
+  I --> I2["pruneDetachedLinks<br/>剔除已不贴合的链接"]
   G --> J["scheduleGeometryRefresh + markLayoutDirty"]
-  I --> J
+  I2 --> J
   C --> K["canvasController.getViewData()"]
   K --> L["光标超出视口底部 → panBy(0, -over)"]
 ```
@@ -102,6 +103,7 @@ flowchart TD
 > 组件自己调用 `resizeTo` 不受 changable 拦截；自动大小（如图片块）在尺寸落定后把两轴都置为不可变，手柄随之收掉。
 >
 > `pushOverlapped` 按**变更前**的起始矩形判断方位：原本贴在右侧的块横向右推（横向联结群跟随），原本在下方/底边贴合的块纵向推下；变宽后新产生的横向重叠不会再被误判成「下方块」，也不会把侧边块推到下面。
+> 尺寸传播落定后 `pruneDetachedLinks` 会按 `isAdjacent` 复查所有链接；受 min/max 钳制或推挤而不再贴合的链接会被剔除，避免出现「看不到链接线但拖拽仍联动」。
 
 ## 维护提示
 

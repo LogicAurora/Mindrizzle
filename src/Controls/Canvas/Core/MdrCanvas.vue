@@ -1358,6 +1358,20 @@ const isAdjacent = (a: Rect, b: Rect): boolean => {
     (touchesHorizontalEdge && hasHorizontalOverlap)
 }
 
+// 尺寸传播受 min/max 钳制或推挤后可能把联结块推离贴合位，此时链接线已画不出来，所以同步剔除失效链接
+const pruneDetachedLinks = () => {
+  if (linkedPairs.value.size === 0 || mobileMode.value) return
+  const itemMap = new Map(state.items.map((item) => [item.uuid, item]))
+  const kept = new Set<string>()
+  linkedPairs.value.forEach((key) => {
+    const [firstId, secondId] = key.split('|')
+    const first = itemMap.get(firstId)
+    const second = itemMap.get(secondId)
+    if (first && second && isAdjacent(layoutOf(first), layoutOf(second))) kept.add(key)
+  })
+  if (kept.size !== linkedPairs.value.size) linkedPairs.value = kept
+}
+
 // 曲别针取连接线两端点的中点定位
 const connectionPoint = (a: Rect, b: Rect): { x: number; y: number } => {
   const { start, end } = connectionPoints(a, b)
@@ -1893,6 +1907,7 @@ const onResizeStop = (item: CanvasItem, x: number, y: number, w: number, h: numb
     markLayoutDirty()
   }
   resizeSession = null
+  pruneDetachedLinks()
   recomputeMasks()
 }
 // #endregion 尺寸调整与联结传播
@@ -2034,6 +2049,8 @@ const applyBlockSize = (item: CanvasItem, width: number, height: number) => {
     propagateLinkedEdges(item, layout, shift.starts).forEach((id) => shift.moved.add(id))
   }
   pushOverlapped(shift)
+  // 手柄会话中途的 layout 还可能被下一帧重算，等 onResizeStop 落定后再剔除失效链接
+  if (!resizeSession) pruneDetachedLinks()
   scheduleGeometryRefresh()
   markLayoutDirty()
 }

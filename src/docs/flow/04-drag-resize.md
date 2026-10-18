@@ -71,7 +71,9 @@ flowchart TD
   P --> Q["onResizeStop"]
   Q --> R["stopAutoPan()"]
   R --> S["applyResizeLayout(item, true)"]
-  S --> T["resizeSession = null<br/>recomputeMasks()"]
+  S --> T["resizeSession = null"]
+  T --> U["pruneDetachedLinks<br/>剔除已不贴合的链接"]
+  U --> V["recomputeMasks()"]
 ```
 
 ## 图 4.4 propagateLinkedEdges 分维 BFS
