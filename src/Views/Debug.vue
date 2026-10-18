@@ -21,22 +21,22 @@ const isPerfBusy = ref(false)
 const noteHint = ref('')
 const perfHint = ref('')
 
-const clearWebStorage = () => {
-  clearLocalNotes()
+const clearWebStorage = async () => {
+  await clearLocalNotes()
   invalidateNoteSetEntries()
   isCleared.value = true
 }
 
 // 批量造样本只为压列表渲染与逐条取元信息的开销，只允许在浏览器端跑
-function generateTestNotes() {
+async function generateTestNotes() {
   const count = Math.min(Math.max(Math.floor(testNoteCount.value) || 1, 1), MAX_TEST_NOTE_COUNT)
-  createTestNotes(count)
+  await createTestNotes(count)
   invalidateNoteSetEntries()
   noteHint.value = `已生成 ${count} 个测试便签`
 }
 
-function removeTestNotes() {
-  const removed = clearTestNotes()
+async function removeTestNotes() {
+  const removed = await clearTestNotes()
   invalidateNoteSetEntries()
   noteHint.value = `已清除 ${removed} 个测试便签`
 }

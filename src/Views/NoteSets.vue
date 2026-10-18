@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { mdiNoteOffOutline, mdiPencil, mdiPlus } from '@mdi/js';
+import { mdiDownload, mdiNoteOffOutline, mdiPencil, mdiPlus } from '@mdi/js';
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { info } from '@tauri-apps/plugin-log';
 
 import NewFileDialog from '../Controls/NewFileDialog.vue';
 import { loadEditorComponent, storePendingEditorBody, type EditorBodyResult } from '../utils/editorRoute'
+import { getErrorMessage } from '../utils/getErrorMessage'
 import { invokeCommand } from '../utils/invoke'
+import { exportLocalNoteMdrf } from '../utils/localNoteStore'
 import { loadNoteSetEntries, type NoteSetEntry } from '../utils/noteSetStore'
 import { isDebugLoadingEnabled, noteLoadControllerKey, startEditorTransitionKey } from '../utils/routeTransition'
 
@@ -58,6 +60,24 @@ async function openEditor(noteSet: NoteSetItem) {
 }
 
 const isCreateDialogOpen = ref(false)
+
+// 桌面版的 .mdrf 已是真实文件，导出只对浏览器预览有意义
+const isWebEnv = !isTauri()
+const exportingFileName = ref('')
+const exportHint = ref('')
+const isExportHintOpen = ref(false)
+
+async function exportNoteSet(noteSet: NoteSetItem) {
+  exportingFileName.value = noteSet.fileName
+  try {
+    exportHint.value = `已导出 ${await exportLocalNoteMdrf(noteSet.fileName)}`
+  } catch (error) {
+    exportHint.value = `导出失败：${getErrorMessage(error)}`
+  } finally {
+    exportingFileName.value = ''
+    isExportHintOpen.value = true
+  }
+}
 
 const INITIAL_VISIBLE_COUNT = 12
 const VISIBLE_BATCH_SIZE = 12
@@ -147,6 +167,9 @@ loadNoteSets();
     <v-snackbar v-model="isError" timeout="2000">
       Oh no!便签怎么皱成一团了！
     </v-snackbar>
+    <v-snackbar v-model="isExportHintOpen" timeout="2500">
+      {{ exportHint }}
+    </v-snackbar>
     <div class="note-sets-scroll pa-4">
       <template v-if="isLoading">
         <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" class="mb-4" />
@@ -174,6 +197,13 @@ loadNoteSets();
               :icon="mdiPencil"
               :loading="noteSet.loading"
               class="ms-2"
+              variant="text"
+            ></v-btn>
+            <v-btn
+              v-if="isWebEnv"
+              @click="exportNoteSet(noteSet)"
+              :icon="mdiDownload"
+              :loading="exportingFileName === noteSet.fileName"
               variant="text"
             ></v-btn>
           </v-card-actions>
