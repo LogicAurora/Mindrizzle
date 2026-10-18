@@ -3,8 +3,8 @@
 <h1 align="center"><img src="app-icon.svg" alt="" width="64" valign="middle"> Mindrizzle</h1>
 
 **Catch your mind drizzle.**<br>
-**让想法有处可落，让笔记自然成形。**
-
+**让想法有处可落，让笔记自然成形。**<br>
+[网页版链接](https://logicaurora.github.io/Mindrizzle/)<br>
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB.svg)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3-42B883.svg)](https://vuejs.org/)
