@@ -25,16 +25,18 @@ function syncCompactState(event: Event) {
 
 <template>
   <v-sheet color="surface" class="settings-page" @scroll.passive="syncCompactState">
+    <!-- 页头留在容器外：吸附后要铺满整个面板宽度，留在 960px 内容列里会露两侧空隙 -->
+    <header v-if="!$slots.header && title" class="settings-page-header" :class="{ 'is-compact': isCompact }">
+      <div class="settings-page-header-inner">
+        <div>
+          <h1 class="settings-page-title">{{ title }}</h1>
+          <p v-if="subtitle" class="settings-page-caption">{{ subtitle }}</p>
+        </div>
+        <v-icon v-if="icon" :icon="icon" color="primary" :size="isCompact ? 22 : 28" />
+      </div>
+    </header>
     <v-container class="settings-page-inner" :class="{ 'settings-page-inner--custom-header': !!$slots.header }">
-      <slot name="header">
-        <header v-if="title" class="settings-page-header" :class="{ 'is-compact': isCompact }">
-          <div>
-            <h1 class="settings-page-title">{{ title }}</h1>
-            <p v-if="subtitle" class="settings-page-caption">{{ subtitle }}</p>
-          </div>
-          <v-icon v-if="icon" :icon="icon" color="primary" :size="isCompact ? 22 : 28" />
-        </header>
-      </slot>
+      <slot name="header" />
       <slot />
     </v-container>
   </v-sheet>
@@ -43,6 +45,8 @@ function syncCompactState(event: Event) {
 <style scoped>
 /* 面板自己滚（Settings.vue 给足高度），页头才能 sticky 在这里；v-main 滚动时会被 v-window 的 overflow:hidden 吃掉粘性 */
 .settings-page {
+  --settings-content-width: 960px;
+  --settings-gutter: 16px;
   height: 100%;
   overflow-y: auto;
   /* 关掉滚动锚定：折叠页头会改内容高度，锚定又把 scrollTop 拽回阈值另一侧，状态就来回闪 */
@@ -55,9 +59,9 @@ function syncCompactState(event: Event) {
 }
 
 .settings-page-inner {
-  max-width: 960px;
+  max-width: var(--settings-content-width);
   /* 上下内边距不写在容器上：页头要贴住面板顶边才能一滚就钉住 */
-  padding: 0 16px 24px;
+  padding: 0 var(--settings-gutter) 24px;
 }
 
 .settings-page-inner--custom-header {
@@ -68,15 +72,22 @@ function syncCompactState(event: Event) {
   position: sticky;
   top: 0;
   z-index: 1;
+  padding-block: 16px;
+  border-bottom: 1px solid transparent;
+  background: rgb(var(--v-theme-surface));
+  transition: padding 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* 页头底色铺满面板，内容仍与下方 960px 内容列同左缘 */
+.settings-page-header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-inline: -16px;
-  padding: 16px;
-  border-bottom: 1px solid transparent;
-  background: rgb(var(--v-theme-surface));
-  transition: padding 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  width: 100%;
+  max-width: var(--settings-content-width);
+  margin-inline: auto;
+  padding-inline: var(--settings-gutter);
 }
 
 /* 折叠后要跟下面滚动的内容区分开：底色掺主色 + 主色描边 + 抬起的阴影，三层一起才像“吸住的条” */
@@ -144,7 +155,7 @@ function syncCompactState(event: Event) {
   }
 
   .settings-page-header {
-    padding: 24px 16px 14px;
+    padding-block: 24px 14px;
   }
 
   .settings-page-header.is-compact {
