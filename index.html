@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mindrizzle</title>
+    <script>
+      // 因 RO 循环告警是浏览器在布局稳定后补发的无害通知（下一帧会自动重投递），但 Vite 会当未捕获异常刷屏，故用早于模块脚本执行的监听拦掉
+      window.addEventListener('error', (event) => {
+        if (!String(event.message).includes('ResizeObserver loop')) return
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      })
+    </script>
   </head>
 
   <body>

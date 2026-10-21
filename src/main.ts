@@ -36,6 +36,20 @@ router.beforeEach((to, from) => {
   }
 })
 
+// 匹配懒加载 chunk 取不到的错误文案
+const CHUNK_LOAD_ERROR = /Failed to fetch dynamically imported module|Importing a module script failed/
+const CHUNK_RELOAD_KEY = 'mindrizzle:chunk-reload'
+
+// 因构建产物更新后旧 chunk 必然 404、只能重载入口恢复，故生产环境限次重载，避免停在空白页
+router.onError((error) => {
+  if (!import.meta.env.PROD || !CHUNK_LOAD_ERROR.test(String(error))) return
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+  window.location.reload()
+})
+
+router.afterEach(() => sessionStorage.removeItem(CHUNK_RELOAD_KEY))
+
 async function mountApplication() {
   try {
     const preference = await getSetting<unknown>(APPEARANCE_SETTING_KEY)
