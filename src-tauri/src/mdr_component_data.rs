@@ -116,14 +116,14 @@ tauri_cmd! {
             source: request.source,
         })?;
         write_archive_file(&target, &content)?;
-        info!("写入组件数据成功：{} / {} / {}", target.note_name, target.uuid, target.path);
+        info!("写入组件数据成功");
         Ok(())
     }
 
     pub fn delete_component_data_file(request: ComponentFileRequest) -> anyhow::Result<()> {
         let target = resolve_target(&request)?;
         delete_archive_file(&target)?;
-        info!("删除组件数据成功：{} / {} / {}", target.note_name, target.uuid, target.path);
+        info!("删除组件数据成功");
         Ok(())
     }
 
