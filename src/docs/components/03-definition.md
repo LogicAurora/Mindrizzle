@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-24 -->
+<!-- 最后验证: 2026-10-25 -->
 # 03 块定义
 
 每个块在 `Components/` 下有一个同名定义文件 `Xxx.block.ts`，默认导出一个 `defineBlock({...})`。
@@ -18,6 +18,7 @@
 | `titleOf` / `iconOf` | 否 | 按 config 动态取标题/图标 |
 | `widthChangableOf` / `heightChangableOf` | 否 | `(config, env) => boolean`，`env` 含 `isCompact` / `isReadOnly` |
 | `snapshot` | 否 | 视口外显示什么，默认 `'html'`，见 [04 生命周期](04-lifecycle.md) |
+| `settings` | 否 | 嵌入富文本时的设置面板组件（props + `update` 事件），块与插入块共用 |
 | `embed` | 否 | 块 ↔ 富文本双向映射 |
 
 ## 尺寸约束
@@ -58,16 +59,27 @@ iconOf: (config) => (config.kind === 'alert' ? mdiAlert : mdiNote),
 
 ```ts
 embed: {
-  nodeName: 'CodeBlock',
-  toProps: (config) => ({ modelValue: config.code, language: config.language }),
-  fromProps: (props) => ({
-    code: (props.modelValue as string) ?? '',
-    language: (props.language as string) ?? 'javascript',
-  }),
+  nodeName: 'TableBlock',
+  component: TableBlockEmbed,
+  toProps: (config) => ({ rows: config.rows, header: config.header !== false }),
+  fromProps: (props) => ({ rows: normalizeTableRows(props.rows), header: props.header !== false }),
 }
 ```
 
-`nodeName` 是 ProseMirror 节点名；组件复用同一个 `.vue`，不用另写组件映射。
+`nodeName` 是反查注册表用的名字，`component` 是嵌入态组件（建议始终显式给）。
+
+嵌入组件拿不到 `useBlockContext()`，只能靠 props：`toProps` 输出的字段 + `readOnly` + `blockUuid`，
+回写统一 `emit('update-props', patch)`：
+
+| prop / 事件 | 说明 |
+| --- | --- |
+| `readOnly` | 富文本只读态 |
+| `blockUuid` | 嵌入节点的组件目录 uuid，附件类块用它 `createBlockFiles(uuid)` |
+| `update-props` | 一次回写多个字段（表格/任务用）；`modelValue` / `language` 是代码块的历史通道 |
+
+- 从画布拖入时沿用源块 uuid，所以附件数据目录不用搬家；拖出成块时也沿用同一 uuid（数据目录直接续用，不会出现“复制未完成就先读”的空档）。
+- 不写 `component` 会复用块自己的 `.vue`，它依赖 `ctx`，嵌入时直接抛错。
+- 嵌入节点是原子节点，`props` 只能放可 JSON 序列化的数据（和 config 同一约束）。
 
 ## 配置类型
 

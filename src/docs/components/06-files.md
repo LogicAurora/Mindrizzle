@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-24 -->
+<!-- 最后验证: 2026-10-25 -->
 # 06 私有文件
 
 附件、图片、大文本放 `ctx.files`，文件落在当前 `.mdrf` 的 `ComponentsData/<uuid>/`，随笔记一起走。
@@ -20,6 +20,22 @@ const imageUrl = files.url('assets/cover.png') // 直接给 <img :src>
 | `list()` | 列出本块目录下的相对路径 |
 | `remove(path)` | 删除（不存在时无操作） |
 | `exists(path)` | 是否存在 |
+| `exportTo(path, targetPath)` | 桌面端另存到用户选定路径（路径由保存对话框给出） |
+
+## 导出给用户
+
+`exportTo` 只在桌面端可用；网页端没有文件系统，自己把 `readBinary` 的结果包成 Blob 下载。
+用户选的路径可能含中文与空格，直接丢给 `exportTo` 即可，Rust 侧只校验非空与绝对路径。
+
+```ts
+const bytes = await ctx.files.readBinary('file.bin')
+if (isTauri()) {
+  const target = await save({ defaultPath: name })
+  if (target) await ctx.files.exportTo('file.bin', target)
+} else {
+  downloadBlob(bytes, name)
+}
+```
 
 ## 存图片
 

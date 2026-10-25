@@ -116,6 +116,7 @@ pub fn run() {
             mdr_component_data::write_component_data_file,
             mdr_component_data::delete_component_data_file,
             mdr_component_data::component_data_file_exists,
+            mdr_component_data::export_component_data_file,
             settings_store::get_setting,
             settings_store::set_setting,
             settings_store::remove_setting,

@@ -115,6 +115,15 @@ export class ComponentDataStore {
     return new TextDecoder().decode(await this.readFile(url))
   }
 
+  // 另存到用户选定路径；网页端没有文件系统，调用方自己下载 Blob
+  async exportFile(url: string, targetPath: string): Promise<void> {
+    const location = parseMdrfcdUrl(url)
+    validateComponentPath(location.path)
+    await invokeCommand('export_component_data_file', {
+      request: { ...location, ...noteSourceOf(), targetPath },
+    })
+  }
+
   async deleteFile(url: string): Promise<void> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
@@ -138,5 +147,16 @@ export class ComponentDataStore {
     return invokeCommand<string[]>('list_component_data_files', {
       request: { fileName: location.fileName, uuid: location.uuid, ...noteSourceOf() },
     })
+  }
+}
+
+// 富文本嵌入节点拖出成块时要换 uuid，数据目录得跟着搬；抽出是低频操作，逐个写回可接受
+export async function copyComponentFiles(sourceUuid: string, targetUuid: string): Promise<void> {
+  if (!sourceUuid || !targetUuid || sourceUuid === targetUuid) return
+  const store = new ComponentDataStore()
+  const files = await store.listFiles(sourceUuid)
+  for (const path of files) {
+    const bytes = await store.readFile(store.urlOf(sourceUuid, path))
+    await store.writeFile(store.urlOf(targetUuid, path), bytes)
   }
 }

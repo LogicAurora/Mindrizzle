@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-24 -->
+<!-- 最后验证: 2026-10-25 -->
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -64,6 +64,13 @@ flowchart LR
 | `applyConfig(config)` | 覆盖内存 config | 载入文档 |
 | `resolveDropAtElement` / `scrollContent` | 由块组件调 `ctx.setDropHandlers` 注册 | 接收画布拖入 |
 | `ctx.getView()` | 读画布视图 | 插件不接触 DOM 坐标与原始事件 |
+| `blockUuid` prop | 嵌入节点自带 uuid，附件类块用它开组件目录 | 富文本内读写组件数据 |
+| `onUpdateProps(patch)` | 一次合并多个 props | 表格 / 任务等结构化块 |
+| `EMBED_SETTINGS_HOST_KEY` | 插入块设置面板的 Teleport 宿主（`Ref<HTMLElement>`） | 块作者提供自己的设置 UI |
+
+- 插入命令 `insertVueComponent(At)(pos, name, props, uuid?)`：从画布块拖入时传源块 uuid，数据目录可直接复用。
+- 拖出成块（`Mindrizzle:extract-component`）携带 `detail.uuid`，画布直接沿用该 uuid 新建块，组件数据目录无需搬迁；
+  仅当 uuid 已被占用（节点被复制过）时才新起 uuid 并 `copyComponentFiles` 复制目录。
 
 - 块组件根是 `BlockShell`（`MdrCanvasComponentBase` 的自动属性版），设置面板写 `#settings` 插槽；`useBlockContext()` 取 ctx。
 - 虚拟化由壳统一：`virtualized` / `snapshot` 经 `BlockShell` 传给 `MdrCanvasComponentBase`，块内不再写 `v-if`。

@@ -3,6 +3,9 @@ import { mdiImageOutline } from '@mdi/js'
 import { defineBlock } from '../Sdk/defineBlock.ts'
 import type { ImageBlockConfig } from '../Registry/canvasComponents.ts'
 import { IMAGE_BLOCK_CONSTRAINTS } from '../Registry/componentConstraints.ts'
+import ImageBlockEmbed from './ImageBlock/ImageBlockEmbed.vue'
+import ImageSettings from './ImageBlock/ImageSettings.vue'
+import { toImageFit } from './ImageBlock/imageConfig.ts'
 
 export default defineBlock<ImageBlockConfig>({
   key: 'ImageBlock',
@@ -16,4 +19,23 @@ export default defineBlock<ImageBlockConfig>({
   // 移动端宽度锁在画布宽，块自己再放开会与堆叠布局冲突
   widthChangableOf: (config, env) => config.autoSize !== true && !env.isCompact,
   heightChangableOf: (config) => config.autoSize !== true,
+  settings: ImageSettings,
+  embed: {
+    nodeName: 'ImageBlock',
+    component: ImageBlockEmbed,
+    toProps: (config) => ({
+      path: config.path,
+      mime: config.mime,
+      alt: config.alt,
+      fit: config.fit,
+      autoSize: config.autoSize,
+    }),
+    fromProps: (props) => ({
+      path: String(props.path ?? ''),
+      mime: String(props.mime ?? ''),
+      alt: String(props.alt ?? ''),
+      fit: toImageFit(props.fit),
+      autoSize: props.autoSize === true,
+    }),
+  },
 })

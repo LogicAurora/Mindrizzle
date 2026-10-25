@@ -14,5 +14,6 @@ export const createBlockFiles = (uuid: string): BlockFiles => {
     list: () => store.listFiles(uuid),
     remove: (path) => store.deleteFile(url(path)),
     exists: (path) => store.hasFile(url(path)),
+    exportTo: (path, targetPath) => store.exportFile(url(path), targetPath),
   }
 }

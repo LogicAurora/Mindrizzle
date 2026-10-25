@@ -63,6 +63,17 @@ pub struct ComponentFileWriteRequest {
     source: NoteSource,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComponentFileExportRequest {
+    file_name: String,
+    uuid: String,
+    path: String,
+    target_path: String,
+    #[serde(flatten)]
+    source: NoteSource,
+}
+
 struct ComponentFileTarget {
     // 缓存失效要用，否则重新打包后同名暂存区还会把旧数据写回去
     cache_key: String,
@@ -132,6 +143,26 @@ tauri_cmd! {
         // 复用读取以保证与 read 看到同一份条目；文件有 64 MiB 上限，这点开销可以接受
         Ok(read_archive_bytes(&target)?.is_some())
     }
+
+    pub fn export_component_data_file(request: ComponentFileExportRequest) -> anyhow::Result<()> {
+        let target = resolve_target(&ComponentFileRequest {
+            file_name: request.file_name,
+            uuid: request.uuid,
+            path: request.path,
+            source: request.source,
+        })?;
+        let content = read_archive_bytes(&target)?
+            .ok_or_else(|| anyhow::anyhow!("组件数据文件不存在"))?;
+        let destination = export_destination(&request.target_path)?;
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("创建导出目录：{}", parent.display()))?;
+        }
+        fs::write(&destination, &content)
+            .with_context(|| format!("写入导出文件：{}", destination.display()))?;
+        info!("导出组件数据成功");
+        Ok(())
+    }
 }
 
 fn resolve_scope(request: &ComponentScopeRequest) -> Result<ComponentFileTarget> {
@@ -167,6 +198,18 @@ fn resolve_target(request: &ComponentFileRequest) -> Result<ComponentFileTarget>
     })?;
     target.path = path;
     Ok(target)
+}
+
+// 目标路径由系统保存对话框选定，这里只挡空值与相对路径，避免误写到进程工作目录
+fn export_destination(raw: &str) -> Result<PathBuf> {
+    let path = PathBuf::from(raw.trim());
+    if raw.trim().is_empty() || !path.is_absolute() {
+        return Err(anyhow::anyhow!("导出路径必须是绝对路径"));
+    }
+    if path.is_dir() {
+        return Err(anyhow::anyhow!("导出路径是目录"));
+    }
+    Ok(path)
 }
 
 fn validate_component_uuid(uuid: &str) -> Result<()> {

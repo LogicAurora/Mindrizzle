@@ -11,11 +11,15 @@ import {
   onMounted,
   computed,
   markRaw,
+  provide,
+  Teleport,
 } from 'vue'
-import { mdiArrowBottomRight, mdiExportVariant } from '@mdi/js'
+import { mdiArrowBottomRight, mdiCogOutline, mdiExportVariant } from '@mdi/js'
+import { Z_LAYER } from '../../../Core/zIndex.ts'
 import { DEFAULT_CONSTRAINTS, normalizeConstraints, type ResizeConstraints } from '../../../Registry/resizeConstraints.ts'
 import { embeddedBlockOf } from '../../../Sdk/blockRegistry.ts'
-import { createStoreResolver, findPositionerEl, viewportToLayout } from './blockHandleUtils.ts'
+import { EMBED_SETTINGS_HOST_KEY } from '../../../Sdk/embedSettingsHost.ts'
+import { createStoreResolver, findPositionerEl, layoutToViewportX, layoutToViewportY, viewportToLayout } from './blockHandleUtils.ts'
 
 const resolveBlockHandleStore = createStoreResolver()
 
@@ -50,6 +54,8 @@ export const vueComponentNode = defineNodeSpec({
     props: { default: {} },
     width: { default: 360 },
     height: { default: 240 },
+    // 嵌入态也需要组件数据目录，拖出成块时按它迁移文件
+    uuid: { default: '' },
   },
   parseDOM: [
     {
@@ -61,6 +67,7 @@ export const vueComponentNode = defineNodeSpec({
           props: JSON.parse(el.getAttribute('data-props') || '{}'),
           width: parseFloat(el.getAttribute('data-width') || '360'),
           height: parseFloat(el.getAttribute('data-height') || '240'),
+          uuid: el.getAttribute('data-uuid') || '',
         }
       },
     },
@@ -74,59 +81,54 @@ export const vueComponentNode = defineNodeSpec({
         'data-props': JSON.stringify(node.attrs.props),
         'data-width': String(node.attrs.width),
         'data-height': String(node.attrs.height),
+        'data-uuid': node.attrs.uuid || '',
       },
     ]
   },
 })
 
-interface CornerButtonOptions {
+interface ToolButtonOptions {
   icon: string
   active: boolean
   cursor: string
-  at: { left?: string; right?: string; bottom: string }
+  title: string
   onMousedown: (event: MouseEvent) => void
   onHover: (hovering: boolean) => void
 }
 
 // 左下"拖出成块"与右下缩放共用角标视觉，避免渲染函数重复整段样式
-const cornerButtonStyle = (active: boolean, cursor: string, at: CornerButtonOptions['at']) => {
-  const tone = 'var(--v-theme-on-surface, #000000)'
-  return {
-    position: 'absolute' as const,
-    ...at,
-    width: '22px',
-    height: '22px',
-    borderRadius: '4px',
-    background: active ? `rgba(${tone}, 0.10)` : `rgba(${tone}, 0.04)`,
-    border: `1px solid ${active ? `rgba(${tone}, 0.25)` : `rgba(${tone}, 0.08)`}`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor,
-    zIndex: 5,
-    transition: 'background 0.2s, border-color 0.2s, transform 0.15s',
-    userSelect: 'none',
-    transform: `scale(${active ? 1.1 : 1})`,
-  }
-}
+// 描边与工具条共用同一个色相，随主题明暗自动切换
+const toolTone = 'var(--v-theme-on-surface, #000000)'
+const TOOLBAR_HEIGHT = 22
+const TOOL_BUTTON_SIZE = 20
+const SETTINGS_POP_WIDTH = 240
 
-function renderCornerButton(options: CornerButtonOptions) {
-  const { icon, active, cursor, at, onMousedown, onHover } = options
-  const tone = 'var(--v-theme-on-surface, #000000)'
-  const iconColor = active ? `rgba(${tone}, 0.85)` : `rgba(${tone}, 0.40)`
+const toolButtonStyle = (active: boolean, cursor: string) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: `${TOOL_BUTTON_SIZE}px`,
+  height: `${TOOL_BUTTON_SIZE}px`,
+  borderRadius: '3px',
+  background: active ? `rgba(${toolTone}, 0.16)` : 'transparent',
+  color: active ? `rgba(${toolTone}, 0.95)` : `rgba(${toolTone}, 0.6)`,
+  cursor,
+  userSelect: 'none' as const,
+  transition: 'background 0.15s, color 0.15s',
+})
+
+function renderToolButton(options: ToolButtonOptions) {
+  const { icon, active, cursor, title, onMousedown, onHover } = options
   return h(
     'div',
     {
-      style: cornerButtonStyle(active, cursor, at),
+      title,
+      style: toolButtonStyle(active, cursor),
       onMouseenter: () => onHover(true),
       onMouseleave: () => onHover(false),
       onMousedown,
     },
-    [
-      h('svg', { viewBox: '0 0 24 24', width: 16, height: 16, style: { color: iconColor } }, [
-        h('path', { d: icon, fill: 'currentColor' }),
-      ]),
-    ],
+    [h('svg', { viewBox: '0 0 24 24', width: 14, height: 14 }, [h('path', { d: icon, fill: 'currentColor' })])],
   )
 }
 
@@ -153,6 +155,8 @@ const ResizableContainer = defineComponent({
     minHeight: { type: Number as PropType<number | null>, default: null },
     maxHeight: { type: Number as PropType<number | null>, default: null },
     readOnly: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+    title: { type: String, default: '' },
     // NodeView 渲染上下文外调用 slot 会触发 Vue 警告，所以内容经 prop 传入
     content: { type: Object as PropType<any>, required: true },
   },
@@ -165,6 +169,41 @@ const ResizableContainer = defineComponent({
     const isExtracting = ref(false)
     const currentWidth = ref(props.width)
     const currentHeight = ref(props.height)
+
+    const settingsOpen = ref(false)
+    const settingsPopRef = ref<HTMLElement | null>(null)
+    const settingsHostRef = ref<HTMLElement | null>(null)
+    const settingsAnchorRef = ref<HTMLElement | null>(null)
+    const settingsPos = ref({ left: 0, top: 0 })
+    provide(EMBED_SETTINGS_HOST_KEY, settingsHostRef)
+
+    // 弹层挂在 body，点外面就收起；点按钮自身交给 toggle 处理
+    const closeSettingsOnOutside = (event: MouseEvent) => {
+      if (!settingsOpen.value) return
+      const target = event.target as Node | null
+      if (!target) return
+      if (settingsPopRef.value?.contains(target) || settingsAnchorRef.value?.contains(target)) return
+      settingsOpen.value = false
+    }
+
+    const toggleSettings = (event: MouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (settingsOpen.value) {
+        settingsOpen.value = false
+        return
+      }
+      const anchor = event.currentTarget as HTMLElement
+      settingsAnchorRef.value = anchor
+      const rect = anchor.getBoundingClientRect()
+      // 弹层在 body（zoom 容器外），所以按钮矩形是布局坐标、需要换算成视觉坐标再夹进视口
+      const left = layoutToViewportX(anchor, rect.right) - SETTINGS_POP_WIDTH
+      settingsPos.value = {
+        left: Math.max(8, Math.min(left, window.innerWidth - SETTINGS_POP_WIDTH - 8)),
+        top: layoutToViewportY(anchor, rect.bottom) + 6,
+      }
+      settingsOpen.value = true
+    }
 
     const stopWatchWidth = watch(
       () => props.width,
@@ -255,9 +294,12 @@ const ResizableContainer = defineComponent({
       document.addEventListener('mouseup', onMouseUp)
     }
 
+    onMounted(() => document.addEventListener('mousedown', closeSettingsOnOutside, true))
+
     onUnmounted(() => {
       stopWatchWidth()
       stopWatchHeight()
+      document.removeEventListener('mousedown', closeSettingsOnOutside, true)
     })
 
     return () => {
@@ -265,41 +307,142 @@ const ResizableContainer = defineComponent({
       const isResizeActive = isResizing.value || isResizeHovered.value
       const isExtractActive = isExtracting.value || isExtractHovered.value
 
+      const maxWidth = props.maxWidth !== null ? props.maxWidth + 'px' : '100%'
+      const toolbar = props.readOnly
+        ? null
+        : h(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              // 宽度交给父级 stretch，写 100% 会在自动宽容器里按可用宽撑开，块缩窄时条不跟
+              alignSelf: 'stretch',
+              height: `${TOOLBAR_HEIGHT}px`,
+              marginTop: '2px',
+              padding: '0 3px',
+              boxSizing: 'border-box',
+              borderRadius: '4px',
+              background: `rgba(${toolTone}, 0.06)`,
+              border: `1px solid rgba(${toolTone}, 0.08)`,
+            },
+            // 工具条在内容外，但仍在 ProseMirror 里，不拦住会变成选段落
+            onMousedown: (event: MouseEvent) => event.stopPropagation(),
+          },
+          [
+            h(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: '4px', flex: '1', minWidth: 0 } },
+              [
+                props.icon
+                  ? h('svg', { viewBox: '0 0 24 24', width: 12, height: 12, style: { flex: '0 0 auto', color: `rgba(${toolTone}, 0.45)` } }, [h('path', { d: props.icon, fill: 'currentColor' })])
+                  : null,
+                h(
+                  'span',
+                  {
+                    style: {
+                      fontSize: '11px',
+                      color: `rgba(${toolTone}, 0.6)`,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    },
+                  },
+                  props.title,
+                ),
+              ],
+            ),
+            h(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: '2px', flex: '0 0 auto' } },
+              [
+                renderToolButton({
+                  icon: mdiExportVariant,
+                  active: isExtractActive,
+                  cursor: 'grab',
+                  title: '拖出成画布块',
+                  onMousedown: startExtract,
+                  onHover: (hovering) => { isExtractHovered.value = hovering },
+                }),
+                renderToolButton({
+                  icon: mdiCogOutline,
+                  active: settingsOpen.value,
+                  cursor: 'pointer',
+                  title: '块设置',
+                  onMousedown: toggleSettings,
+                  onHover: () => {},
+                }),
+                renderToolButton({
+                  icon: mdiArrowBottomRight,
+                  active: isResizeActive,
+                  cursor: 'nwse-resize',
+                  title: '拖动改变大小',
+                  onMousedown: startResize,
+                  onHover: (hovering) => { isResizeHovered.value = hovering },
+                }),
+              ],
+            ),
+          ],
+        )
+
       return h(
         'div',
         {
-          ref: containerRef,
           style: {
-            display: 'inline-block',
+            display: 'inline-flex',
+            flexDirection: 'column',
             width: currentWidth.value + 'px',
-            height: currentHeight.value + 'px',
-            maxWidth: props.maxWidth !== null ? props.maxWidth + 'px' : '100%',
-            maxHeight: props.maxHeight !== null ? props.maxHeight + 'px' : '100%',
-            position: 'relative',
-            boxSizing: 'border-box',
-            overflow: 'hidden',
-            borderRadius: '4px',
+            maxWidth,
+            verticalAlign: 'top',
           },
         },
         [
-          ...children,
-          ...(props.readOnly ? [] : [
-            renderCornerButton({
-              icon: mdiExportVariant,
-              active: isExtractActive,
-              cursor: 'grab',
-              at: { left: '4px', bottom: '4px' },
-              onMousedown: startExtract,
-              onHover: (hovering) => { isExtractHovered.value = hovering },
-            }),
-            renderCornerButton({
-              icon: mdiArrowBottomRight,
-              active: isResizeActive,
-              cursor: 'nwse-resize',
-              at: { right: '4px', bottom: '4px' },
-              onMousedown: startResize,
-              onHover: (hovering) => { isResizeHovered.value = hovering },
-            }),
+          h(
+            'div',
+            {
+              ref: containerRef,
+              style: {
+                width: '100%',
+                height: currentHeight.value + 'px',
+                maxWidth,
+                maxHeight: props.maxHeight !== null ? props.maxHeight + 'px' : '100%',
+                position: 'relative',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                borderRadius: '4px',
+                // 描边会挤压内容，所以用 inset 阴影画
+                boxShadow: `inset 0 0 0 1px rgba(${toolTone}, 0.22)`,
+              },
+            },
+            children,
+          ),
+          toolbar,
+          // 设置面板挂在 body：放在 .editor-scroll 里会被 overflow 裁掉
+          h(Teleport, { to: 'body' }, [
+            h(
+              'div',
+              {
+                ref: settingsPopRef,
+                style: {
+                  position: 'fixed',
+                  left: `${settingsPos.value.left}px`,
+                  top: `${settingsPos.value.top}px`,
+                  width: `${SETTINGS_POP_WIDTH}px`,
+                  display: settingsOpen.value ? 'block' : 'none',
+                  zIndex: Z_LAYER.settingsMenu,
+                  background: 'rgb(var(--v-theme-surface))',
+                  border: `1px solid rgba(${toolTone}, 0.12)`,
+                  borderRadius: '6px',
+                  boxShadow: '0 12px 32px -12px rgba(0, 0, 0, 0.45)',
+                  padding: '4px',
+                  maxHeight: '60vh',
+                  overflow: 'auto',
+                },
+                onMousedown: (event: MouseEvent) => event.stopPropagation(),
+              },
+              [h('div', { ref: settingsHostRef })],
+            ),
           ]),
         ],
       )
@@ -335,6 +478,15 @@ export const vueComponentNodeView = defineVueNodeView({
         clearInterval(hoverKeepAlive)
         hoverKeepAlive = null
       }
+
+      // 工具条标题/图标与画布块一致：按当前 config 反推，改 props 立即更新
+      const definition = computed(() => embeddedBlockOf(node.value.attrs.componentName as string))
+      const embedConfig = computed<Record<string, unknown>>(() => {
+        const embed = definition.value?.embed
+        return embed ? embed.fromProps(node.value.attrs.props as Record<string, unknown>) : {}
+      })
+      const blockIcon = computed(() => definition.value?.iconOf?.(embedConfig.value) ?? definition.value?.icon ?? '')
+      const blockTitle = computed(() => definition.value?.titleOf?.(embedConfig.value) ?? definition.value?.title ?? '')
 
       const state = reactive<{
         component: any | null
@@ -448,6 +600,7 @@ export const vueComponentNodeView = defineVueNodeView({
         const payload = {
           componentName: node.value.attrs.componentName as string,
           props: node.value.attrs.props as Record<string, any>,
+          uuid: node.value.attrs.uuid as string,
           clientX: point.clientX,
           clientY: point.clientY,
           accepted: false,
@@ -529,6 +682,9 @@ export const vueComponentNodeView = defineVueNodeView({
           h(Comp, {
             ...componentProps,
             readOnly: readOnly.value,
+            blockUuid: currentNode.attrs.uuid as string,
+            // 结构化块（表格/任务）一次要改多个字段，所以除两个历史通道外再给一个通用 patch 通道
+            onUpdateProps: (patch: Record<string, any>) => updateComponentProps(patch),
             'onUpdate:modelValue': (value: string) => updateComponentProps({ modelValue: value }),
             'onUpdate:language': (value: string) => updateComponentProps({ language: value }),
             style: {
@@ -545,6 +701,8 @@ export const vueComponentNodeView = defineVueNodeView({
           {
             width: currentNode.attrs.width,
             height: currentNode.attrs.height,
+            icon: blockIcon.value,
+            title: blockTitle.value,
             aspectRatio: aspectRatio ?? undefined,
             minWidth: state.constraints.minWidth,
             maxWidth: effectiveMaxWidth.value,

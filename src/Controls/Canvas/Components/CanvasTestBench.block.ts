@@ -9,7 +9,8 @@ export default defineBlock<TestBenchConfig>({
   title: '测试台',
   icon: mdiFlaskOutline,
   addId: 'add-test',
-  order: 40,
+  // 调试用块，排在全部正式块之后
+  order: 90,
   constraints: TEST_BENCH_CONSTRAINTS,
   defaultConfig: () => ({ counter: 0, note: '', showViewport: true }),
   defaultSize: { w: 420, h: 360 },

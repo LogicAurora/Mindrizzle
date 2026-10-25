@@ -31,6 +31,7 @@ import {
   highlightKeymap,
 } from './extensions/formatting.ts'
 import { vueComponentNode, vueComponentNodeView } from './extensions/vue-component.ts'
+import { generateBlockUuid } from '../../../../utils/blockUuid.ts'
 import { defineBlockquote } from 'prosekit/extensions/blockquote'
 import { defineSubscript } from 'prosekit/extensions/subscript'
 import { defineSuperscript } from 'prosekit/extensions/superscript'
@@ -40,7 +41,8 @@ import { NodeSelection } from 'prosekit/pm/state'
 // 父组件统一经 editor.commands 调用，所以在此注册自定义命令；
 // 标题切换复用 defineHeading() 内置的 toggleHeading，避免同名命令被合并成交叉类型
 const customCommands = defineCommands({
-  insertVueComponent(componentName: string, props: Record<string, any> = {}) {
+  // uuid 可选：从画布块拖入时沿用源块 uuid，附件类块的组件数据目录才能直接复用
+  insertVueComponent(componentName: string, props: Record<string, any> = {}, uuid?: string) {
     return (state, dispatch, view) => {
       if (!view) return false
       const containerWidth = view.dom.clientWidth || 360
@@ -48,12 +50,12 @@ const customCommands = defineCommands({
       const defaultHeight = 240
       return insertNode({
         type: 'vueComponent',
-        attrs: { componentName, props, width: defaultWidth, height: defaultHeight },
+        attrs: { componentName, props, width: defaultWidth, height: defaultHeight, uuid: uuid ?? generateBlockUuid() },
       })(state, dispatch)
     }
   },
   // 落点由指示线给出，按指定位置插入而非当前选区
-  insertVueComponentAt(pos: number, componentName: string, props: Record<string, any> = {}) {
+  insertVueComponentAt(pos: number, componentName: string, props: Record<string, any> = {}, uuid?: string) {
     return (state, dispatch, view) => {
       if (!view) return false
       // 落点来自画布帧缓存可能越界，所以直接失败让调用方回退，避免 tr.insert 抛错
@@ -63,6 +65,7 @@ const customCommands = defineCommands({
         props,
         width: Math.min(360, view.dom.clientWidth || 360),
         height: 240,
+        uuid: uuid ?? generateBlockUuid(),
       })
       if (!node) return false
       if (!dispatch) return true

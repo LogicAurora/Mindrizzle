@@ -36,6 +36,38 @@ export type ImageBlockConfig = WidgetConfig & {
   autoSize: boolean
 }
 
+export type FileBlockConfig = WidgetConfig & {
+  // 归档内路径固定为 file.bin，显示名与类型单独存，换文件不会在归档里留垃圾
+  path: string
+  name: string
+  mime: string
+  size: number
+}
+
+export type LinkBlockConfig = WidgetConfig & {
+  url: string
+  title: string
+  description: string
+  siteName: string
+  imageUrl: string
+}
+
+export type TableBlockConfig = WidgetConfig & {
+  rows: string[][]
+  header: boolean
+}
+
+export interface TaskItem {
+  id: string
+  text: string
+  done: boolean
+}
+
+export type TaskListBlockConfig = WidgetConfig & {
+  title: string
+  tasks: TaskItem[]
+}
+
 export interface ComponentController {
   saveConfig?: () => Partial<WidgetConfig>
   loadConfig?: (config: WidgetConfig) => void

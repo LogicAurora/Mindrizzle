@@ -74,7 +74,7 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 | `src/Controls/Canvas/Core/zIndex.ts` | 叠加层 z-index 的唯一事实来源 |
 | `src/Controls/Canvas/Sdk/` | 块 SDK：`BlockShell.vue`、`blockContext.ts`、`defineBlock.ts`、`blockRegistry.ts`、`PluginBlockHost.vue` |
 | `src/Controls/Canvas/Registry/` | 块定义自动收集（`canvasComponents.ts` 扫 `*.block.ts`）与尺寸约束 |
-| `src/Controls/Canvas/Components/` | 内置块：富文本、代码块、图片、测试台、插件探针（每个都有同名 `.block.ts`） |
+| `src/Controls/Canvas/Components/` | 内置块：富文本、代码块、图片、附件、链接、表格、任务、测试台（每个都有同名 `.block.ts`） |
 | `src/Controls/Canvas/Components/RichEditor/` | 富文本编辑器、block-handle 扩展、插入组件节点视图 |
 | `src/Controls/Canvas/Components/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
 | `src/utils/canvasCoords.ts` | content ↔ 视口坐标换算的唯一来源 |
@@ -131,6 +131,8 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 - 写配置只走 `ctx.setConfig(patch)`：`config` 是 `markRaw` 原始对象，直改既不重渲染也不落盘。
 - 虚拟化快照由宿主调 `snapshotHtml()` 产出；`canvas`/WebGL/iframe 类必须声明函数式 `snapshot`，DOM 克隆是空白。
 - 富文本内嵌组件按 `embed.nodeName` 反查同一注册表，不得再新建第二份组件映射。
+- `embed.component` 必须是纯 props 组件：嵌入态没有 `BlockContext`，只能靠 `readOnly` / `blockUuid` / `update-props`。
+- 嵌入节点自带 uuid：从画布拖入沿用源块 uuid（附件数据目录直接复用），拖出成块时画布用 `copyComponentFiles` 把目录搬到新块。
 
 ### 交互语义
 

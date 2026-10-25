@@ -102,7 +102,12 @@ import type { BlockInteractionHandlers, BlockSize, CanvasViewData } from './canv
 import type { MdrCanvasComponentShellProps } from './MdrCanvasComponentBase.types.ts'
 import type { ResizeConstraints } from '../Registry/resizeConstraints.ts'
 import { Z_LAYER } from './zIndex.ts'
+import { isTauri } from '@tauri-apps/api/core'
+import { error as logError } from '@tauri-apps/plugin-log'
 import { roundToVisual, contentToScreen, screenToContent, contentToVisual, type CanvasTransform, type Point, type ViewportOrigin } from '../../../utils/canvasCoords.ts'
+import { generateBlockUuid } from '../../../utils/blockUuid.ts'
+import { copyComponentFiles } from '../../../utils/componentDataStore.ts'
+import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
 import { getVisibleBlockRect, isFullyVisibleInCanvas, invalidateCanvasScaleCache } from '../Components/RichEditor/extensions/blockHandleUtils.ts'
 
 import { useDisplay } from 'vuetify'
@@ -1594,9 +1599,9 @@ const insertDraggedComponent = (targetId: string, sourceId: string, pos: number 
   const component = source ? componentNodeOf(source) : null
   if (!target || !component) return false
   const commands = componentRefs.value[target.uuid]?.commands
-  // 落点可能解析失败，所以无指示线时回退到按当前选区插入
-  const inserted = (pos != null && commands?.insertVueComponentAt?.(pos, component.name, component.props))
-    || !!commands?.insertVueComponent?.(component.name, component.props)
+  // 沿用源块 uuid，附件类块的组件数据目录不必搬家
+  const inserted = (pos != null && commands?.insertVueComponentAt?.(pos, component.name, component.props, sourceId))
+    || !!commands?.insertVueComponent?.(component.name, component.props, sourceId)
   if (!inserted) return false
   const removedIds = new Set([sourceId])
   state.items = state.items.filter((item) => !removedIds.has(item.uuid))
@@ -2597,17 +2602,6 @@ const syncComponentData = () => {
   })
 }
 
-const generateBlockUuid = () => {
-  // 优先使用原生 UUID；若不可用则使用 CSPRNG 生成随机字节并格式化为 UUID 形态字符串
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
-  const bytes = new Uint8Array(16)
-  globalThis.crypto.getRandomValues(bytes)
-  bytes[6] = (bytes[6] & 0x0f) | 0x40
-  bytes[8] = (bytes[8] & 0x3f) | 0x80
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
-
 const ARRANGE_GAP = 16
 const ARRANGE_TOP = 16
 const ARRANGE_LEFT = 16
@@ -2847,10 +2841,18 @@ const resolveAddSpot = (key: CanvasItem['component'], at?: { x: number; y: numbe
     : { spot }
 }
 
-const addComponent = (key: CanvasItem['component'], at?: { x: number; y: number }, config?: WidgetConfig): string | null => {
+const addComponent = (
+  key: CanvasItem['component'],
+  at?: { x: number; y: number },
+  config?: WidgetConfig,
+  // 插入块抽出时沿用原 uuid，组件数据目录直接复用，不用等异步复制
+  preferredUuid?: string,
+): string | null => {
   const meta = componentMetaOf(key)
   if (!meta) return null
-  const uuid = generateBlockUuid()
+  const uuid = preferredUuid && !state.items.some((item) => item.uuid === preferredUuid)
+    ? preferredUuid
+    : generateBlockUuid()
   const { spot } = resolveAddSpot(key, at)
   const { x, y } = spot
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
@@ -2882,6 +2884,8 @@ const extractMetaOf = (nodeName: string) => embeddedBlockOf(nodeName)
 type ExtractDetail = {
   componentName: string
   props: Record<string, any>
+  // 嵌入节点的组件数据目录，拖出成块后要把文件搬过去
+  uuid?: string
   clientX: number
   clientY: number
   accepted: boolean
@@ -2899,9 +2903,16 @@ const onExtractComponent = (event: Event) => {
     meta.key,
     screenToContent(canvasTransform(), rect, detail.clientX, detail.clientY),
     extract.fromProps(detail.props),
+    detail.uuid,
   )
   if (!id) return
   detail.accepted = true
+  // uuid 被占用（节点被复制过）或旧节点没有 uuid 时只能另起一个目录，这时才需要搬文件
+  if (detail.uuid && detail.uuid !== id) {
+    void copyComponentFiles(detail.uuid, id).catch((cause) => {
+      if (isTauri()) void logError(`迁移组件数据失败：${getErrorMessage(cause)}`)
+    })
+  }
   // 抽出后新块置为选中以给反馈，并对随之补发的 click 置标记，避免被当"点击空白"清掉选中
   state.selectedIds = new Set([id])
   dragJustFinished = true

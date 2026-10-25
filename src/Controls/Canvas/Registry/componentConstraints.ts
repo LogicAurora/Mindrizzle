@@ -27,3 +27,31 @@ export const IMAGE_BLOCK_CONSTRAINTS: ResizeConstraints = {
   minHeight: 120,
   maxHeight: null,
 }
+
+export const FILE_BLOCK_CONSTRAINTS: ResizeConstraints = {
+  minWidth: 200,
+  maxWidth: null,
+  minHeight: 120,
+  maxHeight: null,
+}
+
+export const LINK_BLOCK_CONSTRAINTS: ResizeConstraints = {
+  minWidth: 220,
+  maxWidth: null,
+  minHeight: 120,
+  maxHeight: null,
+}
+
+export const TABLE_BLOCK_CONSTRAINTS: ResizeConstraints = {
+  minWidth: 260,
+  maxWidth: null,
+  minHeight: 140,
+  maxHeight: null,
+}
+
+export const TASK_LIST_BLOCK_CONSTRAINTS: ResizeConstraints = {
+  minWidth: 220,
+  maxWidth: null,
+  minHeight: 140,
+  maxHeight: null,
+}

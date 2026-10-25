@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-24 -->
+<!-- 最后验证: 2026-10-25 -->
 # 画布块开发
 
 一个块 = **两个同名文件 + 自动注册**。第一次写块从 [01 快速上手](01-quick-start.md) 开始。
@@ -58,6 +58,19 @@ const ctx = useBlockContext<{ text: string }>()
 ```
 
 完整可跑版本（含定义文件与设置面板）见 [01 快速上手](01-quick-start.md)。
+
+## 内置块
+
+| key | 添加菜单 | 数据 | 说明 |
+| --- | --- | --- | --- |
+| `RichTextEditor` | 富文本 | `config.content` | ProseMirror 文档；可接收拖入 |
+| `EditableCodeBlock` | 代码块 | `config.code` / `language` | 可拖进富文本（`embed`） |
+| `ImageBlock` | 图片 | `config.path` + `ctx.files` | 平铺与自动尺寸 |
+| `FileBlock` | 附件 | `config.name` / `mime` / `size` + `ctx.files` | 归档内固定 `file.bin`；图片内联预览，桌面端可另存 |
+| `LinkBlock` | 链接 | `config.url` / `title` / `description` / `imageUrl` | 前端抓 og 标签，跨域失败退回手填 |
+| `TableBlock` | 表格 | `config.rows` / `header` | 矩形保证；Enter 沿列下移；可拖入富文本 |
+| `TaskListBlock` | 任务 | `config.title` / `tasks` | 勾选、续写、进度 |
+| `CanvasTestBench` | 测试台 | — | 调试用，`order: 90` 排在最后 |
 
 ## 相关
 

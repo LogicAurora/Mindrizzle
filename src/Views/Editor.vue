@@ -16,9 +16,9 @@
         @update:model-value="onSelectAdd"
         mandatory
       >
-        <v-btn v-for="(opt, index) in ADD_OPTIONS" :key="opt.key" :value="index" :data-test="opt.addId">
-          <v-icon :icon="opt.icon" class="mr-1" />
-          {{ opt.label }}
+        <v-btn v-for="(opt, index) in ADD_OPTIONS" :key="opt.key" :value="index" :data-test="opt.addId"
+          :title="opt.label">
+          <v-icon :icon="opt.icon" />
         </v-btn>
       </v-btn-toggle>
       <v-btn-toggle
@@ -176,10 +176,27 @@ const isOnScrollbar = (e: WheelEvent): boolean => {
   return false
 }
 
-// 任意位置滚轮按 deltaY 循环切换按钮项：无选中循环添加类型、富文本选中循环格式操作；滚动条上豁免
+// 从目标往上找第一个真正能滚的容器（overflow 允许且内容确实溢出）
+const findScrollableAncestor = (target: EventTarget | null): HTMLElement | null => {
+  let el = target instanceof HTMLElement ? target : null
+  while (el && !el.classList.contains('canvas-container')) {
+    const style = getComputedStyle(el)
+    const canScrollY = (style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1
+    const canScrollX = (style.overflowX === 'auto' || style.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1
+    if (canScrollY || canScrollX) return el
+    el = el.parentElement
+  }
+  return null
+}
+
+// 通法：指针下只要有溢出的滚动容器（插入块里的表格/任务列表、富文本自身）就让原生滚动接管
+const isOnScrollableArea = (target: EventTarget | null): boolean => !!findScrollableAncestor(target)
+
+// 任意位置滚轮按 deltaY 循环切换按钮项：无选中循环添加类型、富文本选中循环格式操作；滚动条与可滚容器内豁免
 const cycleOption = (e: WheelEvent) => {
   if (!(e.target as HTMLElement).closest?.('.canvas-container')) return
   if (isOnScrollbar(e)) return
+  if (isOnScrollableArea(e.target)) return
   if (!hasSelection.value) {
     e.preventDefault()
     const len = ADD_OPTIONS.length

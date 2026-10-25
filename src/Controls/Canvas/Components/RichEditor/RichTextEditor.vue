@@ -438,10 +438,14 @@ defineExpose({
   pointer-events: none;
 }
 
-/* 滚动条需紧贴文本区右侧，所以宽度与文本区一致（不进 gutter） */
+/* 零宽滚动条：原生滚动条占位会与自定义轨道叠成两条，所以只保留滚动能力 */
 .editor-scroll {
+  grid-column: 1;
+  grid-row: 1;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   scrollbar-width: none;
   box-sizing: border-box;
@@ -451,8 +455,12 @@ defineExpose({
   display: none;
 }
 
+/* VSCode 式：右侧留固定一列给滚动条，正文不延伸到轨道下面 */
 .editor-scroll-shell {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10px;
+  grid-template-rows: minmax(0, 1fr) auto;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -463,39 +471,41 @@ defineExpose({
   height: auto;
 }
 
+/* 常显：不做“hover 才亮”的隐式提示，缩放下也能一眼看到可滚 */
 .custom-scrollbar {
-  position: absolute;
+  position: relative;
   z-index: 6;
   pointer-events: auto;
-  background: rgba(var(--v-theme-on-surface), 0.08);
+  background: rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 4px;
-  opacity: 0.7;
   touch-action: none;
 }
 
 .custom-scrollbar:hover,
 .custom-scrollbar.force-hover {
-  opacity: 1;
+  background: rgba(var(--v-theme-on-surface), 0.2);
 }
 
+/* 两端各留 2px 与 thumbGeometry 的 viewport - 4 对应 */
 .custom-scrollbar-vertical {
-  top: 2px;
-  right: 2px;
-  bottom: 2px;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
   width: 8px;
+  margin: 2px 0;
 }
 
 .custom-scrollbar-horizontal {
-  right: 2px;
-  bottom: 2px;
-  left: 2px;
+  grid-column: 1;
+  grid-row: 2;
   height: 8px;
+  margin: 2px 0;
 }
 
 .custom-scrollbar-thumb {
   position: absolute;
   pointer-events: auto;
-  background: rgba(var(--v-theme-on-surface), 0.42);
+  background: rgba(var(--v-theme-on-surface), 0.5);
   border-radius: 4px;
   cursor: grab;
 }

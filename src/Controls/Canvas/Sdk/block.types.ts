@@ -22,6 +22,8 @@ export interface BlockFiles {
   list: () => Promise<string[]>
   remove: (path: string) => Promise<void>
   exists: (path: string) => Promise<boolean>
+  /** 桌面端另存到用户选定路径；网页端没有文件系统，需调用方自行下载 */
+  exportTo: (path: string, targetPath: string) => Promise<void>
 }
 
 export interface BlockContext<TConfig extends Record<string, unknown> = Record<string, unknown>> {
@@ -86,6 +88,8 @@ export interface BlockDefinition<TConfig extends Record<string, unknown> = Recor
   heightChangableOf?: (config: TConfig, env: BlockEnv) => boolean
   /** 块主体组件：用 useBlockContext() 取 ctx，用 <BlockSettings> 写设置面板 */
   component?: Component
+  /** 嵌入富文本时的设置面板（props + update 事件），块组件与插入块共用 */
+  settings?: Component
   embed?: BlockEmbed<TConfig>
   /** 可接收画布块拖拽落点（富文本为 true） */
   acceptsDrop?: boolean
