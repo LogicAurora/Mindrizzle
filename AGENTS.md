@@ -24,7 +24,6 @@ cd src-tauri && cargo test   # 含模块文档里的 no_run doctest
 ```
 
 - `bun run build` 是完整前端验证入口，先运行 `vue-tsc --noEmit` 再执行 Vite 构建。
-- `typescript` 保持在 6.0.x；当前 `vue-tsc` 通过 `typescript/lib/tsc` 加载编译器，TypeScript 7 不导出该内部路径。升级 TypeScript 前需先确认 `vue-tsc` 已兼容。
 
 ## 注释规范（最高优先级）
 

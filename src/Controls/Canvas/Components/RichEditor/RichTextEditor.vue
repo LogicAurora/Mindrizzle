@@ -455,7 +455,6 @@ defineExpose({
   display: none;
 }
 
-/* VSCode 式：右侧留固定一列给滚动条，正文不延伸到轨道下面 */
 .editor-scroll-shell {
   position: relative;
   display: grid;

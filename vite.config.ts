@@ -1,8 +1,8 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import vuetify from "vite-plugin-vuetify";
+import fs from 'node:fs'
 
-// @ts-expect-error process is a nodejs global
 const { TAURI_DEV_HOST: host, HOME: homeDir } = process.env;
 
 // bun 的依赖是经 ~/.bun/install/cache 的符号链接暴露的，realpath 后落在 workspace 之外，
@@ -11,7 +11,17 @@ const bunCacheDir = homeDir ? `${homeDir}/.bun/install/cache` : undefined;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [vue(),vuetify()],
+  plugins: [
+    vue({
+      script: {
+        fs: {
+          fileExists: (filePath) => fs.existsSync(filePath),
+          readFile: (filePath) => fs.readFileSync(filePath, 'utf-8'),
+        },
+      },
+    }),
+    vuetify()
+  ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
