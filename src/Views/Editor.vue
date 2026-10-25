@@ -21,16 +21,8 @@
           <v-icon :icon="opt.icon" />
         </v-btn>
       </v-btn-toggle>
-      <v-btn-toggle
-        v-if="componentOf == 'RichTextEditor' && MdrCRef?.isEditMode"
-        :model-value="opIdx"
-        @update:model-value="onSelectOption"
-        mandatory
-      >
-        <v-btn v-for="(opt, index) in OPTIONS" :key="index" :value="index">
-          <v-icon :icon="opt.icon"/>
-        </v-btn>
-      </v-btn-toggle>
+      <!-- 富文本格式模式属于块自身，所以只给容器，由 RichTextEditor teleport 进来 -->
+      <div id="rich-text-mode-slot" class="rich-text-mode-slot" />
       <v-btn @click="toggleEditMode">
         {{ MdrCRef?.isEditMode ? '切换到只读' : '切换到编辑' }}
       </v-btn>
@@ -58,25 +50,6 @@
     
     <MdrCanvas class="editor-wrapper" ref="MdrCRef"/>
 
-    <!-- 格式操作需确认，所以弹 overlay：左键应用、右键取消（全屏捕获层接管事件） -->
-    <v-overlay v-model="pendingApply" persistent scroll-strategy="none">
-      <div class="apply-layer" @click.left="confirmApply" @mousedown.right="cancelApply" @contextmenu.prevent="cancelApply">
-        <v-card :ref="setApplyCardElement" class="apply-card"
-          :style="{
-            left: `${overlayPos.left}px`,
-            top: `${overlayPos.top}px`,
-            visibility: applyPositionReady ? 'visible' : 'hidden',
-          }">
-          <v-card-text class="text-center">
-            切换「{{ pendingLabel }}」？
-          </v-card-text>
-          <v-card-actions class="justify-space-between">
-            <span class="text-caption text-medium-emphasis ml-3">右键取消</span>
-            <v-btn size="small" color="primary" class="mr-1">左键应用</v-btn>
-          </v-card-actions>
-        </v-card>
-      </div>
-    </v-overlay>
     <v-snackbar :prepend-icon="mdiCheck" color="success" location="top" v-model="saved" timeout="1500">
       保存成功
     </v-snackbar>
@@ -84,15 +57,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, inject, nextTick } from 'vue'
-import { mdiFormatHeader1, mdiFormatUnderline, mdiFormatBold, mdiFormatItalic, mdiMouse, mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
+import { ref, onMounted, onUnmounted, computed, watch, inject } from 'vue'
+import { mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { error as logError } from '@tauri-apps/plugin-log'
 import MdrCanvas, { type ComponentController } from '../Controls/Canvas/Core/MdrCanvas.vue'
 import { CANVAS_COMPONENTS } from '../Controls/Canvas/Registry/canvasComponents.ts'
 import { screenToContent } from '../utils/canvasCoords'
-import { layoutToViewportSize, layoutToViewportX, layoutToViewportY } from '../Controls/Canvas/Components/RichEditor/extensions/blockHandleUtils.ts'
 import { useRoute } from 'vue-router'
 import { invokeCommand } from '../utils/invoke'
 import { getErrorMessage } from '../utils/getErrorMessage.ts'
@@ -107,13 +79,6 @@ const MdrCRef = ref<InstanceType<typeof MdrCanvas> | null>()
 
 const getComponentRefs = (): Record<string, ComponentController | undefined> =>
   MdrCRef.value!.componentRefs as unknown as Record<string, ComponentController | undefined>
-
-const componentOf = computed(() => {
-  const ids = MdrCRef.value?.state.selectedIds ?? new Set<string>()
-  if (ids.size !== 1) return false
-  const id = Array.from(ids)[0]
-  return MdrCRef.value?.state.items.find((it) => it.uuid === id)?.component
-})
 
 // 添加类型单源
 const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, title, icon, addId }) => ({ key, label: title, icon, addId }))
@@ -135,24 +100,6 @@ watch(
   },
   { immediate: true },
 )
-
-// 格式操作单源
-const OPTIONS = [
-  { icon: mdiMouse, label: '指针', action: () => {} },
-  { icon: mdiFormatHeader1, label: '标题', action: () => batchToggleHeading(1) },
-  { icon: mdiFormatBold, label: '加粗', action: () => batchToggleBold() },
-  { icon: mdiFormatItalic, label: '斜体', action: () => batchToggleItalic() },
-  { icon: mdiFormatUnderline, label: '下划线', action: () => batchToggleUnderline() }
-] as const
-
-// 单选索引；切换选中块时重置为首项
-const opIdx = ref(0)
-watch(componentOf, () => { opIdx.value = 0 })
-
-const onSelectOption = (index: number | null) => {
-  if (index == null) return
-  opIdx.value = index
-}
 
 // 仅滚动条轨道上的滚轮滚动内容
 const isOnScrollbar = (e: WheelEvent): boolean => {
@@ -192,104 +139,15 @@ const findScrollableAncestor = (target: EventTarget | null): HTMLElement | null 
 // 通法：指针下只要有溢出的滚动容器（插入块里的表格/任务列表、富文本自身）就让原生滚动接管
 const isOnScrollableArea = (target: EventTarget | null): boolean => !!findScrollableAncestor(target)
 
-// 任意位置滚轮按 deltaY 循环切换按钮项：无选中循环添加类型、富文本选中循环格式操作；滚动条与可滚容器内豁免
+// 任意位置滚轮按 deltaY 循环切换添加类型；滚动条与可滚容器内豁免（富文本格式模式改用 Alt+滚轮，由块自己处理）
 const cycleOption = (e: WheelEvent) => {
   if (!(e.target as HTMLElement).closest?.('.canvas-container')) return
   if (isOnScrollbar(e)) return
   if (isOnScrollableArea(e.target)) return
-  if (!hasSelection.value) {
-    e.preventDefault()
-    const len = ADD_OPTIONS.length
-    addIdx.value = e.deltaY > 0 ? (addIdx.value + 1) % len : (addIdx.value - 1 + len) % len
-    return
-  }
-  if (componentOf.value !== 'RichTextEditor') return
+  if (hasSelection.value) return
   e.preventDefault()
-  const len = OPTIONS.length
-  const next = e.deltaY > 0 ? (opIdx.value + 1) % len : (opIdx.value - 1 + len) % len
-  onSelectOption(next)
-}
-
-// 要求选区非空且落在当前选中块内
-const selectionInBlock = (): boolean => {
-  const sel = window.getSelection()
-  const id = Array.from(MdrCRef.value!.state.selectedIds)[0]
-  const block = document.querySelector(`[data-uuid="${id}"]`)
-  return !!sel && !sel.isCollapsed && !!block &&
-    !!sel.anchorNode && !!sel.focusNode && block.contains(sel.anchorNode) && block.contains(sel.focusNode)
-}
-
-// selectionchange 途中会误触发，所以改在 mouseup 校验选区，并弹 overlay 询问（左键应用、右键取消）
-let applyLockUntil = 0
-const pendingApply = ref(false)
-const pendingActionIndex = ref(0)
-const pendingLabel = computed(() => OPTIONS[pendingActionIndex.value]?.label ?? '更改')
-const overlayPos = ref({ left: 0, top: 0 })
-const applyPositionReady = ref(false)
-const applyCardElement = ref<HTMLElement | null>(null)
-const APPLY_OVERLAY_MARGIN = 8
-
-interface ApplyAnchorRect {
-  left: number
-  top: number
-  right: number
-  bottom: number
-  width: number
-  height: number
-}
-
-const setApplyCardElement = (element: unknown) => {
-  applyCardElement.value = (element as { $el?: HTMLElement } | null)?.$el
-    ?? (element as HTMLElement | null)
-}
-
-const applyAnchorRectOf = (rect: DOMRect, element: HTMLElement): ApplyAnchorRect => {
-  const width = layoutToViewportSize(element, rect.width)
-  const height = layoutToViewportSize(element, rect.height)
-  const left = layoutToViewportX(element, rect.left)
-  const top = layoutToViewportY(element, rect.top)
-  return { left, top, right: left + width, bottom: top + height, width, height }
-}
-
-const positionApplyCard = (anchor: ApplyAnchorRect, card: HTMLElement) => {
-  const rect = card.getBoundingClientRect()
-  const maxLeft = Math.max(APPLY_OVERLAY_MARGIN, window.innerWidth - rect.width - APPLY_OVERLAY_MARGIN)
-  const maxTop = Math.max(APPLY_OVERLAY_MARGIN, window.innerHeight - rect.height - APPLY_OVERLAY_MARGIN)
-  const left = Math.min(Math.max(anchor.left + (anchor.width - rect.width) / 2, APPLY_OVERLAY_MARGIN), maxLeft)
-  const above = anchor.top - rect.height - APPLY_OVERLAY_MARGIN
-  const below = anchor.bottom + APPLY_OVERLAY_MARGIN
-  const availableAbove = anchor.top - APPLY_OVERLAY_MARGIN * 2
-  const availableBelow = window.innerHeight - anchor.bottom - APPLY_OVERLAY_MARGIN * 2
-  const preferredTop = above >= APPLY_OVERLAY_MARGIN ? above
-    : below <= maxTop ? below
-      : availableAbove >= availableBelow ? above : below
-  overlayPos.value = {
-    left,
-    top: Math.min(Math.max(preferredTop, APPLY_OVERLAY_MARGIN), maxTop),
-  }
-}
-
-const keepApplyCardInViewport = () => {
-  const card = applyCardElement.value
-  if (!pendingApply.value || !applyPositionReady.value || !card) return
-  const rect = card.getBoundingClientRect()
-  const maxLeft = Math.max(APPLY_OVERLAY_MARGIN, window.innerWidth - rect.width - APPLY_OVERLAY_MARGIN)
-  const maxTop = Math.max(APPLY_OVERLAY_MARGIN, window.innerHeight - rect.height - APPLY_OVERLAY_MARGIN)
-  overlayPos.value = {
-    left: Math.min(Math.max(overlayPos.value.left, APPLY_OVERLAY_MARGIN), maxLeft),
-    top: Math.min(Math.max(overlayPos.value.top, APPLY_OVERLAY_MARGIN), maxTop),
-  }
-}
-
-const openApplyOverlay = async (rect: DOMRect, element: HTMLElement) => {
-  const anchor = applyAnchorRectOf(rect, element)
-  applyPositionReady.value = false
-  pendingApply.value = true
-  await nextTick()
-  const card = applyCardElement.value
-  if (!pendingApply.value || !card) return
-  positionApplyCard(anchor, card)
-  applyPositionReady.value = true
+  const len = ADD_OPTIONS.length
+  addIdx.value = e.deltaY > 0 ? (addIdx.value + 1) % len : (addIdx.value - 1 + len) % len
 }
 
 // 把视口鼠标坐标换算为画布 content 坐标
@@ -317,53 +175,23 @@ const trackMouseDown = (e: MouseEvent) => {
   mouseDownX = e.clientX
   mouseDownY = e.clientY
   isDeselectClick = hasSelection.value
-  isBlockPress = !!(e.target as HTMLElement).closest?.('.drag-wrapper, .floating-handle, .side-settings, .handle, .block-handle-popup')
+  // 画布拖拽结束后 mouseup 可能落在文档节点上，所以先确认目标元素存在
+  const target = e.target instanceof Element ? e.target : null
+  isBlockPress = !!target?.closest?.('.drag-wrapper, .floating-handle, .side-settings, .handle, .block-handle-popup')
 }
 
 const onMouseUp = (e: MouseEvent) => {
-  if (pendingApply.value) return
   // 无选中块：处于"添加块"状态，画布内左键在鼠标位置直接添加当前滚轮选中的类型（工具栏点击/只读态不触发）
-  if (!hasSelection.value) {
-    // 取消多选的点击已在 mouseup 前清空选中，所以此处拦截避免误入添加分支
-    if (isDeselectClick || isBlockPress) return
-    if (!MdrCRef.value?.isEditMode || e.button !== 0) return
-    if (!(e.target as HTMLElement).closest('.canvas-container')) return
-    // 仅位移小于阈值的简单点击才添加
-    if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > CLICK_DRAG_THRESHOLD) return
-    const key = ADD_OPTIONS[addIdx.value]?.key
-    if (key) MdrCRef.value?.addComponent(key, canvasPointFromMouse(e) ?? undefined)
-    return
-  }
-  if (componentOf.value !== 'RichTextEditor' || Date.now() < applyLockUntil || !selectionInBlock()) return
-  if (opIdx.value === 0) return
-  applyLockUntil = Date.now() + 300
-  pendingActionIndex.value = opIdx.value
-  const selection = window.getSelection()
-  const anchorNode = selection?.anchorNode
-  const anchorElement = anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement
-  if (!anchorElement) return
-  const rangeRect = selection?.getRangeAt(0).getBoundingClientRect()
-  const anchorRect = rangeRect?.width && rangeRect.height
-    ? rangeRect
-    : anchorElement.getBoundingClientRect()
-  void openApplyOverlay(anchorRect, anchorElement)
-}
-
-const confirmApply = () => {
-  pendingApply.value = false
-  applyPositionReady.value = false
-  OPTIONS[pendingActionIndex.value]?.action()
-  // 选区保留会经 mouseup 再次询问，所以应用后同样清除选区并失焦
-  ;(document.activeElement as HTMLElement | null)?.blur?.()
-  window.getSelection()?.removeAllRanges()
-}
-
-const cancelApply = () => {
-  pendingApply.value = false
-  applyPositionReady.value = false
-  // ProseMirror 失焦前会恢复内部选区，所以须先 blur 再清选区，否则右键 mouseup 会重开询问
-  ;(document.activeElement as HTMLElement | null)?.blur?.()
-  window.getSelection()?.removeAllRanges()
+  if (hasSelection.value) return
+  // 取消多选的点击已在 mouseup 前清空选中，所以此处拦截避免误入添加分支
+  if (isDeselectClick || isBlockPress) return
+  if (!MdrCRef.value?.isEditMode || e.button !== 0) return
+  const target = e.target instanceof Element ? e.target : null
+  if (!target?.closest('.canvas-container')) return
+  // 仅位移小于阈值的简单点击才添加
+  if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > CLICK_DRAG_THRESHOLD) return
+  const key = ADD_OPTIONS[addIdx.value]?.key
+  if (key) MdrCRef.value?.addComponent(key, canvasPointFromMouse(e) ?? undefined)
 }
 
 const mobileButtonLabel = computed(() => {
@@ -432,34 +260,6 @@ const load = async () => {
   await MdrCRef.value?.load(raw.content ?? '')
 }
 
-const batchToggleHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
-  const refs = getComponentRefs()
-  Array.from(MdrCRef.value!.state.selectedIds).forEach((id) => {
-    refs[id]?.commands?.toggleHeading?.({ level })
-  })
-}
-
-const batchToggleBold = () => {
-  const refs = getComponentRefs()
-  Array.from(MdrCRef.value!.state.selectedIds).forEach((id) => {
-    refs[id]?.commands?.toggleBold?.()
-  })
-}
-
-const batchToggleItalic = () => {
-  const refs = getComponentRefs()
-  Array.from(MdrCRef.value!.state.selectedIds).forEach((id) => {
-    refs[id]?.commands?.toggleItalic?.()
-  })
-}
-
-const batchToggleUnderline = () => {
-  const refs = getComponentRefs()
-  Array.from(MdrCRef.value!.state.selectedIds).forEach((id) => {
-    refs[id]?.commands?.toggleUnderline?.()
-  })
-}
-
 const deleteSelected = () => {
   if (!MdrCRef.value?.isEditMode || MdrCRef.value.state.selectedIds.size === 0) return
   const ids = Array.from(MdrCRef.value!.state.selectedIds)
@@ -491,7 +291,6 @@ const initializeEditor = async () => {
 
 onMounted(() => {
   void initializeEditor()
-  window.addEventListener('resize', keepApplyCardInViewport)
   // 挂 window 级并显式非 passive（否则 preventDefault 无效）
   window.addEventListener('wheel', cycleOption, { passive: false })
   // 选字可能跨出编辑器，所以挂 window 级 mouseup
@@ -501,7 +300,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', keepApplyCardInViewport)
   window.removeEventListener('wheel', cycleOption)
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('mousedown', trackMouseDown)
@@ -536,20 +334,8 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
 
-/* v-overlay__content 尺寸为 0（inset 失效），所以用 vw/vh 显式铺满并置 z 高于 scrim */
-.apply-layer {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 1;
-}
-.apply-card {
-  position: absolute;
-  min-width: min(240px, calc(100vw - 16px));
-  max-width: calc(100vw - 16px);
-  max-height: calc(100vh - 16px);
-  overflow: auto;
+/* 只给容器，不参与 flex 布局（空时不占位，teleport 进来的按钮组与其它按钮同排） */
+.rich-text-mode-slot {
+  display: contents;
 }
 </style>

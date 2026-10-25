@@ -29,6 +29,44 @@
           <RowDropIndicator :editor="editor" />
         </Teleport>
       </ProseKit>
+      <!-- 格式模式属于富文本块，所以按钮组留在本组件、只把 DOM 塞进页面工具栏 -->
+      <Teleport to="#rich-text-mode-slot" defer>
+        <v-btn-toggle v-if="showFormatModes" class="rich-text-mode-toggle" :model-value="modeIndex"
+          @update:model-value="onSelectMode" mandatory>
+          <v-btn v-for="(mode, index) in FORMAT_MODES" :key="mode.label" :value="index" :title="mode.label">
+            <v-icon :icon="mode.icon" />
+          </v-btn>
+        </v-btn-toggle>
+      </Teleport>
+      <!-- 工具栏在视口顶部，指针在块内看不到按钮组变化，所以滚轮切换时在指针旁给瞬时提示 -->
+      <Teleport to="body">
+        <Transition name="format-mode-hint">
+          <div v-if="modeHint.visible" class="format-mode-hint"
+            :style="{ left: `${modeHint.x}px`, top: `${modeHint.y}px`, zIndex: Z_LAYER.formatModeHint }">
+            <span class="format-mode-hint-label">{{ modeHint.label }}</span>
+            <span class="format-mode-hint-caption">Alt + 滚轮切换格式</span>
+          </div>
+        </Transition>
+      </Teleport>
+      <v-overlay v-model="pendingApply" persistent scroll-strategy="none">
+        <div class="apply-layer" @click.left="confirmApply" @mousedown.right="cancelApply" @contextmenu.prevent="cancelApply">
+          <v-card :ref="setApplyCardElement" class="apply-card"
+            :style="{
+              left: `${overlayPos.left}px`,
+              top: `${overlayPos.top}px`,
+              visibility: applyPositionReady ? 'visible' : 'hidden',
+            }">
+            <v-card-text class="text-center pb-0">
+              <div>切换「{{ pendingLabel }}」？</div>
+              <div class="text-caption text-medium-emphasis mt-1">左键应用 · 右键取消</div>
+            </v-card-text>
+            <v-card-actions class="justify-end ga-1">
+              <v-btn size="small" variant="text" @click.stop="cancelApply">取消</v-btn>
+              <v-btn size="small" color="primary" @click.stop="confirmApply">应用</v-btn>
+            </v-card-actions>
+          </v-card>
+        </div>
+      </v-overlay>
     </div>
     <!-- 视口外的块只留静态快照，省掉 ProseMirror 的插件 state、RO 与逐块 window 捕获监听 -->
     <div v-else class="virtual-snapshot inner-component" v-html="snapshot" />
@@ -59,15 +97,16 @@ import 'prosekit/pm/view/style/prosemirror.css'
 
 import blockHandle from './extensions/block-handle.vue'
 import RowDropIndicator from './extensions/RowDropIndicator.vue'
-import { ref, onMounted, onUnmounted, computed, reactive, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, reactive, watch, nextTick } from 'vue'
 import { ProseKit, useDocChange } from '@prosekit/vue'
 import { useDisplay } from 'vuetify'
-import { mdiNoteText } from '@mdi/js'
+import { mdiNoteText, mdiMouse, mdiFormatHeader1, mdiFormatBold, mdiFormatItalic, mdiFormatUnderline } from '@mdi/js'
 
 import { defineExtension } from './extension.ts'
 import { createEditor, NodeJSON } from '@prosekit/core'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY, viewportToLayout } from './extensions/blockHandleUtils.ts'
 import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue'
+import { Z_LAYER } from '../../Core/zIndex.ts'
 import type { MdrCanvasComponentContentProps } from '../../Core/MdrCanvasComponentBase.types.ts'
 import type { WidgetConfig } from '../../Registry/canvasComponents.ts'
 import type { BlockCanvasController, BlockComponentController } from '../../Core/canvasComponentControllers.ts'
@@ -259,6 +298,191 @@ function scrollContent(deltaY: number) {
   if (scrollRef.value) scrollRef.value.scrollTop += deltaY
 }
 
+const FORMAT_MODES = [
+  { icon: mdiMouse, label: '指针' },
+  { icon: mdiFormatHeader1, label: '标题' },
+  { icon: mdiFormatBold, label: '加粗' },
+  { icon: mdiFormatItalic, label: '斜体' },
+  { icon: mdiFormatUnderline, label: '下划线' },
+] as const
+
+const modeIndex = ref(0)
+const showFormatModes = computed(() => props.base.active === true && !readOnly.value)
+
+// 取消选中后不该保留旧格式模式，否则再次选中同一块会直接套用上次的选择
+watch(() => props.base.active, (active) => {
+  if (!active) modeIndex.value = 0
+})
+
+const onSelectMode = (index: number | null) => {
+  if (index == null) return
+  modeIndex.value = index
+}
+
+// 触摸板一次滑动会连发几十个 wheel，40ms 内的残余事件算同一手势，确保一次手势只切一格
+const MODE_WHEEL_GESTURE_MS = 40
+const MODE_HINT_DURATION = 1200
+const MODE_HINT_OFFSET = 16
+const MODE_HINT_WIDTH = 220
+const MODE_HINT_HEIGHT = 64
+let lastModeWheelAt = 0
+let modeHintTimer = 0
+
+const modeHint = ref({ visible: false, label: '', x: 0, y: 0 })
+
+const showModeHint = (label: string, event: WheelEvent) => {
+  modeHint.value = {
+    visible: true,
+    label,
+    x: Math.min(event.clientX + MODE_HINT_OFFSET, window.innerWidth - MODE_HINT_WIDTH),
+    y: Math.min(event.clientY + MODE_HINT_OFFSET, window.innerHeight - MODE_HINT_HEIGHT),
+  }
+  if (modeHintTimer) clearTimeout(modeHintTimer)
+  modeHintTimer = window.setTimeout(() => {
+    modeHint.value = { ...modeHint.value, visible: false }
+    modeHintTimer = 0
+  }, MODE_HINT_DURATION)
+}
+
+// 普通滚轮要留给内容/画布，所以只有按住 Alt 才抢来切换格式模式
+const onModeWheel = (event: WheelEvent) => {
+  if (!event.altKey || !showFormatModes.value) return
+  if (!(event.target as HTMLElement | null)?.closest?.('.canvas-container')) return
+  // Alt 下滚轮专用于切模式，所以连同滚动条元素上的 wheel 处理器一起拦掉，否则会同时滚内容
+  event.preventDefault()
+  event.stopPropagation()
+  const now = performance.now()
+  if (now - lastModeWheelAt < MODE_WHEEL_GESTURE_MS) return
+  lastModeWheelAt = now
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+  const len = FORMAT_MODES.length
+  modeIndex.value = event.deltaY > 0 ? (modeIndex.value + 1) % len : (modeIndex.value - 1 + len) % len
+  showModeHint(FORMAT_MODES[modeIndex.value].label, event)
+}
+
+const applyFormatMode = (index: number) => {
+  const commands = editor.commands
+  switch (index) {
+    case 1: commands.toggleHeading({ level: 1 }); break
+    case 2: commands.toggleBold(); break
+    case 3: commands.toggleItalic(); break
+    case 4: commands.toggleUnderline(); break
+    default: break
+  }
+}
+
+const isSelectionInsideEditor = (): boolean => {
+  if (!editorMounted) return false
+  const sel = window.getSelection()
+  const dom = editor.view.dom
+  return !!sel && !sel.isCollapsed && !!sel.anchorNode && !!sel.focusNode &&
+    dom.contains(sel.anchorNode) && dom.contains(sel.focusNode)
+}
+
+const APPLY_OVERLAY_MARGIN = 8
+const APPLY_LOCK_MS = 300
+let applyLockUntil = 0
+
+interface ViewportRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
+}
+
+const pendingApply = ref(false)
+const pendingFormat = ref(0)
+const pendingLabel = computed(() => FORMAT_MODES[pendingFormat.value]?.label ?? '格式')
+const overlayPos = ref({ left: 0, top: 0 })
+const applyPositionReady = ref(false)
+const applyCardElement = ref<HTMLElement | null>(null)
+
+const setApplyCardElement = (element: unknown) => {
+  applyCardElement.value = (element as { $el?: HTMLElement } | null)?.$el
+    ?? (element as HTMLElement | null)
+}
+
+const applyAnchorRectOf = (rect: DOMRect, element: HTMLElement): ViewportRect => {
+  const width = layoutToViewportSize(element, rect.width)
+  const height = layoutToViewportSize(element, rect.height)
+  const left = layoutToViewportX(element, rect.left)
+  const top = layoutToViewportY(element, rect.top)
+  return { left, top, right: left + width, bottom: top + height, width, height }
+}
+
+const positionApplyCard = (anchor: ViewportRect, card: HTMLElement) => {
+  const rect = card.getBoundingClientRect()
+  const maxLeft = Math.max(APPLY_OVERLAY_MARGIN, window.innerWidth - rect.width - APPLY_OVERLAY_MARGIN)
+  const maxTop = Math.max(APPLY_OVERLAY_MARGIN, window.innerHeight - rect.height - APPLY_OVERLAY_MARGIN)
+  const left = Math.min(Math.max(anchor.left + (anchor.width - rect.width) / 2, APPLY_OVERLAY_MARGIN), maxLeft)
+  const above = anchor.top - rect.height - APPLY_OVERLAY_MARGIN
+  const below = anchor.bottom + APPLY_OVERLAY_MARGIN
+  const availableAbove = anchor.top - APPLY_OVERLAY_MARGIN * 2
+  const availableBelow = window.innerHeight - anchor.bottom - APPLY_OVERLAY_MARGIN * 2
+  const preferredTop = above >= APPLY_OVERLAY_MARGIN ? above
+    : below <= maxTop ? below
+      : availableAbove >= availableBelow ? above : below
+  overlayPos.value = {
+    left,
+    top: Math.min(Math.max(preferredTop, APPLY_OVERLAY_MARGIN), maxTop),
+  }
+}
+
+const keepApplyCardInViewport = () => {
+  const card = applyCardElement.value
+  if (!pendingApply.value || !applyPositionReady.value || !card) return
+  const rect = card.getBoundingClientRect()
+  const maxLeft = Math.max(APPLY_OVERLAY_MARGIN, window.innerWidth - rect.width - APPLY_OVERLAY_MARGIN)
+  const maxTop = Math.max(APPLY_OVERLAY_MARGIN, window.innerHeight - rect.height - APPLY_OVERLAY_MARGIN)
+  overlayPos.value = {
+    left: Math.min(Math.max(overlayPos.value.left, APPLY_OVERLAY_MARGIN), maxLeft),
+    top: Math.min(Math.max(overlayPos.value.top, APPLY_OVERLAY_MARGIN), maxTop),
+  }
+}
+
+const openApplyOverlay = async (rect: DOMRect) => {
+  const wrapper = wrapperRef.value
+  if (!wrapper) return
+  const anchor = applyAnchorRectOf(rect, wrapper)
+  applyPositionReady.value = false
+  pendingApply.value = true
+  await nextTick()
+  const card = applyCardElement.value
+  if (!pendingApply.value || !card) return
+  positionApplyCard(anchor, card)
+  applyPositionReady.value = true
+}
+
+const onSelectionMouseUp = () => {
+  if (!showFormatModes.value || pendingApply.value || modeIndex.value === 0) return
+  if (Date.now() < applyLockUntil || !isSelectionInsideEditor()) return
+  const selection = window.getSelection()
+  const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null
+  if (!rect?.width || !rect.height) return
+  applyLockUntil = Date.now() + APPLY_LOCK_MS
+  pendingFormat.value = modeIndex.value
+  void openApplyOverlay(rect)
+}
+
+const confirmApply = () => {
+  pendingApply.value = false
+  applyPositionReady.value = false
+  applyFormatMode(pendingFormat.value)
+  // 选区保留会经 mouseup 再次询问，所以应用后同样清除选区并失焦
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  window.getSelection()?.removeAllRanges()
+}
+
+const cancelApply = () => {
+  pendingApply.value = false
+  applyPositionReady.value = false
+  // ProseMirror 失焦前会恢复内部选区，所以须先 blur 再清选区，否则右键 mouseup 会重开询问
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  window.getSelection()?.removeAllRanges()
+}
+
 // 再加上 .content-area 上下 padding(8) 与 border(2)，共 10
 const AUTO_HEIGHT_EXTRA = 10
 // auto-height 类解除了 height:100% 钳制，所以 offsetHeight 即内容自然高度
@@ -359,6 +583,10 @@ onMounted(() => {
     })
   }
   window.addEventListener('Mindrizzle:canvas-transform', onCanvasTransform)
+  // 捕获阶段：popup 与滚动条的 wheel 会 stopPropagation，按 Alt 切换必须抢在它们前面
+  window.addEventListener('wheel', onModeWheel, { passive: false, capture: true })
+  window.addEventListener('mouseup', onSelectionMouseUp)
+  window.addEventListener('resize', keepApplyCardInViewport)
   onUnmounted(() => observer.disconnect())
 })
 
@@ -368,9 +596,14 @@ onUnmounted(() => {
   metricsFrame = 0
   if (contentResizeFrame) cancelAnimationFrame(contentResizeFrame)
   contentResizeFrame = 0
+  if (modeHintTimer) clearTimeout(modeHintTimer)
+  modeHintTimer = 0
   stopScrollbarDrag()
   editor.unmount()
   window.removeEventListener('Mindrizzle:canvas-transform', onCanvasTransform)
+  window.removeEventListener('wheel', onModeWheel, true)
+  window.removeEventListener('mouseup', onSelectionMouseUp)
+  window.removeEventListener('resize', keepApplyCardInViewport)
 })
 
 // 开启瞬间按当前内容测一次
@@ -589,5 +822,57 @@ defineExpose({
 .editor-wrapper.compact :deep(.block-handle-btn svg) {
   width: 22px;
   height: 22px;
+}
+
+/* teleport 到工具栏拿不到页面里的 scoped 样式，所以按钮组自带未选中底色 */
+.rich-text-mode-toggle :deep(.v-btn:not(.v-btn--selected)) {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+
+/* 提示挂在 body、用固定视觉坐标跟随指针，所以自带深色底避免受主题变量影响对比度 */
+.format-mode-hint {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.format-mode-hint-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.format-mode-hint-caption {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.format-mode-hint-enter-active,
+.format-mode-hint-leave-active {
+  transition: opacity 0.15s ease;
+}
+.format-mode-hint-enter-from,
+.format-mode-hint-leave-to {
+  opacity: 0;
+}
+
+/* v-overlay__content 尺寸为 0（inset 失效），所以用 vw/vh 显式铺满并置 z 高于 scrim */
+.apply-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+}
+.apply-card {
+  position: absolute;
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
 }
 </style>

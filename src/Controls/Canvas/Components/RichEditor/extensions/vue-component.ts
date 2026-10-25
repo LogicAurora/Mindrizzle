@@ -13,6 +13,7 @@ import {
   markRaw,
   provide,
   Teleport,
+  nextTick,
 } from 'vue'
 import { mdiArrowBottomRight, mdiCogOutline, mdiExportVariant } from '@mdi/js'
 import { Z_LAYER } from '../../../Core/zIndex.ts'
@@ -102,6 +103,8 @@ const toolTone = 'var(--v-theme-on-surface, #000000)'
 const TOOLBAR_HEIGHT = 22
 const TOOL_BUTTON_SIZE = 20
 const SETTINGS_POP_WIDTH = 240
+const SETTINGS_POP_GAP = 6
+const SETTINGS_POP_MARGIN = 8
 
 const toolButtonStyle = (active: boolean, cursor: string) => ({
   display: 'inline-flex',
@@ -177,13 +180,34 @@ const ResizableContainer = defineComponent({
     const settingsPos = ref({ left: 0, top: 0 })
     provide(EMBED_SETTINGS_HOST_KEY, settingsHostRef)
 
-    // 弹层挂在 body，点外面就收起；点按钮自身交给 toggle 处理
+    // 弹层挂在 body，点外面就收起；下拉菜单也 teleport 到 overlay 容器，点它不能算「外面」
     const closeSettingsOnOutside = (event: MouseEvent) => {
       if (!settingsOpen.value) return
       const target = event.target as Node | null
       if (!target) return
-      if (settingsPopRef.value?.contains(target) || settingsAnchorRef.value?.contains(target)) return
+      if (isInsideSettingsUi(target)) return
       settingsOpen.value = false
+    }
+
+    const isInsideSettingsUi = (target: Node): boolean =>
+      settingsPopRef.value?.contains(target) === true ||
+      settingsAnchorRef.value?.contains(target) === true ||
+      (target instanceof Element && !!target.closest('.v-overlay-container'))
+
+    // 面板常驻 DOM（只是不可见），所以随时能量高；下方放不下就翻到按钮上方
+    const placeSettings = (anchor: HTMLElement) => {
+      const rect = anchor.getBoundingClientRect()
+      const height = settingsPopRef.value?.offsetHeight ?? 0
+      const maxTop = Math.max(SETTINGS_POP_MARGIN, window.innerHeight - height - SETTINGS_POP_MARGIN)
+      const below = layoutToViewportY(anchor, rect.bottom) + SETTINGS_POP_GAP
+      const above = layoutToViewportY(anchor, rect.top) - height - SETTINGS_POP_GAP
+      settingsPos.value = {
+        left: Math.max(SETTINGS_POP_MARGIN, Math.min(
+          layoutToViewportX(anchor, rect.right) - SETTINGS_POP_WIDTH,
+          window.innerWidth - SETTINGS_POP_WIDTH - SETTINGS_POP_MARGIN,
+        )),
+        top: below <= maxTop ? below : Math.max(SETTINGS_POP_MARGIN, Math.min(above, maxTop)),
+      }
     }
 
     const toggleSettings = (event: MouseEvent) => {
@@ -195,14 +219,8 @@ const ResizableContainer = defineComponent({
       }
       const anchor = event.currentTarget as HTMLElement
       settingsAnchorRef.value = anchor
-      const rect = anchor.getBoundingClientRect()
-      // 弹层在 body（zoom 容器外），所以按钮矩形是布局坐标、需要换算成视觉坐标再夹进视口
-      const left = layoutToViewportX(anchor, rect.right) - SETTINGS_POP_WIDTH
-      settingsPos.value = {
-        left: Math.max(8, Math.min(left, window.innerWidth - SETTINGS_POP_WIDTH - 8)),
-        top: layoutToViewportY(anchor, rect.bottom) + 6,
-      }
       settingsOpen.value = true
+      void nextTick(() => placeSettings(anchor))
     }
 
     const stopWatchWidth = watch(
@@ -429,7 +447,10 @@ const ResizableContainer = defineComponent({
                   left: `${settingsPos.value.left}px`,
                   top: `${settingsPos.value.top}px`,
                   width: `${SETTINGS_POP_WIDTH}px`,
-                  display: settingsOpen.value ? 'block' : 'none',
+                  // 常驻布局才能量高度算展开方向，关闭时用可见性而不是 display 隐藏
+                  display: 'block',
+                  visibility: settingsOpen.value ? 'visible' : 'hidden',
+                  pointerEvents: settingsOpen.value ? 'auto' : 'none',
                   zIndex: Z_LAYER.settingsMenu,
                   background: 'rgb(var(--v-theme-surface))',
                   border: `1px solid rgba(${toolTone}, 0.12)`,

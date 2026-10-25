@@ -1,6 +1,6 @@
 // 画布叠加层 z-index 体系（全项目唯一事实来源）。
 // CSS（scoped）无法引用 TS 常量，各处硬编码的 z-index 必须与本表一致，改动需同步：
-// settingsDropdown 2110 > settingsMenu 2100 > popup 1005 > 曲别针 1004 > 缩放手柄 1003 > 描边环 1002 > 拖拽栏 1001 > 选中块 1000 > itemZLimit 500
+// settingsDropdown 2110 > settingsMenu 2100 > formatModeHint 1010 > popup 1005 > 曲别针 1004 > 缩放手柄 1003 > 描边环 1002 > 拖拽栏 1001 > 选中块 1000 > itemZLimit 500
 export const Z_LAYER = {
   popup: 1005,
   paperclip: 1004,
@@ -13,5 +13,7 @@ export const Z_LAYER = {
   settingsMenu: 2100,
   // 设置项里的下拉菜单也挂在 body，必须高于设置菜单卡片，否则选项被卡片盖住点不到
   settingsDropdown: 2110,
+  // 格式模式的滚轮提示挂在 body、只是瞬时反馈，只需压过画布浮层
+  formatModeHint: 1010,
   appLoadingCurtain: 10002,
 } as const

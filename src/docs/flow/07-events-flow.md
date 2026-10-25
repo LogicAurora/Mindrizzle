@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-4 -->
+<!-- 最后验证: 2026-10-25 -->
 # 07 事件连锁反应
 
 > 事件契约见 02-contracts.md，本文件回答"派发之后发生了什么"。
@@ -55,6 +55,34 @@ flowchart TD
 ```
 
 > `document.body.classList.contains('block-handle-dragging')` 是跨编辑器抑制 UI 的**全局 lock**。
+
+## 图 7.4 工具栏按钮组的滚轮切换
+
+```mermaid
+flowchart TD
+  A["window wheel（冒泡）"] --> B["Editor.cycleOption"]
+  B --> C{"指针在 .canvas-container 内？"}
+  C -->|否| Z["忽略"]
+  C -->|是| D{"在滚动条/可滚容器上或有选中？"}
+  D -->|是| Z
+  D -->|否| E["preventDefault + 循环切换添加类型"]
+
+  F["window wheel（捕获，先于 stopPropagation）"] --> G["RichTextEditor.onModeWheel"]
+  G --> H{"按住 Alt 且本块选中且非只读？"}
+  H -->|否| Z
+  H -->|是| I["preventDefault + stopPropagation（不滚内容/滚动条）"]
+  I --> I2{"距上次切换 < 40ms（同一手势残余）？"}
+  I2 -->|是| Z
+  I2 -->|否| I3["循环切换格式模式 + 指针旁提示 1.2s"]
+  I3 --> J["按钮组经 Teleport 渲染在 #rich-text-mode-slot"]
+
+  K["window mouseup"] --> L["RichTextEditor.onSelectionMouseUp"]
+  L --> M{"格式模式非指针且选区在本文块内？"}
+  M -->|否| Z
+  M -->|是| N["v-overlay 确认：左键应用、右键取消"]
+```
+
+> 富文本格式模式的生命周期完全在块内部（含应用与确认 overlay），页面只提供 `#rich-text-mode-slot` 容器；普通滚轮不再切格式，否则会与块内滚动冲突。
 
 ## 维护提示
 

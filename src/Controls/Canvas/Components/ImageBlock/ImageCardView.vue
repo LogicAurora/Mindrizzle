@@ -2,7 +2,7 @@
   <div class="image-card">
     <div v-if="imageUrl && fit === 'tile'" class="image-tile" :style="tileStyle" role="img" :aria-label="alt" />
     <v-img v-else-if="imageUrl" :src="imageUrl" :alt="alt" :cover="fit === 'cover'"
-      :class="['image-preview', { 'fit-fill': fit === 'fill' }]" />
+      :class="['image-preview', `fit-${fit}`]" />
     <div v-else class="image-empty">
       <v-progress-circular v-if="isLoading" indeterminate size="28" color="primary" />
       <template v-else>
@@ -153,12 +153,25 @@ defineExpose({ openPicker, showError, naturalSize })
   height: 100%;
 }
 
+/* v-img 会按图片比例把内部 img 缩成 contain 尺寸，嵌入块里就填不满节点（拉伸模式只剩一小块），所以统一铺满容器；
+   编辑器排版样式还给 img 加了外边距，会把它顶出容器，一并清零 */
 .image-preview :deep(img) {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  max-width: 100%;
+  max-height: 100%;
+  inset: 0;
+  object-fit: contain;
   user-select: none;
 }
 
 .image-card .fit-fill :deep(img) {
   object-fit: fill;
+}
+
+.image-card .fit-cover :deep(img) {
+  object-fit: cover;
 }
 
 .image-tile {
