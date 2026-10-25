@@ -14,37 +14,28 @@ import {
 } from 'vue'
 import { mdiArrowBottomRight, mdiExportVariant } from '@mdi/js'
 import { DEFAULT_CONSTRAINTS, normalizeConstraints, type ResizeConstraints } from '../../../Registry/resizeConstraints.ts'
+import { embeddedBlockOf } from '../../../Sdk/blockRegistry.ts'
 import { createStoreResolver, findPositionerEl, viewportToLayout } from './blockHandleUtils.ts'
 
 const resolveBlockHandleStore = createStoreResolver()
 
-interface ComponentEntry {
-  loader: () => Promise<{
-    default: any
-    resizeConstraints?: ResizeConstraints
-  }>
-  aspectRatio?: number | null
-}
-
-const componentMap: Record<string, ComponentEntry> = {
-  CodeBlock: {
-    loader: () => import('../../../Components/EditableCodeBlock.vue'),
-  },
-}
-
 const loadedCache = new Map<
   string,
-  { component: any; constraints: Required<ResizeConstraints> }
+  { component: any; constraints: Required<ResizeConstraints>; aspectRatio: number | null }
 >()
 
+// 内嵌组件与画布块同一注册表，避免同一类块在两处各自维护一份
 async function loadComponent(name: string) {
-  if (loadedCache.has(name)) return loadedCache.get(name)!
-  const entry = componentMap[name]
-  if (!entry) throw new Error(`未知组件：${name}`)
-  const module = await entry.loader()
-  const comp = module.default
-  const constraints = normalizeConstraints(module.resizeConstraints)
-  const result = { component: comp, constraints }
+  const cached = loadedCache.get(name)
+  if (cached) return cached
+  const definition = embeddedBlockOf(name)
+  const component = definition?.embed?.component ?? definition?.rawComponent
+  if (!definition || !component) throw new Error(`未知组件：${name}`)
+  const result = {
+    component,
+    constraints: normalizeConstraints(definition.constraints),
+    aspectRatio: definition.embed?.aspectRatio ?? null,
+  }
   loadedCache.set(name, result)
   return result
 }
@@ -348,20 +339,23 @@ export const vueComponentNodeView = defineVueNodeView({
       const state = reactive<{
         component: any | null
         constraints: Required<ResizeConstraints>
+        aspectRatio: number | null
         loaded: boolean
         error?: string
       }>({
         component: null,
         constraints: { ...DEFAULT_CONSTRAINTS },
+        aspectRatio: null,
         loaded: false,
       })
 
       const load = async () => {
         const name = node.value.attrs.componentName as string
         try {
-          const { component, constraints } = await loadComponent(name)
+          const { component, constraints, aspectRatio } = await loadComponent(name)
           state.component = markRaw(component)
           state.constraints = constraints
+          state.aspectRatio = aspectRatio
           state.loaded = true
           state.error = undefined
         } catch (err: any) {
@@ -486,7 +480,6 @@ export const vueComponentNodeView = defineVueNodeView({
 
       return () => {
         const currentNode = node.value
-        const componentName = currentNode.attrs.componentName as string
         const componentProps = currentNode.attrs.props as Record<string, any>
 
         if (!state.loaded) {
@@ -515,8 +508,7 @@ export const vueComponentNodeView = defineVueNodeView({
         }
 
         const Comp = state.component
-        const entry = componentMap[componentName]
-        const aspectRatio = entry?.aspectRatio ?? null
+        const aspectRatio = state.aspectRatio
 
         const innerContent = h(
           'div',

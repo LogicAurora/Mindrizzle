@@ -29,7 +29,8 @@
 | 10-utils.md | 工具函数索引 |
 | 11-workarounds.md | 非逻辑防御清单 |
 
-> 组件开发（base props、controller、注册表、虚拟化）见 [../components/](../components/)。
+> 组件开发（定义、上下文、设置面板、私有文件）见 [../components/](../components/)：
+> 先读 [快速上手](../components/01-quick-start.md)。
 
 ## 维护规则
 

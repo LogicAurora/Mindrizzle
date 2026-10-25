@@ -14,7 +14,10 @@
       <!-- 只盖接触段、露出段保留边框，所以按段渲染同色遮罩 -->
       <div v-for="mask in masks" :key="`${mask.side}-${mask.start}`" class="edge-mask" :style="maskStyleOf(mask)" />
       <div class="content-area">
-        <slot />
+        <!-- 未传 virtualized 是 raw 旧写法，快照由块自己渲染 -->
+        <slot v-if="virtualized === undefined" />
+        <div v-else-if="virtualized" class="virtual-snapshot inner-component" v-html="snapshot" />
+        <div v-else ref="contentEl" class="inner-component"><slot /></div>
       </div>
     </v-sheet>
 
@@ -84,6 +87,7 @@ const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   dragging: false,
   showHandle: false,
   showSettings: false,
+  settingsAvailable: true,
   handles: () => ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'],
   zIndex: 0,
   zoom: 1,
@@ -102,6 +106,7 @@ const emit = defineEmits<{
 
 const resizeBoxRef = ref<{ rootEl: HTMLElement | null } | null>(null)
 const canvasEl = ref<HTMLElement | null>(null)
+const contentEl = ref<HTMLElement | null>(null)
 onMounted(() => {
   canvasEl.value = resizeBoxRef.value?.rootEl?.closest('.canvas') ?? null
 })
@@ -129,7 +134,8 @@ const showFloatingHandle = computed(() =>
 // 无设置插槽的块不该出现空按钮，所以显隐由插槽实际存在与否兜底
 const slots = useSlots()
 const showFloatingSettings = computed(() =>
-  props.showSettings && props.active && props.draggable && !props.readOnly && !!slots.settings)
+  props.showSettings && props.active && props.draggable && !props.readOnly &&
+  props.settingsAvailable && !!slots.settings)
 
 // 菜单挂在 body，须与按钮同处视觉坐标；`.canvas` 的 zoom 会让 BCR 变成布局坐标，所以经工具换算
 const SETTINGS_MENU_WIDTH = 240
@@ -258,7 +264,7 @@ provide(COMPONENT_CONTROLLER_KEY, componentController)
 provide(CANVAS_CONTROLLER_KEY, canvasController)
 
 // provide 只对后代生效，而块组件是 base 的父级，所以同时 expose 给块组件直接调用
-defineExpose({ controller: componentController, canvasController })
+defineExpose({ controller: componentController, canvasController, getContentEl: () => contentEl.value })
 
 const onHandleDown = (event: MouseEvent) => {
   if (event.button !== 0) return
@@ -338,6 +344,16 @@ const onHandleDown = (event: MouseEvent) => {
   min-height: 0;
   height: 100%;
   width: 100%;
+}
+
+/* 快照是克隆的组件 DOM，用 display:contents 让它直接充当 content-area 的 flex 子项 */
+.content-area :deep(.inner-component.virtual-snapshot) {
+  display: contents;
+}
+
+/* 克隆里残留的 pointer-events:auto 会吞掉指针事件，所以整棵子树穿透 */
+.content-area :deep(.virtual-snapshot *) {
+  pointer-events: none !important;
 }
 
 .floating-handle {

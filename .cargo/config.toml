@@ -1,6 +1,0 @@
-# 本机默认的 USTC 镜像对 crates.io 代理返回 403，改用可达的 rsproxy 解析依赖
-[source.crates-io]
-replace-with = "rsproxy"
-
-[source.rsproxy]
-registry = "sparse+https://rsproxy.cn/index/"

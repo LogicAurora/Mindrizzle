@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-10-24 -->
 # 05 块生命周期
 
 ## 三种状态
@@ -71,12 +71,16 @@ flowchart TD
   A["virtualizeBlock(item)"] --> B["查 .drag-wrapper[data-uuid] .inner-component"]
   B --> C{"存在？"}
   C -->|否| Z["返回空串"]
-  C -->|是| D["saveConfig 落回 config"]
+  C -->|是| D["flushConfig() ?? saveConfig() 落回 config"]
   D --> E["scrollRecordsOf 记录滚动位置"]
-  E --> F["sanitizeSnapshot 去 contenteditable/tabindex"]
-  F --> G["返回 HTML 快照"]
+  E --> F["snapshotHtml() ?? root.outerHTML"]
+  F --> G["sanitizeSnapshot 去 contenteditable/tabindex"]
   G --> H["virtualSnapshots[id] = 快照"]
 ```
+
+- SDK 宿主块的 `snapshotHtml()` 按注册项的 `snapshot` 声明产出：`'html'` 取块内 DOM、`'none'` 留占位、
+  函数则自绘（canvas / WebGL / iframe 类必须自绘，DOM 克隆是空白）。
+- 无论哪条路线，快照都仍过一遍 `sanitizeSnapshot`，并保留 `.inner-component` 类的交接约束。
 
 > 顺序很重要：**先 saveConfig → 再记录滚动 → 最后克隆 HTML**。实例一去，doc 与 DOM 都取不到。
 

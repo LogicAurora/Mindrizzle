@@ -68,17 +68,19 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 | `src/Controls/Canvas/Core/` | 画布本体：`MdrCanvas.vue`、块壳、缩放手柄、浮层几何与 z-index |
 | `src/Controls/Canvas/Core/MdrCanvas.vue` | 画布核心：平移/缩放/框选/拖拽/联结/贴合遮罩/自动布局 |
 | `src/Controls/Canvas/Core/ResizeBox.vue` | 单块容器与缩放手柄（手柄 Teleport 到 `.canvas` 顶层） |
-| `src/Controls/Canvas/Core/MdrCanvasComponentBase.vue` | 块通用壳：几何、拖拽栏、设置插槽、controller（见 `src/docs/components/`） |
+| `src/Controls/Canvas/Core/MdrCanvasComponentBase.vue` | 块壳：几何、拖拽栏、设置插槽、虚拟化（`virtualized` / `snapshot`） |
 | `src/Controls/Canvas/Core/canvasComponentControllers.ts` | 块 ↔ 画布控制器契约（移动 / 改尺寸 / 平移 / 缩放 / 视图） |
 | `src/Controls/Canvas/Core/blockFloatGeometry.ts` | 拖拽栏、设置栏、遮罩几何与浮层 z 的唯一来源 |
 | `src/Controls/Canvas/Core/zIndex.ts` | 叠加层 z-index 的唯一事实来源 |
-| `src/Controls/Canvas/Registry/` | 可注册组件的唯一注册表（`canvasComponents.ts`）与尺寸约束 |
-| `src/Controls/Canvas/Components/` | 可注册的块组件：富文本、代码块、测试台 |
+| `src/Controls/Canvas/Sdk/` | 块 SDK：`BlockShell.vue`、`blockContext.ts`、`defineBlock.ts`、`blockRegistry.ts`、`PluginBlockHost.vue` |
+| `src/Controls/Canvas/Registry/` | 块定义自动收集（`canvasComponents.ts` 扫 `*.block.ts`）与尺寸约束 |
+| `src/Controls/Canvas/Components/` | 内置块：富文本、代码块、图片、测试台、插件探针（每个都有同名 `.block.ts`） |
 | `src/Controls/Canvas/Components/RichEditor/` | 富文本编辑器、block-handle 扩展、插入组件节点视图 |
 | `src/Controls/Canvas/Components/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
 | `src/utils/canvasCoords.ts` | content ↔ 视口坐标换算的唯一来源 |
 | `src/utils/componentDataStore.ts` | 组件私有文件 `mdrfcd://` 读写唯一入口（归档内 `ComponentsData/<uuid>/`） |
 | `src/Views/Editor.vue` | 路由页面与工具栏交互（滚轮切工具、选区确认 overlay） |
+| `src/docs/components/` | 块开发文档（从 `01-quick-start.md` 读起） |
 | `src-tauri/src/mdr_file_*.rs` | `.mdrf` 归档读写、缓存目录、IPC 命令 |
 
 ## 硬约束
@@ -121,6 +123,14 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 - block-handle 的 store 必须从 positioner 自身派发 `aria-ui:context-request` 解析（positioner 已 Teleport 出 wrapper）。
 - `.forced-open` / `.popup-keep` 只写 `display` / `visibility` 的 `!important`，不要一起写 `opacity`/`scale`，否则会盖掉 `@starting-style` 入场动画。
 - 缩放环境下的 hover 由 `useHoverState` 自解析并经 `store.hoverState.set()` 独占，同时用合成 `pointermove` 让 ProseKit 的定位自洽；两者缺一都会出现「popup 不出现」或「拖拽源为空」。
+
+### 块 SDK
+
+- 新增块在 `Components/` 下放一对同名文件（`Xxx.block.ts` 定义 + `Xxx.vue` 组件），`canvasComponents.ts` 自动收集，禁止再手写注册项；块组件根用 `BlockShell`、`useBlockContext()` 取上下文、`#settings` 插槽写设置面板。
+- 虚拟化已下沉到 `MdrCanvasComponentBase`（`virtualized` / `snapshot` props）：块内不要再写 `v-if="!virtualized"` 与 `.virtual-snapshot` 分支。
+- 写配置只走 `ctx.setConfig(patch)`：`config` 是 `markRaw` 原始对象，直改既不重渲染也不落盘。
+- 虚拟化快照由宿主调 `snapshotHtml()` 产出；`canvas`/WebGL/iframe 类必须声明函数式 `snapshot`，DOM 克隆是空白。
+- 富文本内嵌组件按 `embed.nodeName` 反查同一注册表，不得再新建第二份组件映射。
 
 ### 交互语义
 

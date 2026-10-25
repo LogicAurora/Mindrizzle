@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-10-24 -->
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -45,6 +45,31 @@ flowchart LR
 | `Mindrizzle:extract-component` | vue-component | MdrCanvas | 插入组件拖出成块 |
 | `Mindrizzle:rich-text-read-only` | RichTextEditor | vue-component | 只读态同步 |
 | `Mindrizzle:scrollbar-drag` | RichTextEditor | block-handle | 滚动条拖拽时收 popup |
+
+## 图 2.3 块 SDK 契约（`src/Controls/Canvas/Sdk/`）
+
+```mermaid
+flowchart LR
+  P["块内容 / 设置组件"] -->|"ctx.setConfig(patch)"| H["PluginBlockHost"]
+  H -->|"handlers.writeConfig"| MC["MdrCanvas"]
+  MC -->|"snapshotHtml()"| H
+  MC -->|"flushConfig()"| H
+  H -->|"applyConfig(config)"| H
+```
+
+| 宿主调用 | 块侧实现 | 用途 |
+| --- | --- | --- |
+| `snapshotHtml()` | 按 `snapshot` 声明返回静态 HTML（函数形式可读块内 DOM） | 虚拟化 |
+| `flushConfig()` | 返回内存中的 config | 保存与虚拟化前落库 |
+| `applyConfig(config)` | 覆盖内存 config | 载入文档 |
+| `resolveDropAtElement` / `scrollContent` | 由块组件调 `ctx.setDropHandlers` 注册 | 接收画布拖入 |
+| `ctx.getView()` | 读画布视图 | 插件不接触 DOM 坐标与原始事件 |
+
+- 块组件根是 `BlockShell`（`MdrCanvasComponentBase` 的自动属性版），设置面板写 `#settings` 插槽；`useBlockContext()` 取 ctx。
+- 虚拟化由壳统一：`virtualized` / `snapshot` 经 `BlockShell` 传给 `MdrCanvasComponentBase`，块内不再写 `v-if`。
+- `titleOf` / `iconOf` 让拖拽栏标题随 config 变化，缺省用注册项的 `title` / `icon`。
+- 富文本内嵌组件按 `embed.nodeName` 反查同一注册表（`embeddedBlockOf`），不再有第二份组件映射。
+- 块定义经 `import.meta.glob('../Components/**/*.block.ts')` 自动注册，组件按同名 `.vue` 异步加载。
 
 ## 图 2.2 DOM 选择器契约
 

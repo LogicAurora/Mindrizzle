@@ -1,7 +1,6 @@
 <template>
-  <MdrCanvasComponentBase ref="baseRef" v-bind="props.base" :icon="mdiImageOutline" :title="IMAGE_BLOCK_LABEL"
-    :width-changable="!autoSize && props.base.compact !== true" :height-changable="!autoSize">
-    <div v-if="!virtualized" class="image-block inner-component">
+  <BlockShell>
+    <div class="image-block">
       <div v-if="imageUrl && fit === 'tile'" class="image-tile" :style="tileStyle" role="img" :aria-label="imageAlt" />
       <v-img v-else-if="imageUrl" :src="imageUrl" :alt="imageAlt" :cover="fit === 'cover'"
         :class="['image-preview', { 'fit-fill': fit === 'fill' }]" />
@@ -10,53 +9,46 @@
         <template v-else>
           <v-icon :icon="mdiImageOutline" size="40" class="text-medium-emphasis" />
           <span class="text-caption text-medium-emphasis">{{ loadFailed ? '图片读取失败' : '还没有图片' }}</span>
-          <v-btn v-if="canEdit" :prepend-icon="mdiImagePlus" size="small" variant="tonal" color="primary"
+          <v-btn v-if="!ctx.readOnly" :prepend-icon="mdiImagePlus" size="small" variant="tonal" color="primary"
             @click="openPicker">
             选择图片
           </v-btn>
         </template>
       </div>
+
       <v-snackbar v-model="snackbar" :timeout="3000" color="error" location="top">
         {{ snackbarText }}
       </v-snackbar>
     </div>
-    <div v-else class="virtual-snapshot inner-component" v-html="snapshot" />
     <input ref="fileInputRef" type="file" accept="image/*" class="d-none" @change="onFileChange" />
 
     <template #settings>
       <v-list density="compact">
         <v-list-item>
           <v-select :model-value="fit" :items="FIT_OPTIONS" item-title="title" item-value="value" label="显示方式"
-            density="compact" variant="outlined" hide-details :disabled="!canEdit"
+            density="compact" variant="outlined" hide-details :disabled="ctx.readOnly"
             :menu-props="{ zIndex: Z_LAYER.settingsDropdown }" @update:model-value="onFitChange" />
         </v-list-item>
         <v-list-item>
           <v-switch :model-value="autoSize" color="primary" label="自动大小" hint="块尺寸等于图片像素"
-            persistent-hint hide-details :disabled="!canEdit"
-            @update:model-value="onAutoSizeToggle" />
+            persistent-hint hide-details :disabled="ctx.readOnly" @update:model-value="onAutoSizeToggle" />
         </v-list-item>
         <v-list-item>
           <v-text-field :model-value="imageAlt" label="图片描述" density="compact" variant="outlined" hide-details
-            :readonly="!canEdit" @update:model-value="onAltInput" />
+            :readonly="ctx.readOnly" @update:model-value="onAltInput" />
         </v-list-item>
         <v-list-item class="d-flex justify-end ga-2">
-          <v-btn size="small" variant="tonal" :prepend-icon="mdiImageRefresh" :disabled="!canEdit" @click="openPicker">
+          <v-btn size="small" variant="tonal" :prepend-icon="mdiImageRefresh" :disabled="ctx.readOnly" @click="openPicker">
             更换
           </v-btn>
-          <v-btn size="small" variant="text" color="error" :disabled="!canEdit || !storedPath" @click="removeImage">
+          <v-btn size="small" variant="text" color="error" :disabled="ctx.readOnly || !storedPath" @click="removeImage">
             移除
           </v-btn>
         </v-list-item>
       </v-list>
     </template>
-  </MdrCanvasComponentBase>
+  </BlockShell>
 </template>
-
-<script lang="ts">
-export { IMAGE_BLOCK_CONSTRAINTS as resizeConstraints } from '../Registry/componentConstraints.ts'
-
-export const IMAGE_BLOCK_LABEL = '图片'
-</script>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -64,13 +56,11 @@ import { isTauri } from '@tauri-apps/api/core'
 import { error as logError } from '@tauri-apps/plugin-log'
 import { mdiImageOutline, mdiImagePlus, mdiImageRefresh } from '@mdi/js'
 
-import MdrCanvasComponentBase from '../Core/MdrCanvasComponentBase.vue'
-import type { MdrCanvasComponentContentProps } from '../Core/MdrCanvasComponentBase.types.ts'
-import type { BlockComponentController } from '../Core/canvasComponentControllers.ts'
-import { Z_LAYER } from '../Core/zIndex.ts'
-import type { ImageBlockConfig, ImageFit } from '../Registry/canvasComponents.ts'
-import { ComponentDataStore } from '../../../utils/componentDataStore.ts'
 import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
+import type { ImageBlockConfig, ImageFit } from '../Registry/canvasComponents.ts'
+import { Z_LAYER } from '../Core/zIndex.ts'
+import BlockShell from '../Sdk/BlockShell.vue'
+import { useBlockContext } from '../Sdk/blockContext.ts'
 
 // 与 Rust 侧 COMPONENT_FILE_MAX_BYTES 一致，前端先拦一次省掉整包重打的失败开销
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024
@@ -96,20 +86,13 @@ const FIT_OPTIONS = [
 const toFit = (value: unknown): ImageFit =>
   IMAGE_FITS.includes(value as ImageFit) ? value as ImageFit : 'contain'
 
-const props = defineProps<MdrCanvasComponentContentProps<ImageBlockConfig> & {
-  virtualized?: boolean
-  snapshot?: string
-}>()
-
-const baseRef = ref<{ controller: BlockComponentController } | null>(null)
-const storedPath = ref(props.config?.path ?? '')
-const imageMime = ref(props.config?.mime ?? '')
-const imageAlt = ref(props.config?.alt ?? '')
-const fit = ref<ImageFit>(toFit(props.config?.fit))
-const autoSize = ref(props.config?.autoSize === true)
-const canEdit = computed(() => props.base.readOnly !== true)
-// 构造时捕获当前笔记名，组件被虚拟化重建后也不会读到别的笔记
-const componentData = new ComponentDataStore()
+const ctx = useBlockContext<ImageBlockConfig>()
+const config = computed(() => ctx.config)
+const storedPath = computed(() => config.value.path ?? '')
+const imageMime = computed(() => config.value.mime ?? '')
+const imageAlt = computed(() => config.value.alt ?? '')
+const fit = computed(() => toFit(config.value.fit))
+const autoSize = computed(() => config.value.autoSize === true)
 
 const imageUrl = ref('')
 const isLoading = ref(false)
@@ -137,9 +120,9 @@ const showError = (message: string, cause: unknown) => {
   snackbar.value = true
 }
 
-const naturalSizeOf = (url: string) => new Promise<{ width: number; height: number }>((resolve, reject) => {
+const naturalSizeOf = (url: string) => new Promise<{ w: number; h: number }>((resolve, reject) => {
   const probe = new Image()
-  probe.onload = () => resolve({ width: probe.naturalWidth, height: probe.naturalHeight })
+  probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight })
   probe.onerror = () => reject(new Error('图片解码失败'))
   probe.src = url
 })
@@ -150,8 +133,8 @@ const applyNaturalSize = async () => {
   const token = loadToken
   try {
     const size = await naturalSizeOf(url)
-    if (token !== loadToken || !autoSize.value || size.width <= 0 || size.height <= 0) return
-    baseRef.value?.controller.resizeTo(size)
+    if (token !== loadToken || !autoSize.value || size.w <= 0 || size.h <= 0) return
+    ctx.resizeTo(size)
   } catch (cause) {
     logFailure('读取图片尺寸失败', cause)
   }
@@ -168,7 +151,7 @@ const loadImage = async () => {
   }
   isLoading.value = true
   try {
-    const bytes = await componentData.readFile(componentData.urlOf(props.base.uuid, path))
+    const bytes = await ctx.files.readBinary(path)
     // 快速换图时旧请求可能后返回，用令牌挡掉过期结果
     if (token !== loadToken) return
     revokeImageUrl()
@@ -185,30 +168,13 @@ const loadImage = async () => {
 
 watch([storedPath, imageVersion], () => { void loadImage() }, { immediate: true })
 
-// 画布只会在重建时换 config，外部换图时同步回本地状态
-watch(() => props.config?.path, (path) => {
-  storedPath.value = path ?? ''
-})
-watch(() => props.config?.mime, (mime) => {
-  imageMime.value = mime ?? ''
-})
-watch(() => props.config?.alt, (alt) => {
-  imageAlt.value = alt ?? ''
-})
-watch(() => props.config?.fit, (value) => {
-  fit.value = toFit(value)
-})
-watch(() => props.config?.autoSize, (value) => {
-  autoSize.value = value === true
-})
-
 onBeforeUnmount(() => {
   loadToken += 1
   revokeImageUrl()
 })
 
 const openPicker = () => {
-  if (canEdit.value) fileInputRef.value?.click()
+  if (!ctx.readOnly) fileInputRef.value?.click()
 }
 
 const extensionOf = (mime: string) => EXTENSION_BY_MIME[mime] ?? IMAGE_EXTENSION_FALLBACK
@@ -221,7 +187,7 @@ const baseNameOf = (fileName: string) => {
 const deleteStaleFile = async (previousPath: string, nextPath: string) => {
   if (!previousPath || previousPath === nextPath) return
   try {
-    await componentData.deleteFile(componentData.urlOf(props.base.uuid, previousPath))
+    await ctx.files.remove(previousPath)
   } catch (cause) {
     // 旧文件残留不影响新图显示，只记日志
     logFailure('清理旧图片失败', cause)
@@ -232,14 +198,14 @@ const uploadFile = async (file: File) => {
   const nextPath = `image.${extensionOf(file.type)}`
   isLoading.value = true
   try {
-    const url = componentData.urlOf(props.base.uuid, nextPath)
-    await componentData.writeFile(url, new Uint8Array(await file.arrayBuffer()))
+    await ctx.files.write(nextPath, new Uint8Array(await file.arrayBuffer()))
     await deleteStaleFile(storedPath.value, nextPath)
-    storedPath.value = nextPath
-    imageMime.value = file.type
     imageVersion.value += 1
-    if (!imageAlt.value) imageAlt.value = baseNameOf(file.name)
-    props.base.handlers.writeConfig({ path: storedPath.value, mime: imageMime.value, alt: imageAlt.value })
+    ctx.setConfig({
+      path: nextPath,
+      mime: file.type,
+      alt: imageAlt.value || baseNameOf(file.name),
+    })
   } catch (cause) {
     showError('保存图片失败', cause)
   } finally {
@@ -269,63 +235,37 @@ const onFileChange = async (event: Event) => {
 const tileStyle = computed(() => (imageUrl.value ? { backgroundImage: `url("${imageUrl.value}")` } : {}))
 
 const onFitChange = (value: unknown) => {
-  fit.value = toFit(value)
-  props.base.handlers.writeConfig({ fit: fit.value })
+  ctx.setConfig({ fit: toFit(value) })
 }
 
 const onAutoSizeToggle = (value: unknown) => {
-  autoSize.value = value === true
-  props.base.handlers.updateConfig({ autoSize: autoSize.value })
-  if (autoSize.value) void applyNaturalSize()
+  ctx.setConfig({ autoSize: value === true })
+  if (value === true) void applyNaturalSize()
 }
 
 const onAltInput = (value: unknown) => {
-  imageAlt.value = String(value ?? '')
-  props.base.handlers.writeConfig({ alt: imageAlt.value })
+  ctx.setConfig({ alt: String(value ?? '') })
 }
 
 const removeImage = async () => {
   const path = storedPath.value
   if (!path) return
-  storedPath.value = ''
-  imageMime.value = ''
-  props.base.handlers.writeConfig({ path: '', mime: '', alt: imageAlt.value })
+  ctx.setConfig({ path: '', mime: '', alt: imageAlt.value })
   try {
-    await componentData.deleteFile(componentData.urlOf(props.base.uuid, path))
+    await ctx.files.remove(path)
   } catch (cause) {
     logFailure('删除图片失败', cause)
   }
 }
-
-defineExpose({
-  saveConfig() {
-    return {
-      path: storedPath.value,
-      mime: imageMime.value,
-      alt: imageAlt.value,
-      fit: fit.value,
-      autoSize: autoSize.value,
-    }
-  },
-})
 </script>
 
 <style scoped>
-/* 快照是克隆的组件 DOM，用 display:contents 让它像原来一样直接充当 .content-area 的 flex 子项 */
-.virtual-snapshot {
-  display: contents;
-}
-
-/* 克隆里残留的 pointer-events:auto 会把指针事件吞进死 DOM，所以整棵子树穿透 */
-.virtual-snapshot :deep(*) {
-  pointer-events: none !important;
-}
-
 .image-block {
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  height: 100%;
   background: rgba(var(--v-theme-on-surface), 0.03);
 }
 

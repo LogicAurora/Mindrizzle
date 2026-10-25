@@ -11,8 +11,10 @@
         <div v-for="line in linkedConnections" :key="line.key" class="connection-segment"
           :style="connectionSegmentStyle(line)" />
       </div>
-      <component v-for="item in state.items" :key="`${item.uuid}-${mobileMode ? 'm' : 'd'}`"
-        :is="componentMap[item.component]" :ref="componentRefOf(item)" :config="item.config"
+      <!-- 虚拟化切换必须换 key：自带壳的块只有整体重建才会重新 mount 内部编辑器 -->
+      <component v-for="item in state.items"
+        :key="`${item.uuid}-${mobileMode ? 'm' : 'd'}-${isVirtualized(item.uuid) ? 'v' : 'a'}`"
+        :is="blockHostOf(item)" :ref="componentRefOf(item)" v-bind="blockDefinitionPropsOf(item)" :config="item.config"
         :virtualized="isVirtualized(item.uuid)" :snapshot="virtualSnapshots[item.uuid] ?? ''"
         :base="blockBasePropsOf(item)" @resizestart="resizeCallbacksOf(item).start"
         @resizing="resizeCallbacksOf(item).resizing" @resizestop="resizeCallbacksOf(item).resizestop"
@@ -67,14 +69,13 @@ export type {
 </script>
 
 <script setup lang="ts">
-import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, watch, markRaw, type CSSProperties } from 'vue'
+import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, watch, markRaw, type Component, type CSSProperties } from 'vue'
 
 import { mdiPaperclip, mdiArrowUp } from '@mdi/js'
 import {
   CANVAS_COMPONENTS,
   DEFAULT_COMPONENT_KEY,
   componentLabelOf,
-  componentMap,
   componentMetaOf,
   constraintsOf,
   heightChangableOf,
@@ -84,6 +85,9 @@ import {
   type Rect,
   type WidgetConfig,
 } from '../Registry/canvasComponents.ts'
+import { blockDefinitionOf, embeddedBlockOf } from '../Sdk/blockRegistry.ts'
+import type { AnyBlockDefinition, BlockEnv } from '../Sdk/block.types.ts'
+import PluginBlockHost from '../Sdk/PluginBlockHost.vue'
 import {
   handleBarStyleOf,
   sideSettingsStyleOf,
@@ -598,6 +602,28 @@ const setComponentRef = (id: string, el: any) => {
   if (el) componentRefs.value[id] = el
   else delete componentRefs.value[id]
 }
+
+// 壳层由宿主统一提供，插件块只声明内容与设置；历史块自带壳，按原样挂载
+const EMPTY_COMPONENT_PROPS = {}
+const definitionPropsCache = new WeakMap<CanvasItem, { definition: AnyBlockDefinition }>()
+
+const blockHostOf = (item: CanvasItem): Component => {
+  const definition = blockDefinitionOf(item.component)
+  return definition?.kind === 'raw' ? definition.rawComponent ?? PluginBlockHost : PluginBlockHost
+}
+
+// 每次渲染新建对象会让宿主 props 逐帧变化，所以按块缓存
+const blockDefinitionPropsOf = (item: CanvasItem) => {
+  const definition = blockDefinitionOf(item.component)
+  if (!definition || definition.kind === 'raw') return EMPTY_COMPONENT_PROPS
+  const cached = definitionPropsCache.get(item)
+  if (cached && cached.definition === definition) return cached
+  const props = { definition }
+  definitionPropsCache.set(item, props)
+  return props
+}
+
+const blockEnvOf = (): BlockEnv => ({ isCompact: mobileMode.value, isReadOnly: !isEditMode.value })
 
 const layoutOf = (item: CanvasItem): Rect => (mobileMode.value ? item.layout.mobile : item.layout.desktop)
 // #endregion 组件数据读写
@@ -1557,8 +1583,10 @@ const resolveDragConflict = () => {
 }
 
 // 块配置 → 富文本节点由注册项声明，画布不感知具体组件类型
-const componentNodeOf = (item: CanvasItem) =>
-  componentMetaOf(item.component)?.toNode?.(item.config) ?? null
+const componentNodeOf = (item: CanvasItem) => {
+  const embed = componentMetaOf(item.component)?.embed
+  return embed ? { name: embed.nodeName, props: embed.toProps(item.config) } : null
+}
 
 const insertDraggedComponent = (targetId: string, sourceId: string, pos: number | null): boolean => {
   const target = state.items.find((item) => item.uuid === targetId)
@@ -1730,7 +1758,7 @@ const applyResizeLayout = (item: CanvasItem, propagate: boolean) => {
     (pan.y - rs.panStartY) / zoom.value,
   )
   // 高度由内容驱动的块不参与自动滚动补偿
-  if (!heightChangableOf(item)) {
+  if (!heightChangableOf(item, blockEnvOf())) {
     final.y = rs.lastBase.y
     final.h = rs.lastBase.h
   }
@@ -1770,6 +1798,7 @@ const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, 
   const positions: Record<string, Rect> = {}
   const itemMap = new Map(state.items.map((target) => [target.uuid, target]))
   const neighborMap = linkedNeighborMap.value
+  const env = blockEnvOf()
   // autoPan 改变了 layout，所以 positions 用当前布局初始化，方位判定仍基于 starts
   starts.forEach((start, id) => {
     const target = itemMap.get(id)
@@ -1791,8 +1820,8 @@ const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, 
       if (!nStart || !target) return
       const c = constraintsOf(target)
       // 宽/高不可变的块只跟随平移，不参与对应轴重算
-      const fixedW = widthChangableOf(target) ? null : (positions[nid]?.w ?? nStart.w)
-      const fixedH = heightChangableOf(target) ? null : (positions[nid]?.h ?? nStart.h)
+      const fixedW = widthChangableOf(target, env) ? null : (positions[nid]?.w ?? nStart.w)
+      const fixedH = heightChangableOf(target, env) ? null : (positions[nid]?.h ?? nStart.h)
       const minW = fixedW ?? (c.minWidth ?? 0) + 8, maxW = fixedW ?? c.maxWidth ?? null
       const minH = fixedH ?? (c.minHeight ?? 0) + 8
       const maxH = fixedH ?? c.maxHeight ?? null
@@ -2561,7 +2590,7 @@ const handleCanvasFocusin = (e: FocusEvent) => {
 const syncComponentData = () => {
   state.items.forEach((item) => {
     const inst = componentRefs.value[item.uuid]
-    const saved = inst?.saveConfig?.()
+    const saved = inst?.flushConfig?.() ?? inst?.saveConfig?.()
     if (saved) {
       item.config = { ...item.config, ...saved } as WidgetConfig
     }
@@ -2847,8 +2876,7 @@ const addComponent = (key: CanvasItem['component'], at?: { x: number; y: number 
 
 // #region 插入组件拖出成块
 // 节点名 → 块注册项由注册表声明，画布不感知具体组件类型
-const extractMetaOf = (nodeName: string) =>
-  CANVAS_COMPONENTS.find((meta) => meta.extractFromNode?.nodeName === nodeName)
+const extractMetaOf = (nodeName: string) => embeddedBlockOf(nodeName)
 
 // 仅编辑态且落点在画布内才新增块，经 detail.accepted 同步回填结果
 type ExtractDetail = {
@@ -2861,7 +2889,7 @@ type ExtractDetail = {
 const onExtractComponent = (event: Event) => {
   const detail = (event as CustomEvent<ExtractDetail>).detail
   const meta = detail ? extractMetaOf(detail.componentName) : undefined
-  const extract = meta?.extractFromNode
+  const extract = meta?.embed
   const rect = canvasContainerRef.value?.getBoundingClientRect()
   if (!meta || !extract || !rect || !isEditMode.value) return
   const isInside = detail.clientX >= rect.left && detail.clientX <= rect.right
@@ -2870,7 +2898,7 @@ const onExtractComponent = (event: Event) => {
   const id = addComponent(
     meta.key,
     screenToContent(canvasTransform(), rect, detail.clientX, detail.clientY),
-    extract.toConfig(detail.props),
+    extract.fromProps(detail.props),
   )
   if (!id) return
   detail.accepted = true
@@ -2949,11 +2977,14 @@ const scrollRecordsOf = (root: HTMLElement): ScrollRecord[] => {
 const virtualizeBlock = (item: CanvasItem): string => {
   const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${item.uuid}"] .inner-component`)
   if (!root) return ''
-  const config = componentRefs.value[item.uuid]?.saveConfig?.()
+  const inst = componentRefs.value[item.uuid]
+  const config = inst?.flushConfig?.() ?? inst?.saveConfig?.()
   if (config) item.config = { ...item.config, ...config } as WidgetConfig
   const records = scrollRecordsOf(root)
   if (records.length) virtualScrolls.set(item.uuid, records)
-  return sanitizeSnapshot(root.outerHTML)
+  // 自绘块（canvas/WebGL）的 DOM 克隆是空白，快照内容由块自己给出；空串表示走 DOM 克隆
+  const custom = inst?.snapshotHtml?.()
+  return sanitizeSnapshot(custom ? custom : root.outerHTML)
 }
 
 const applyScrollRecords = (root: HTMLElement | null, records: ScrollRecord[]): void => {
@@ -3058,8 +3089,8 @@ const save = () => {
 
 // 兼容双端布局重构前的扁平格式并对缺失字段兜底
 const normalizeLoadedItem = (it: any): CanvasItem => {
-  const component: CanvasItem['component'] = componentMap[it.component as CanvasItem['component']]
-    ? (it.component as CanvasItem['component'])
+  const component: CanvasItem['component'] = blockDefinitionOf(it.component as string)
+    ? (it.component as string)
     : DEFAULT_COMPONENT_KEY
   const isLegacyFlat = !it.layout && typeof it.x === 'number' && typeof it.y === 'number'
   const desktop: Rect = isLegacyFlat
@@ -3138,7 +3169,9 @@ const load = async (raw: string) => {
   // 排列改了 layout，所以要按落定后的位置再定一次虚拟集（首次渲染那次用的是文件里的旧坐标）
   reconcileVirtualBlocks()
   state.items.forEach((item) => {
-    componentRefs.value[item.uuid]?.loadConfig?.(item.config)
+    const inst = componentRefs.value[item.uuid]
+    if (inst?.applyConfig) inst.applyConfig(item.config)
+    else inst?.loadConfig?.(item.config)
   })
   recomputeMasks()
 }

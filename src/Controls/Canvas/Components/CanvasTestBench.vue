@@ -1,238 +1,186 @@
 <template>
-  <MdrCanvasComponentBase ref="baseRef" v-bind="props.base" :icon="mdiFlaskOutline" :title="TEST_BENCH_LABEL"
-    :width-changable="props.base.compact !== true">
-    <div v-if="!virtualized" class="test-bench inner-component">
-      <div class="bench-status">
-        <v-chip size="x-small" color="primary" variant="tonal">{{ TEST_BENCH_LABEL }}</v-chip>
-        <v-chip size="x-small" :color="props.base.active ? 'success' : 'default'">
-          active: {{ props.base.active }}
-        </v-chip>
-        <v-chip size="x-small" :color="props.base.readOnly ? 'warning' : 'default'">
-          readOnly: {{ props.base.readOnly }}
-        </v-chip>
-        <v-chip size="x-small" :color="props.base.popupOpen ? 'info' : 'default'">
-          popup: {{ props.base.popupOpen }}
-        </v-chip>
-      </div>
+  <BlockShell>
+    <div class="test-bench">
+      <v-tabs v-model="tab" density="compact" bg-color="transparent" show-arrows>
+        <v-tab value="state">状态</v-tab>
+        <v-tab value="config">配置</v-tab>
+        <v-tab value="files">文件</v-tab>
+        <v-tab value="scroll">滚动</v-tab>
+      </v-tabs>
 
-      <div class="bench-uuid">
-        <b>uuid</b>
-        <code data-test="block-uuid">{{ props.base.uuid }}</code>
-      </div>
+      <v-window v-model="tab" class="bench-window">
+        <v-window-item value="state">
+          <div class="bench-pane">
+            <div class="bench-uuid">
+              <b>uuid</b>
+              <code data-test="block-uuid">{{ ctx.uuid }}</code>
+            </div>
 
-      <div v-if="showViewport" class="bench-metrics">
-        <span v-for="metric in metrics" :key="metric.label">
-          <b>{{ metric.label }}</b> {{ metric.value }}
-        </span>
-      </div>
+            <div class="bench-metrics">
+              <span><b>尺寸</b> {{ size.w }}×{{ size.h }}</span>
+              <span><b>readOnly</b> {{ ctx.readOnly }}</span>
+              <span><b>compact</b> {{ ctx.isCompact }}</span>
+              <span><b>active</b> {{ ctx.isActive }}</span>
+            </div>
 
-      <div class="bench-actions">
-        <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="runStep(moveBlock)">
-          moveBy(+40, 0)
-        </v-btn>
-        <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="runStep(growWidth)">
-          resizeTo(width +40)
-        </v-btn>
-        <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="runStep(growHeight)">
-          resizeTo(height +40)
-        </v-btn>
-        <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="runStep(panCanvas)">
-          panBy(+60, 0)
-        </v-btn>
-        <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="runStep(cycleZoom)">
-          zoom 循环
-        </v-btn>
-        <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="runStep(resetView)">
-          重置视图
-        </v-btn>
-        <v-btn size="x-small" variant="outlined" @click="refreshViewModel">刷新数据</v-btn>
-      </div>
+            <div v-if="config.showViewport !== false" class="bench-metrics">
+              <span><b>view</b> {{ viewLabel }}</span>
+              <span><b>origin</b> {{ viewLabel ? originLabel : '—' }}</span>
+              <span><b>isPanning</b> {{ panningLabel }}</span>
+            </div>
 
-      <div class="bench-config">
-        <div class="bench-counter">
-          <span>config.counter = {{ counter }}</span>
-          <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="bumpCounter">
-            updateConfig +1
-          </v-btn>
-        </div>
-        <v-text-field :model-value="note" label="config.note（writeConfig）" density="compact" variant="outlined"
-          hide-details :readonly="props.base.readOnly" @update:model-value="onNoteInput" />
-      </div>
+            <div class="bench-actions">
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="runStep(moveBlock)">
+                moveBy(+40, 0)
+              </v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="runStep(growWidth)">
+                resizeTo(width +40)
+              </v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="runStep(growHeight)">
+                resizeTo(height +40)
+              </v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="runStep(panCanvas)">
+                panBy(+60, 0)
+              </v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="runStep(cycleZoom)">
+                zoom 循环
+              </v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="runStep(resetView)">
+                重置视图
+              </v-btn>
+              <v-btn size="x-small" variant="outlined" @click="refreshView">刷新视图</v-btn>
+            </div>
+          </div>
+        </v-window-item>
 
-      <div class="bench-data">
-        <div class="bench-data-title">组件数据 mdrfcd://</div>
-        <v-text-field v-model="dataPath" label="相对路径" density="compact" variant="outlined" hide-details
-          :readonly="props.base.readOnly" />
-        <v-textarea v-model="dataContent" label="内容" rows="2" density="compact" variant="outlined" hide-details
-          :readonly="props.base.readOnly" />
-        <div class="bench-actions">
-          <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="writeData">写入</v-btn>
-          <v-btn size="x-small" variant="tonal" @click="readData">读取</v-btn>
-          <v-btn size="x-small" variant="tonal" @click="listData">列出</v-btn>
-          <v-btn size="x-small" variant="tonal" :disabled="props.base.readOnly" @click="deleteData">删除</v-btn>
-        </div>
-        <div class="bench-data-status" data-test="component-data-status">{{ dataStatus }}</div>
-        <div v-if="dataFiles.length" class="bench-data-files">{{ dataFiles.join(' · ') }}</div>
-      </div>
+        <v-window-item value="config">
+          <div class="bench-pane">
+            <div class="bench-row">
+              <span>config.counter = {{ config.counter }}</span>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="bumpCounter">+1</v-btn>
+            </div>
+            <v-text-field :model-value="config.note" label="config.note（同时改拖拽栏标题）" density="compact"
+              variant="outlined" hide-details :readonly="ctx.readOnly" @update:model-value="onNoteInput" />
+            <div class="bench-hint">note 变化会驱动 titleOf，拖拽栏标题应同步变化。</div>
+          </div>
+        </v-window-item>
 
-      <div class="bench-scroll">
-        <div v-for="row in SCROLL_ROWS" :key="row">滚动测试行 {{ row }}</div>
-      </div>
+        <v-window-item value="files">
+          <div class="bench-pane">
+            <v-text-field v-model="dataPath" label="相对路径" density="compact" variant="outlined" hide-details
+              :readonly="ctx.readOnly" />
+            <v-textarea v-model="dataContent" label="内容" rows="2" density="compact" variant="outlined" hide-details
+              :readonly="ctx.readOnly" />
+            <div class="bench-actions">
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="writeData">写入</v-btn>
+              <v-btn size="x-small" variant="tonal" @click="readData">读取</v-btn>
+              <v-btn size="x-small" variant="tonal" @click="listData">列出</v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="deleteData">删除</v-btn>
+            </div>
+            <div class="bench-status" data-test="component-data-status">{{ dataStatus }}</div>
+            <div v-if="dataFiles.length" class="bench-status">{{ dataFiles.join(' · ') }}</div>
+          </div>
+        </v-window-item>
+
+        <v-window-item value="scroll">
+          <div class="bench-pane scroll-pane">
+            <div v-for="row in SCROLL_ROWS" :key="row">滚动测试行 {{ row }}</div>
+          </div>
+        </v-window-item>
+      </v-window>
     </div>
-    <div v-else class="virtual-snapshot inner-component" v-html="snapshot" />
 
     <template #settings>
       <v-list density="compact">
         <v-list-item>
-          <v-switch :model-value="showViewport" color="primary" hide-details label="显示视图数据"
-            @update:model-value="onShowViewportToggle" />
+          <v-switch :model-value="config.showViewport !== false" color="primary" hide-details label="显示视图数据"
+            :disabled="ctx.readOnly" @update:model-value="onShowViewportToggle" />
         </v-list-item>
       </v-list>
     </template>
-  </MdrCanvasComponentBase>
+  </BlockShell>
 </template>
 
-<script lang="ts">
-export const TEST_BENCH_LABEL = '测试台'
-</script>
-
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { mdiFlaskOutline } from '@mdi/js'
+import { computed, nextTick, ref } from 'vue'
 
-import MdrCanvasComponentBase from '../Core/MdrCanvasComponentBase.vue'
-import type { MdrCanvasComponentContentProps } from '../Core/MdrCanvasComponentBase.types.ts'
-import { ComponentDataStore } from '../../../utils/componentDataStore.ts'
 import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
-import type {
-  BlockCanvasController,
-  BlockComponentController,
-  CanvasViewData,
-  SizeChangeable,
-} from '../Core/canvasComponentControllers.ts'
 import type { TestBenchConfig } from '../Registry/canvasComponents.ts'
-
-const props = defineProps<MdrCanvasComponentContentProps<TestBenchConfig> & {
-  virtualized?: boolean
-  snapshot?: string
-}>()
+import BlockShell from '../Sdk/BlockShell.vue'
+import { useBlockContext } from '../Sdk/blockContext.ts'
 
 const MOVE_STEP = 40
 const RESIZE_STEP = 40
 const PAN_STEP = 60
 const ZOOM_PRESETS = [0.5, 1, 2, 3]
-// 测试台是手动验收入口，默认值要能直接点通
 const DATA_TEST_PATH = 'test/hello.txt'
 const DATA_TEST_CONTENT = 'hello mdrfcd'
 const DATA_TEST_IDLE = '未测试'
 const SCROLL_ROWS = Array.from({ length: 60 }, (_, index) => index + 1)
 
-interface BaseExposed {
-  controller: BlockComponentController
-  canvasController: BlockCanvasController
-}
+const ctx = useBlockContext<TestBenchConfig>()
+const config = computed(() => ctx.config)
+const size = computed(() => ctx.getSize())
 
-const baseRef = ref<BaseExposed | null>(null)
-const config = computed(() => props.config as TestBenchConfig)
-const counter = ref(config.value.counter ?? 0)
-const note = ref(config.value.note ?? '')
-const showViewport = ref(config.value.showViewport !== false)
-const sizeSnapshot = ref({ width: 0, height: 0 })
-const changeableSnapshot = ref<SizeChangeable>({ width: true, height: true })
-const viewSnapshot = ref<CanvasViewData | null>(null)
-// 构造时捕获当前笔记名，组件被虚拟化重建后也不会跟到别的笔记
-const componentData = new ComponentDataStore()
-const dataPath = ref(DATA_TEST_PATH)
-const dataContent = ref(DATA_TEST_CONTENT)
-const dataStatus = ref(DATA_TEST_IDLE)
-const dataFiles = ref<string[]>([])
+const tab = ref('state')
+const viewLabel = ref('')
+const originLabel = ref('')
+const panningLabel = ref('')
 
-const metrics = computed(() => {
-  const view = viewSnapshot.value
-  return [
-    { label: 'pos', value: `${Math.round(props.base.x)},${Math.round(props.base.y)}` },
-    { label: 'size', value: `${Math.round(props.base.width)}×${Math.round(props.base.height)}` },
-    { label: 'getSize', value: `${Math.round(sizeSnapshot.value.width)}×${Math.round(sizeSnapshot.value.height)}` },
-    { label: 'getChangeable', value: `${changeableSnapshot.value.width}/${changeableSnapshot.value.height}` },
-    { label: 'view', value: view ? `z${view.zoom} pan(${Math.round(view.pan.x)},${Math.round(view.pan.y)})` : '未刷新' },
-    { label: 'origin', value: view ? `${Math.round(view.origin.x)},${Math.round(view.origin.y)}` : '—' },
-    { label: 'viewport', value: view?.viewport ? '有' : '无' },
-    { label: 'isPanning', value: view ? String(view.isPanning) : '—' },
-    { label: 'handles', value: props.base.handles?.join(',') || '无' },
-    { label: 'zIndex', value: String(props.base.zIndex) },
-    { label: 'placement', value: props.base.placement },
-    { label: 'masks', value: String(props.base.masks?.length ?? 0) },
-    { label: 'compact', value: String(props.base.compact) },
-  ]
-})
-
-const refreshViewModel = () => {
-  const base = baseRef.value
-  if (!base) return
-  sizeSnapshot.value = base.controller.getSize()
-  changeableSnapshot.value = base.controller.getChangeable()
-  viewSnapshot.value = base.canvasController.getViewData()
+const refreshView = () => {
+  const view = ctx.getView()
+  viewLabel.value = `z${view.zoom} pan(${Math.round(view.pan.x)},${Math.round(view.pan.y)})`
+  originLabel.value = `${Math.round(view.origin.x)},${Math.round(view.origin.y)}`
+  panningLabel.value = String(view.isPanning)
 }
 
 const runStep = async (step: () => void | Promise<void>) => {
   await step()
   await nextTick()
-  refreshViewModel()
+  refreshView()
 }
 
-const moveBlock = () => baseRef.value?.controller.moveBy(MOVE_STEP, 0)
+const moveBlock = () => ctx.moveBy(MOVE_STEP, 0)
 
-const growWidth = () => {
-  const controller = baseRef.value?.controller
-  if (!controller) return
-  controller.resizeTo({ width: controller.getSize().width + RESIZE_STEP })
-}
+const growWidth = () => ctx.resizeTo({ w: ctx.getSize().w + RESIZE_STEP })
 
-const growHeight = () => {
-  const controller = baseRef.value?.controller
-  if (!controller) return
-  controller.resizeTo({ height: controller.getSize().height + RESIZE_STEP })
-}
+const growHeight = () => ctx.resizeTo({ h: ctx.getSize().h + RESIZE_STEP })
 
-const panCanvas = () => baseRef.value?.canvasController.panBy(PAN_STEP, 0)
+const panCanvas = () => ctx.panBy(PAN_STEP, 0)
 
 const cycleZoom = () => {
-  const canvasController = baseRef.value?.canvasController
-  if (!canvasController) return
-  const current = canvasController.getViewData().zoom
+  const current = ctx.getView().zoom
   const next = ZOOM_PRESETS.find((preset) => preset > current) ?? ZOOM_PRESETS[0]
-  canvasController.zoomTo(next)
+  ctx.zoomTo(next)
 }
 
 // 缩放会触发画布锚点补偿改写 pan，所以要等它落定后再归零平移
 const resetView = async () => {
-  const canvasController = baseRef.value?.canvasController
-  if (!canvasController) return
-  canvasController.zoomTo(1)
+  ctx.zoomTo(1)
   await nextTick()
-  const { pan } = canvasController.getViewData()
-  canvasController.panBy(-pan.x, -pan.y)
+  const { pan } = ctx.getView()
+  ctx.panBy(-pan.x, -pan.y)
 }
 
 const bumpCounter = () => {
-  counter.value += 1
-  props.base.handlers.updateConfig({ counter: counter.value })
+  ctx.setConfig({ counter: (config.value.counter ?? 0) + 1 })
 }
 
 const onNoteInput = (value: unknown) => {
-  note.value = String(value ?? '')
-  props.base.handlers.writeConfig({ note: note.value })
+  ctx.setConfig({ note: String(value ?? '') })
 }
 
 const onShowViewportToggle = (value: unknown) => {
-  showViewport.value = !!value
-  props.base.handlers.updateConfig({ showViewport: showViewport.value })
+  ctx.setConfig({ showViewport: value === true })
 }
 
-const dataUrlOf = (): string => componentData.urlOf(props.base.uuid, dataPath.value)
+const dataPath = ref(DATA_TEST_PATH)
+const dataContent = ref(DATA_TEST_CONTENT)
+const dataStatus = ref(DATA_TEST_IDLE)
+const dataFiles = ref<string[]>([])
 
+// 点击回调就是错误边界，失败只写状态行，不打断整个块
 const runDataStep = async (step: () => Promise<string>) => {
-  // 点击回调就是错误边界，失败显示到状态行，不能打断整个块
   try {
     dataStatus.value = await step()
   } catch (error) {
@@ -241,68 +189,62 @@ const runDataStep = async (step: () => Promise<string>) => {
 }
 
 const writeData = () => runDataStep(async () => {
-  await componentData.writeFile(dataUrlOf(), dataContent.value)
+  await ctx.files.write(dataPath.value, dataContent.value)
   return `已写入 ${dataPath.value}`
 })
 
 const readData = () => runDataStep(async () => {
-  dataContent.value = await componentData.readText(dataUrlOf())
+  dataContent.value = await ctx.files.readText(dataPath.value)
   return `已读取 ${dataPath.value}`
 })
 
 const listData = () => runDataStep(async () => {
-  dataFiles.value = await componentData.listFiles(props.base.uuid)
+  dataFiles.value = await ctx.files.list()
   return `共 ${dataFiles.value.length} 个文件`
 })
 
 const deleteData = () => runDataStep(async () => {
-  await componentData.deleteFile(dataUrlOf())
+  await ctx.files.remove(dataPath.value)
   return `已删除 ${dataPath.value}`
-})
-
-const onCanvasTransform = () => refreshViewModel()
-
-onMounted(() => {
-  refreshViewModel()
-  window.addEventListener('Mindrizzle:canvas-transform', onCanvasTransform)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('Mindrizzle:canvas-transform', onCanvasTransform)
-})
-
-defineExpose({
-  saveConfig: () => ({ counter: counter.value, note: note.value, showViewport: showViewport.value }),
-  loadConfig: (next: Partial<TestBenchConfig>) => {
-    if (next.counter != null) counter.value = next.counter
-    if (next.note != null) note.value = next.note
-    if (next.showViewport != null) showViewport.value = next.showViewport
-  },
 })
 </script>
 
 <style scoped>
-/* 快照是克隆的组件 DOM，用 display:contents 让它直接充当 .content-area 的 flex 子项 */
-.virtual-snapshot {
-  display: contents;
-}
-
-/* 克隆里残留的 pointer-events:auto 会吞掉指针事件，所以整棵子树穿透 */
-.virtual-snapshot :deep(*) {
-  pointer-events: none !important;
-}
-
 .test-bench {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  height: 100%;
   box-sizing: border-box;
   overflow: hidden;
   color: var(--v-theme-on-surface);
 }
 
-.bench-status,
+.bench-window {
+  flex: 1;
+  min-height: 0;
+}
+
+.bench-window :deep(.v-window__container),
+.bench-window :deep(.v-window-item) {
+  height: 100%;
+}
+
+.bench-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.scroll-pane {
+  overflow: auto;
+}
+
+.bench-row,
 .bench-actions {
   display: flex;
   flex-wrap: wrap;
@@ -312,7 +254,7 @@ defineExpose({
 
 .bench-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 2px 8px;
   font-size: 11px;
   line-height: 1.4;
@@ -330,50 +272,10 @@ defineExpose({
   user-select: text;
 }
 
-.bench-config {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bench-counter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.bench-data {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bench-data-title,
-.bench-data-status {
+.bench-hint,
+.bench-status {
   font-size: 11px;
-  line-height: 1.4;
-}
-
-.bench-data-status {
-  overflow-wrap: anywhere;
-}
-
-.bench-data-files {
-  font-size: 11px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
   opacity: 0.8;
-}
-
-.bench-scroll {
-  flex: 1;
-  min-height: 70px;
-  overflow: auto;
-  padding: 4px 6px;
-  font-size: 11px;
-  line-height: 1.6;
-  border: 1px dashed rgba(var(--v-theme-on-surface), 0.25);
-  border-radius: 4px;
+  overflow-wrap: anywhere;
 }
 </style>

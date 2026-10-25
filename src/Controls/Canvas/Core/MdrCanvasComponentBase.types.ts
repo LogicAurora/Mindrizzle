@@ -22,8 +22,13 @@ export interface MdrCanvasComponentBaseProps {
   compact?: boolean
   active?: boolean
   dragging?: boolean
+  // undefined = 块自己管虚拟化（raw 旧写法）；false/true = 由壳统一渲染内容/快照
+  virtualized?: boolean
+  snapshot?: string
   showHandle?: boolean
   showSettings?: boolean
+  // 带默认插槽的宿主恒有 settings 插槽，需显式告知是否真有内容
+  settingsAvailable?: boolean
   handles?: string[]
   zIndex?: number
   zoom?: number

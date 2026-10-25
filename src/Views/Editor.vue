@@ -116,7 +116,7 @@ const componentOf = computed(() => {
 })
 
 // 添加类型单源
-const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, label, icon, addId }) => ({ key, label, icon, addId }))
+const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, title, icon, addId }) => ({ key, label: title, icon, addId }))
 const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0)
 // 添加类型单选索引
 const addIdx = ref(0)
