@@ -538,7 +538,8 @@ defineExpose({
   width: 100%;
   padding: 44px 0 0 0;
   box-sizing: border-box;
-  /* 首行 popup 需 44px 空间才不被裁剪，所以顶部留白 */
+  /* 首行 popup 需 44px 空间才不被裁剪，所以顶部留白；border-box 下这段内边距要补回高度，否则块底空 44px */
+  height: calc(100% + 44px);
 }
 
 .editor-mount {
