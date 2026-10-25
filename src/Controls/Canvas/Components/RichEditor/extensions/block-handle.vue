@@ -9,7 +9,7 @@ import {
   BlockHandleRoot,
 } from 'prosekit/vue/block-handle'
 import type { Editor } from '@prosekit/core'
-import { createOverlayStoreResolver, createStoreResolver, getScrollEl, getView, layoutToViewportX, layoutToViewportY } from './blockHandleUtils'
+import { createOverlayStoreResolver, createStoreResolver, getBlockRect, getScrollEl, getView, layoutToViewportX, layoutToViewportY } from './blockHandleUtils'
 import { useHoverState } from './useHoverState'
 import { useHoverUi } from './useHoverUi'
 import { useBlockDrag } from './useBlockDrag'
@@ -127,22 +127,30 @@ function syncTmOverlap() {
   })
 }
 
-// 桥接区必须恰好跨过 popup 与块之间的空隙：过宽会盖住紧贴文本右缘的滚动条（其 hover/拖拽全被 popup 吞掉），
-// 按实测空隙自适应；量不到时退回 CSS 的 48px 保守值（宁可闪灭也不能漏掉桥接）
+// 桥接区必须恰好跨过 popup 与块之间的空隙：过宽会盖住紧贴 popup 的文字（左/上/下）或滚动条（右），
+// 所以四侧都按实测空隙自适应；量不到时退回 CSS 的 48px 保守值（宁可闪灭也不能漏掉桥接）
+const BRIDGE_OVERLAP = 2
 let bridgeRaf = 0
 function syncBridgeGap() {
   const measure = () => {
-    const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
+    const view = getView(props.editor)
+    const wrapper = view?.dom?.closest('.drag-wrapper') as HTMLElement | null
     // 多块各自都渲染 popup，所以必须按块 uuid 精确取，否则会量到别的隐藏 popup
     const uuid = wrapper?.dataset.uuid
     const popup = uuid ? document.querySelector<HTMLElement>(`.block-handle-popup[data-uuid="${uuid}"]`) : null
+    const row = activeHover.value ? getBlockRect(view, activeHover.value.pos) : null
     if (!wrapper || !popup) return
     const pr = popup.getBoundingClientRect()
     if (pr.width <= 0 || pr.height <= 0) return
-    // 两者同为布局坐标（Chrome 下 BCR 不含 zoom），相减与画布缩放无关；
-    // 加 2px 余量后桥接区左缘 = 块右缘 − 2px，与空隙大小无关，所以只会压住滚动条最右侧 2px 而不夺其交互
-    const gap = pr.left - wrapper.getBoundingClientRect().right
-    popup.style.setProperty('--block-handle-bridge', `${Math.max(Math.ceil(gap) + 2, 1)}px`)
+    const wr = wrapper.getBoundingClientRect()
+    // 两者同为布局坐标（Chrome 下 BCR 不含 zoom），相减与画布缩放无关；加 2px 余量后桥接区只压住块边缘 2px
+    const bridgeOf = (gap: number) => `${Math.max(Math.ceil(gap) + BRIDGE_OVERLAP, 1)}px`
+    popup.style.setProperty('--block-handle-bridge', bridgeOf(pr.left - wr.right))
+    popup.style.setProperty('--block-handle-bridge-left', bridgeOf(wr.left - pr.right))
+    if (!row) return
+    const verticalGap = handlePlacement.value === 'top' ? row.top - pr.bottom
+      : handlePlacement.value === 'bottom' ? pr.top - row.bottom : 0
+    popup.style.setProperty('--block-handle-bridge-y', bridgeOf(verticalGap))
   }
   cancelAnimationFrame(bridgeRaf)
   bridgeRaf = requestAnimationFrame(measure)
@@ -333,8 +341,8 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
 }
 
 /* popup 与块间有空隙、鼠标经过会先触发失效清理，所以用伪元素向块方向扩展透明桥接区。
-   右侧桥接区**必须恰好跨过空隙**：48px 会越界盖住紧贴文本右缘的 8px 滚动条，使其 hover/拖拽/点轨道全被 popup 吞掉。
-   故下方默认值只是「未量到空隙前」的保守兜底，真实宽度由 syncBridgeGap() 实测 popup 左缘 − 块右缘后写入 CSS 变量。 */
+   桥接区**必须恰好跨过空隙**：过宽会盖住紧贴 popup 的文字（左/上/下）或文本右缘的滚动条（右）。
+   故下方默认值只是「未量到空隙前」的保守兜底，真实尺寸由 syncBridgeGap() 实测后写入 CSS 变量。 */
 .block-handle-popup::before {
   content: '';
   position: absolute;
@@ -344,13 +352,13 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
   left: 0;
   right: 0;
   top: 100%;
-  height: 48px;
+  height: var(--block-handle-bridge-y, 48px);
 }
 .block-handle-positioner.placement-bottom .block-handle-popup::before {
   left: 0;
   right: 0;
   bottom: 100%;
-  height: 48px;
+  height: var(--block-handle-bridge-y, 48px);
 }
 .block-handle-positioner.placement-right .block-handle-popup::before {
   top: 0;
@@ -362,7 +370,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
   top: 0;
   bottom: 0;
   left: 100%;
-  width: 48px;
+  width: var(--block-handle-bridge-left, 48px);
 }
 
 /* 滚动条使文本右缘左移、右侧 popup 偏移不对称，所以按滚动条宽度推回 */

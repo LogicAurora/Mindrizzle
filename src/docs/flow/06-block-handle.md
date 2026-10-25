@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-10-25 -->
 # 06 悬浮手柄与 popup
 
 ## 图 6.1 hover 状态解析流程
@@ -59,9 +59,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["popup 显示"] --> B["syncBridgeGap()"]
-  B --> C["量 popup 左缘 - 块右缘"]
-  C --> D["写 --block-handle-bridge"]
-  D --> E["popup::before 跨过空隙"]
+  B --> C["量四侧空隙：popup−块边缘 / 行矩形"]
+  C --> D["写 --block-handle-bridge / -left / -y"]
+  D --> E["popup::before 只跨过空隙（+2px）"]
 
   F["popup pointermove"] --> G["onPopupPointerMove"]
   G --> H["syncScrollbarHover(x, y)"]
@@ -71,6 +71,9 @@ flowchart TD
 
   L["popup 关闭 / 滚动条拖拽"] --> M["clearScrollbarHover()"]
 ```
+
+> 四侧桥接区都必须按实测空隙自适应：写死 48px 会盖住紧贴 popup 的文字（左/上/下）或文本右缘的滚动条（右）。
+> 实测（桌面 placement-left，popup 130–184 / 行左缘 194）：桥接 6px 时行内 x=197、x=206 均命中文本，空隙中点仍命中 popup。
 
 ## 图 6.5 activeHandleUuid 仲裁
 
