@@ -80,7 +80,7 @@ flowchart TD
   Q -->|否| Z
 
   K["window mouseup"] --> L["RichTextEditor.onSelectionMouseUp"]
-  L --> M{"本轮按过 Alt、格式模式非指针且选区在本文块内？"}
+  L --> M{"本轮按过 Alt 且选区在本文块内？"}
   M -->|否| Z
   M -->|是| N["v-overlay 确认：左键应用、右键取消"]
 ```

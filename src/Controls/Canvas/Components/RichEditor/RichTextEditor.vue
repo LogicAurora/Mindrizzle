@@ -88,6 +88,7 @@ import { mdiNoteText } from '@mdi/js'
 
 import { defineExtension } from './extension.ts'
 import { createEditor, NodeJSON } from '@prosekit/core'
+import { TextSelection } from 'prosekit/pm/state'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY, viewportToLayout } from './extensions/blockHandleUtils.ts'
 import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue'
 import FormatModePicker from './FormatModePicker.vue'
@@ -289,12 +290,26 @@ const showFormatModes = computed(() => props.base.active === true && !readOnly.v
 // 只有本轮按过 Alt 才允许选区松手时弹确认，避免遗留格式模式反复打扰纯选字
 let formatArmed = false
 
+// 失活后 ProseMirror 仍保存旧选区，重新聚焦会恢复高亮，所以连同 state 选区一起折叠
+const clearEditorSelection = () => {
+  if (!editorMounted) return
+  const { state, view } = editor
+  if (!state.selection.empty) {
+    view.dispatch(state.tr.setSelection(TextSelection.near(state.doc.resolve(state.selection.head))))
+  }
+  if (document.activeElement instanceof HTMLElement && view.dom.contains(document.activeElement)) {
+    document.activeElement.blur()
+  }
+  const selection = window.getSelection()
+  if (selection?.anchorNode && view.dom.contains(selection.anchorNode)) selection.removeAllRanges()
+}
+
 // 取消选中后不该保留旧格式模式，否则再次选中同一块会直接套用上次的选择
 watch(() => props.base.active, (active) => {
-  if (!active) {
-    modeIndex.value = 0
-    formatArmed = false
-  }
+  if (active) return
+  modeIndex.value = 0
+  formatArmed = false
+  clearEditorSelection()
 })
 
 const onAltKeyDown = (event: KeyboardEvent) => {
@@ -307,13 +322,14 @@ const onSelectMode = (index: number | null) => {
 }
 
 const applyFormatMode = (index: number) => {
+  const mode = FORMAT_MODES[index]
+  if (!mode) return
   const commands = editor.commands
-  switch (index) {
-    case 1: commands.toggleHeading({ level: 1 }); break
-    case 2: commands.toggleBold(); break
-    case 3: commands.toggleItalic(); break
-    case 4: commands.toggleUnderline(); break
-    default: break
+  switch (mode.id) {
+    case 'heading': commands.toggleHeading({ level: 1 }); break
+    case 'bold': commands.toggleBold(); break
+    case 'italic': commands.toggleItalic(); break
+    case 'underline': commands.toggleUnderline(); break
   }
 }
 
@@ -402,7 +418,7 @@ const openApplyOverlay = async (rect: DOMRect) => {
 }
 
 const onSelectionMouseUp = () => {
-  if (!showFormatModes.value || pendingApply.value || modeIndex.value === 0) return
+  if (!showFormatModes.value || pendingApply.value) return
   if (!formatArmed || Date.now() < applyLockUntil || !isSelectionInsideEditor()) return
   const selection = window.getSelection()
   const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null
