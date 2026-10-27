@@ -21,8 +21,6 @@
           <v-icon :icon="opt.icon" />
         </v-btn>
       </v-btn-toggle>
-      <!-- 富文本格式模式属于块自身，所以只给容器，由 RichTextEditor teleport 进来 -->
-      <div id="rich-text-mode-slot" class="rich-text-mode-slot" />
       <v-btn @click="toggleEditMode">
         {{ MdrCRef?.isEditMode ? '切换到只读' : '切换到编辑' }}
       </v-btn>
@@ -332,10 +330,5 @@ onUnmounted(() => {
 /* 未选中按钮背景与工具栏同色、看不出边界，所以补半透明底色 */
 .v-btn-toggle :deep(.v-btn:not(.v-btn--selected)) {
   background: rgba(var(--v-theme-on-surface), 0.06);
-}
-
-/* 只给容器，不参与 flex 布局（空时不占位，teleport 进来的按钮组与其它按钮同排） */
-.rich-text-mode-slot {
-  display: contents;
 }
 </style>
