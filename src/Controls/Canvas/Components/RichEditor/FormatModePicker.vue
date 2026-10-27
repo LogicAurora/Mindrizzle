@@ -1,6 +1,8 @@
 <template>
   <Teleport to=".canvas-container" defer>
-    <div v-if="visible" class="format-mode-picker" :style="{ zIndex: Z_LAYER.formatModePicker }">
+    <div v-if="visible" class="format-mode-picker" :style="{ zIndex: Z_LAYER.formatModePicker }"
+      @pointerenter="isAnchorHovered = true" @pointerleave="isAnchorHovered = false"
+      @pointerdown.stop @mousedown.stop @click.stop>
       <Transition name="mode-wheel">
         <v-sheet v-if="isExpanded" class="format-mode-wheel" color="surface" elevation="8" rounded="md" border>
           <TransitionGroup name="mode-roll" tag="div" class="format-mode-track"
@@ -11,6 +13,21 @@
               <span>{{ mode.label }}</span>
             </div>
           </TransitionGroup>
+        </v-sheet>
+      </Transition>
+      <Transition name="mode-grid">
+        <v-sheet v-if="isGridVisible" class="format-mode-grid" color="surface" elevation="8" rounded="md" border>
+          <v-tooltip v-for="(mode, index) in modes" :key="mode.label" location="start"
+            :open-delay="0" :close-delay="0">
+            <template #activator="{ props: activatorProps }">
+              <button v-bind="activatorProps" type="button" class="format-mode-grid-item"
+                :class="{ 'is-current': index === modelValue }" @click="emit('update:modelValue', index)">
+                <v-icon :icon="mode.icon" size="20" />
+              </button>
+            </template>
+            <div class="text-body-2 font-weight-medium">{{ mode.label }}</div>
+            <div class="text-caption mode-tip-desc">{{ mode.description }}</div>
+          </v-tooltip>
         </v-sheet>
       </Transition>
       <v-sheet v-if="!isExpanded" class="format-mode-anchor" :color="isExpanded ? undefined : 'surface'"
@@ -44,10 +61,13 @@ const CURRENT_ROW = 1
 const isAltDown = ref(false)
 // 开始框选/点选时立即收起，避免弹窗盖住正在选中的文字；松开 Alt 后复位
 const isDismissed = ref(false)
+const isAnchorHovered = ref(false)
 const rollDirection = ref<1 | -1>(1)
 let lastWheelAt = 0
 
 const isExpanded = computed(() => props.visible && isAltDown.value && !isDismissed.value)
+// 悬浮图标面板与 Alt 轮盘互斥，避免同时压在锚点位置
+const isGridVisible = computed(() => props.visible && isAnchorHovered.value && !isExpanded.value)
 const currentMode = computed(() => props.modes[props.modelValue] ?? props.modes[0])
 
 const wrapIndex = (index: number) => ((index % props.modes.length) + props.modes.length) % props.modes.length
@@ -114,15 +134,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 纯状态指示，留下命中会挡住画布框选 */
+/* 悬浮区只在锚点 36×36 内，命中不再穿透到画布，避免误触框选 */
 .format-mode-picker {
+  --mode-grid-gap: 6px;
   position: absolute;
   /* 弹窗中行与锚点对齐，向上要占 58px，贴顶会被画布容器的 overflow:clip 裁掉，所以整体下移 */
   top: 52px;
   right: 12px;
   width: 36px;
   height: 36px;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .format-mode-anchor {
@@ -132,6 +153,59 @@ onUnmounted(() => {
   place-items: center;
   width: 36px;
   height: 36px;
+}
+
+/* 与锚点留出缝隙，两列三行码放全部模式图标 */
+.format-mode-grid {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--mode-grid-gap));
+  display: grid;
+  grid-template-columns: repeat(2, 36px);
+  grid-auto-rows: 36px;
+  gap: 2px;
+  padding: 4px;
+  box-sizing: border-box;
+  transform: translateY(-50%);
+  transform-origin: right center;
+}
+
+/* 透明桥接缝隙，指针从锚点移到网格时不会先触发 pointerleave */
+.format-mode-grid::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--mode-grid-gap) * -1);
+  width: var(--mode-grid-gap);
+}
+
+.format-mode-grid-item {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.format-mode-grid-item:hover {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.format-mode-grid-item.is-current {
+  color: rgb(var(--v-theme-primary));
+}
+
+.mode-tip-desc {
+  margin-top: 2px;
+  opacity: 0.72;
 }
 
 /* 右边缘与锚点齐平、宽度随文案增长，视觉上从锚点向左展开 */
@@ -219,5 +293,16 @@ onUnmounted(() => {
 .mode-wheel-leave-to {
   opacity: 0;
   transform: translate(10px, -50%) scaleX(0.72);
+}
+
+.mode-grid-enter-active,
+.mode-grid-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.mode-grid-enter-from,
+.mode-grid-leave-to {
+  opacity: 0;
+  transform: translate(8px, -50%) scale(0.96);
 }
 </style>
