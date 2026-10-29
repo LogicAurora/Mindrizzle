@@ -7,6 +7,7 @@ import { TEST_BENCH_CONSTRAINTS } from '../Registry/componentConstraints.ts'
 export default defineBlock<TestBenchConfig>({
   key: 'CanvasTestBench',
   title: '测试台',
+  description: '开发调试用的测试块',
   icon: mdiFlaskOutline,
   addId: 'add-test',
   // 调试用块，排在全部正式块之后

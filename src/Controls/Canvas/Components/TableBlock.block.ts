@@ -15,6 +15,7 @@ const HEADER_CELL = `${CELL_BASE};font-weight:600;background:rgba(128,128,128,.0
 export default defineBlock<TableBlockConfig>({
   key: 'TableBlock',
   title: '表格',
+  description: '可编辑单元格的表格',
   icon: mdiTableLarge,
   addId: 'add-table',
   order: 70,

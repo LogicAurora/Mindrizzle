@@ -73,6 +73,8 @@ export interface BlockEmbed<TConfig extends Record<string, unknown>> {
 export interface BlockDefinition<TConfig extends Record<string, unknown> = Record<string, unknown>> {
   key: string
   title: string
+  /** 添加菜单提示用的简述 */
+  description?: string
   icon: string
   addId: string
   // 添加菜单顺序；不填按 0，同序按 key

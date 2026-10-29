@@ -10,6 +10,7 @@ import { toImageFit } from './ImageBlock/imageConfig.ts'
 export default defineBlock<ImageBlockConfig>({
   key: 'ImageBlock',
   title: '图片',
+  description: '放置本地图片，可调整填充方式',
   icon: mdiImageOutline,
   addId: 'add-image',
   order: 30,

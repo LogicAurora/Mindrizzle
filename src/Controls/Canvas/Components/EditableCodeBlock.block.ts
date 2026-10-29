@@ -8,6 +8,7 @@ import { CODE_BLOCK_CONSTRAINTS } from '../Registry/componentConstraints.ts'
 export default defineBlock<CodeBlockConfig>({
   key: 'EditableCodeBlock',
   title: '代码块',
+  description: '带语法高亮的代码编辑块',
   icon: mdiCodeBraces,
   addId: 'add-code',
   order: 20,

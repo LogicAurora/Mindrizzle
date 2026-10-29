@@ -9,6 +9,7 @@ import LinkSettings from './LinkBlock/LinkSettings.vue'
 export default defineBlock<LinkBlockConfig>({
   key: 'LinkBlock',
   title: '链接',
+  description: '记录网址并展示站点信息',
   icon: mdiLinkVariant,
   addId: 'add-link',
   order: 60,

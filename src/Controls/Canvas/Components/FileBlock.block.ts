@@ -15,6 +15,7 @@ const SNAPSHOT_STYLE =
 export default defineBlock<FileBlockConfig>({
   key: 'FileBlock',
   title: '附件',
+  description: '存放任意文件，可随时下载',
   icon: mdiPaperclip,
   addId: 'add-file',
   order: 50,

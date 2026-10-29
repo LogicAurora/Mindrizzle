@@ -8,6 +8,7 @@ import RichTextEditor from './RichTextEditor.vue'
 export default defineBlock<RichTextConfig>({
   key: 'RichTextEditor',
   title: '富文本',
+  description: '自由排版的文字块，支持标题与行内格式',
   icon: mdiNoteText,
   addId: 'add-rich',
   order: 10,

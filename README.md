@@ -149,3 +149,5 @@ Mindrizzle 采用 [GNU General Public License v3.0](LICENSE)。
 		&#9733; 给 Mindrizzle 点个 Star
 	</a>
 </p>
+
+Copyright (c) 2026 The LogicAurora Authors.

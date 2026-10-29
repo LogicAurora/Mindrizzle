@@ -56,24 +56,23 @@ flowchart TD
 
 > `document.body.classList.contains('block-handle-dragging')` 是跨编辑器抑制 UI 的**全局 lock**。
 
-## 图 7.4 工具栏按钮组的滚轮切换
+## 图 7.4 右侧三态轮盘的滚轮切换
 
 ```mermaid
 flowchart TD
-  A["window wheel（冒泡）"] --> B["Editor.cycleOption"]
-  B --> C{"指针在 .canvas-container 内？"}
+  A["window wheel（捕获）"] --> B["AddBlockPicker.onWheel"]
+  B --> C{"无选中且在 .canvas-container 内？"}
   C -->|否| Z["忽略"]
-  C -->|是| D{"在滚动条/可滚容器上或有选中？"}
-  D -->|是| Z
-  D -->|否| E["preventDefault + 循环切换添加类型"]
+  C -->|是| D["preventDefault + 展开轮盘并切一格"]
+  D --> D2["900ms 无滚动自动收起（悬浮不展开）"]
 
-  F["window wheel（捕获，先于 stopPropagation）"] --> G["FormatModePicker.onWheel"]
-  G --> H{"按住 Alt 且本块选中且非只读？"}
+  F["window wheel（捕获）"] --> G["WheelSwitch.onWheel"]
+  G --> H{"轮盘已展开且指针在画布内？"}
   H -->|否| Z
   H -->|是| I["preventDefault + stopPropagation（不滚内容/滚动条）"]
   I --> I2{"距上次切换 < 40ms（同一手势残余）？"}
   I2 -->|是| Z
-  I2 -->|否| I3["循环切换格式模式，弹窗三行滚动一格"]
+  I2 -->|否| I3["循环切换，弹窗三行滚动一格"]
 
   P["window pointerdown（捕获）"] --> Q{"Alt 弹窗正展开？"}
   Q -->|是| Q2["收起弹窗，直到重新按 Alt"]
@@ -85,7 +84,7 @@ flowchart TD
   M -->|是| N["v-overlay 确认：左键应用、右键取消"]
 ```
 
-> 富文本格式模式的生命周期完全在块内部（含应用与确认 overlay）；选择器由块 Teleport 到 `.canvas-container` 右上角，常驻显示当前模式图标，按住 Alt 向左展开上一/当前/下一模式三行。悬浮锚点会展开全部模式图标网格（两列三行，点击可切换，`v-tooltip` 显示名称与简介），与 Alt 轮盘互斥。开始点选/框选会先收起 Alt 弹窗，只有本轮按过 Alt 的选区才弹确认。普通滚轮不再切格式，否则会与块内滚动冲突。
+> 富文本格式模式与添加块共用 `WheelSwitch` 三态轮盘和 `ModeGrid` 图标网格，选择器统一 Teleport 到 `.canvas-container` 右侧中部。富文本锚点按住 Alt 展开轮盘；添加块锚点滚轮展开轮盘并切一格，停手 900ms 自动收起；两者悬浮都只展开图标网格，点击才切换，悬浮本身不改选中值。只有本轮按过 Alt 的选区才弹应用确认；普通滚轮不再切格式，否则会与块内滚动冲突。
 
 ## 维护提示
 

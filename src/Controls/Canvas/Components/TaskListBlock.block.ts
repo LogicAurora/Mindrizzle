@@ -16,6 +16,7 @@ const SNAPSHOT_STYLE = 'width:100%;height:100%;padding:10px 12px;box-sizing:bord
 export default defineBlock<TaskListBlockConfig>({
   key: 'TaskListBlock',
   title: '任务',
+  description: '可勾选的任务清单',
   icon: mdiCheckboxMarkedOutline,
   addId: 'add-task',
   order: 80,

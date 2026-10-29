@@ -9,18 +9,6 @@
     <v-container class="toolbar" style="height: 133px;">
       <!-- <v-btn @click="save">保存</v-btn> -->
       <!-- <v-btn @click="load">加载</v-btn> -->
-      <!-- 无选中块时进入"添加块"状态，用单选组展示当前类型（滚轮切换、左键直接添加） -->
-      <v-btn-toggle
-        v-if="!hasSelection && MdrCRef?.isEditMode"
-        :model-value="addIdx"
-        @update:model-value="onSelectAdd"
-        mandatory
-      >
-        <v-btn v-for="(opt, index) in ADD_OPTIONS" :key="opt.key" :value="index" :data-test="opt.addId"
-          :title="opt.label">
-          <v-icon :icon="opt.icon" />
-        </v-btn>
-      </v-btn-toggle>
       <v-btn @click="toggleEditMode">
         {{ MdrCRef?.isEditMode ? '切换到只读' : '切换到编辑' }}
       </v-btn>
@@ -48,6 +36,9 @@
     
     <MdrCanvas class="editor-wrapper" ref="MdrCRef"/>
 
+    <AddBlockPicker v-if="!hasSelection && MdrCRef?.isEditMode" :options="ADD_OPTIONS"
+      :model-value="addIdx" :visible="true" @update:model-value="onSelectAdd" />
+
     <v-snackbar :prepend-icon="mdiCheck" color="success" location="top" v-model="saved" timeout="1500">
       保存成功
     </v-snackbar>
@@ -61,6 +52,7 @@ import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { error as logError } from '@tauri-apps/plugin-log'
 import MdrCanvas, { type ComponentController } from '../Controls/Canvas/Core/MdrCanvas.vue'
+import AddBlockPicker from '../Controls/Canvas/AddBlockPicker.vue'
 import { CANVAS_COMPONENTS } from '../Controls/Canvas/Registry/canvasComponents.ts'
 import { screenToContent } from '../utils/canvasCoords'
 import { useRoute } from 'vue-router'
@@ -79,7 +71,8 @@ const getComponentRefs = (): Record<string, ComponentController | undefined> =>
   MdrCRef.value!.componentRefs as unknown as Record<string, ComponentController | undefined>
 
 // 添加类型单源
-const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, title, icon, addId }) => ({ key, label: title, icon, addId }))
+const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, title, description, icon, addId }) =>
+  ({ key, label: title, description, icon, addId }))
 const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0)
 // 添加类型单选索引
 const addIdx = ref(0)
@@ -98,55 +91,6 @@ watch(
   },
   { immediate: true },
 )
-
-// 仅滚动条轨道上的滚轮滚动内容
-const isOnScrollbar = (e: WheelEvent): boolean => {
-  const target = e.target as HTMLElement | null
-  if (target?.closest?.('.custom-scrollbar')) return true
-  for (const el of document.querySelectorAll<HTMLElement>('.editor-scroll')) {
-    if (target === el) return true
-    const r = el.getBoundingClientRect()
-    const verticalWidth = el.offsetWidth - el.clientWidth
-    const horizontalHeight = el.offsetHeight - el.clientHeight
-    const hasVerticalScroll = el.scrollHeight > el.clientHeight
-    const hasHorizontalScroll = el.scrollWidth > el.clientWidth
-    const onVerticalTrack = hasVerticalScroll && verticalWidth > 0 &&
-      e.clientX >= r.right - verticalWidth && e.clientX <= r.right &&
-      e.clientY >= r.top && e.clientY <= r.bottom
-    const onHorizontalTrack = hasHorizontalScroll && horizontalHeight > 0 &&
-      e.clientY >= r.bottom - horizontalHeight && e.clientY <= r.bottom &&
-      e.clientX >= r.left && e.clientX <= r.right
-    if (onVerticalTrack || onHorizontalTrack) return true
-  }
-  return false
-}
-
-// 从目标往上找第一个真正能滚的容器（overflow 允许且内容确实溢出）
-const findScrollableAncestor = (target: EventTarget | null): HTMLElement | null => {
-  let el = target instanceof HTMLElement ? target : null
-  while (el && !el.classList.contains('canvas-container')) {
-    const style = getComputedStyle(el)
-    const canScrollY = (style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1
-    const canScrollX = (style.overflowX === 'auto' || style.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1
-    if (canScrollY || canScrollX) return el
-    el = el.parentElement
-  }
-  return null
-}
-
-// 通法：指针下只要有溢出的滚动容器（插入块里的表格/任务列表、富文本自身）就让原生滚动接管
-const isOnScrollableArea = (target: EventTarget | null): boolean => !!findScrollableAncestor(target)
-
-// 任意位置滚轮按 deltaY 循环切换添加类型；滚动条与可滚容器内豁免（富文本格式模式改用 Alt+滚轮，由块自己处理）
-const cycleOption = (e: WheelEvent) => {
-  if (!(e.target as HTMLElement).closest?.('.canvas-container')) return
-  if (isOnScrollbar(e)) return
-  if (isOnScrollableArea(e.target)) return
-  if (hasSelection.value) return
-  e.preventDefault()
-  const len = ADD_OPTIONS.length
-  addIdx.value = e.deltaY > 0 ? (addIdx.value + 1) % len : (addIdx.value - 1 + len) % len
-}
 
 // 把视口鼠标坐标换算为画布 content 坐标
 const canvasPointFromMouse = (e: MouseEvent): { x: number; y: number } | null => {
@@ -289,8 +233,6 @@ const initializeEditor = async () => {
 
 onMounted(() => {
   void initializeEditor()
-  // 挂 window 级并显式非 passive（否则 preventDefault 无效）
-  window.addEventListener('wheel', cycleOption, { passive: false })
   // 选字可能跨出编辑器，所以挂 window 级 mouseup
   window.addEventListener('mouseup', onMouseUp)
   // 挂 window 级 mousedown 记录按下位置
@@ -298,7 +240,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('wheel', cycleOption)
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('mousedown', trackMouseDown)
 })
