@@ -11,8 +11,8 @@
         <template #activator="{ props: activatorProps }">
           <v-btn v-bind="activatorProps" class="mode-grid-item" icon variant="text"
             :color="index === modelValue ? 'primary' : undefined"
-            @click="emit('update:modelValue', index)">
-            <v-icon :icon="option.icon" size="20" />
+            @click="selectOption(option, index)">
+            <OptionGlyph :icon="option.icon" :color="option.swatch" :custom="option.custom" />
           </v-btn>
         </template>
         <div class="text-body-2 font-weight-medium">{{ option.label }}</div>
@@ -25,6 +25,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import OptionGlyph from './OptionGlyph.vue'
 import type { WheelOption } from './wheelSwitch.ts'
 
 const props = defineProps<{
@@ -34,7 +35,19 @@ const props = defineProps<{
   instantClose?: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'update:modelValue', index: number): void }>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', index: number): void
+  (e: 'pick-custom', index: number): void
+}>()
+
+// 自定义颜色交给调用方打开取色器，其余项直接切换
+const selectOption = (option: WheelOption, index: number) => {
+  if (option.custom) {
+    emit('pick-custom', index)
+    return
+  }
+  emit('update:modelValue', index)
+}
 
 const GRID_CELL_SIZE = 36
 const GRID_GAP = 2

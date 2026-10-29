@@ -34,9 +34,10 @@
         :visible="showFormatModes" :z-index="formatPickerZ" @update:model-value="onSelectMode"
         @update:expanded="isFormatPickerExpanded = $event"
         @update:popup-open="isFormatPopupOpen = $event" />
-      <FormatDetailPicker v-if="showFormatDetail" :options="formatDetailOptions" :model-value="headingIdx"
+      <FormatDetailPicker v-if="showFormatDetail" :options="formatDetailOptions" :model-value="detailIndex"
         :visible="showFormatDetail" :suppressed="isFormatPickerExpanded" :z-index="detailPickerZ"
-        @update:model-value="onSelectHeadingDetail" @update:popup-open="isDetailPopupOpen = $event" />
+        @update:model-value="onSelectDetail" @update:popup-open="isDetailPopupOpen = $event"
+        @pick-custom-color="onPickCustomColor" />
       <v-overlay v-model="pendingApply" persistent scroll-strategy="none">
         <div class="apply-layer" @click.left="confirmApply" @mousedown.right="cancelApply" @contextmenu.prevent="cancelApply">
           <v-card :ref="setApplyCardElement" class="apply-card"
@@ -99,7 +100,8 @@ import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue'
 import { Z_LAYER } from '../../Core/zIndex.ts'
 import FormatModePicker from './FormatModePicker.vue'
 import FormatDetailPicker from './FormatDetailPicker.vue'
-import { FORMAT_MODES, HEADING_DETAILS } from './formatModes.ts'
+import { FORMAT_MODES, HEADING_DETAILS, colorDetailsOf } from './formatModes.ts'
+import type { FormatModeId } from './formatModes.ts'
 import type { MdrCanvasComponentContentProps } from '../../Core/MdrCanvasComponentBase.types.ts'
 import type { WidgetConfig } from '../../Registry/canvasComponents.ts'
 import type { BlockCanvasController, BlockComponentController } from '../../Core/canvasComponentControllers.ts'
@@ -292,7 +294,7 @@ function scrollContent(deltaY: number) {
 }
 
 const modeIndex = ref(0)
-const headingIdx = ref(0)
+const detailIndexByMode = reactive<Record<string, number>>({})
 const isFormatPickerExpanded = ref(false)
 // 哪个选择器的弹窗打开，就把它抬到上层，另一个退回基础层
 const isFormatPopupOpen = ref(false)
@@ -302,14 +304,33 @@ const detailPickerZ = computed(() =>
   isFormatPopupOpen.value && !isDetailPopupOpen.value ? Z_LAYER.formatModePicker : Z_LAYER.formatDetailPicker,
 )
 const showFormatModes = computed(() => props.base.active === true && !readOnly.value)
-const formatDetailOptions = computed(() =>
-  FORMAT_MODES[modeIndex.value]?.id === 'heading' ? HEADING_DETAILS : [],
-)
+const currentModeId = computed(() => FORMAT_MODES[modeIndex.value]?.id)
+// 自定义颜色按模式各存一份，色板用当前值展示
+const customColors = reactive({ textColor: '#111827', highlight: '#fde68a' })
+const textColorDetails = computed(() => colorDetailsOf('text', customColors.textColor))
+const highlightDetails = computed(() => colorDetailsOf('background', customColors.highlight))
+
+const detailOptionsFor = (modeId: FormatModeId | undefined) => {
+  if (modeId === 'heading') return HEADING_DETAILS
+  if (modeId === 'textColor') return textColorDetails.value
+  if (modeId === 'highlight') return highlightDetails.value
+  return []
+}
+
+const formatDetailOptions = computed(() => detailOptionsFor(currentModeId.value))
+const detailIndex = computed(() => detailIndexByMode[currentModeId.value ?? ''] ?? 0)
 const showFormatDetail = computed(() => showFormatModes.value && formatDetailOptions.value.length > 0)
 
-const onSelectHeadingDetail = (index: number | null) => {
-  if (index == null) return
-  headingIdx.value = index
+const onSelectDetail = (index: number | null) => {
+  if (index == null || !currentModeId.value) return
+  detailIndexByMode[currentModeId.value] = index
+}
+
+const onPickCustomColor = (color: string) => {
+  const modeId = currentModeId.value
+  if (modeId !== 'textColor' && modeId !== 'highlight') return
+  customColors[modeId] = color
+  detailIndexByMode[modeId] = detailOptionsFor(modeId).length - 1
 }
 
 // 只有本轮按过 Alt 才允许选区松手时弹确认，避免遗留格式模式反复打扰纯选字
@@ -360,11 +381,21 @@ const applyFormatMode = (index: number) => {
   const mode = FORMAT_MODES[index]
   if (!mode) return
   const commands = editor.commands
+  const detailIdx = detailIndexByMode[mode.id] ?? 0
+  const detail = detailOptionsFor(mode.id)[detailIdx]
   switch (mode.id) {
-    case 'heading': commands.toggleHeading({ level: headingIdx.value + 1 }); break
+    case 'heading': commands.toggleHeading({ level: detailIdx + 1 }); break
     case 'bold': commands.toggleBold(); break
     case 'italic': commands.toggleItalic(); break
     case 'underline': commands.toggleUnderline(); break
+    case 'textColor':
+      if (detail?.swatch) commands.addTextColor({ color: detail.swatch })
+      else commands.removeTextColor()
+      break
+    case 'highlight':
+      if (detail?.swatch) commands.addBackgroundColor({ color: detail.swatch })
+      else commands.removeBackgroundColor()
+      break
   }
 }
 
@@ -392,11 +423,10 @@ interface ViewportRect {
 const pendingApply = ref(false)
 const pendingFormat = ref(0)
 const pendingLabel = computed(() => FORMAT_MODES[pendingFormat.value]?.label ?? '格式')
-// 标题等带详情选项的模式，把具体级别一并带进确认文案
+// 标题/颜色等带详情选项的模式，把具体选项一并带进确认文案
 const pendingDisplayLabel = computed(() => {
-  const detail = FORMAT_MODES[pendingFormat.value]?.id === 'heading'
-    ? HEADING_DETAILS[headingIdx.value]?.label
-    : ''
+  const modeId = FORMAT_MODES[pendingFormat.value]?.id
+  const detail = detailOptionsFor(modeId)[detailIndexByMode[modeId ?? ''] ?? 0]?.label
   return detail ? `${pendingLabel.value} · ${detail}` : pendingLabel.value
 })
 const overlayPos = ref({ left: 0, top: 0 })

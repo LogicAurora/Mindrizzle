@@ -7,8 +7,9 @@
         <div v-for="(option, row) in wheelRows" :key="option.label" class="mode-wheel-row text-body-2"
           :class="row === CURRENT_ROW ? 'text-primary font-weight-medium' : 'text-medium-emphasis'">
           <span>{{ option.label }}</span>
-          <v-icon :icon="option.icon" size="20"
-            :style="{ visibility: row === CURRENT_ROW && !expanded ? 'hidden' : 'visible' }" />
+          <OptionGlyph :icon="option.icon" :color="option.swatch" :custom="option.custom" :style="{
+            visibility: row === CURRENT_ROW && !expanded ? 'hidden' : 'visible',
+          }" />
         </div>
       </TransitionGroup>
     </v-sheet>
@@ -18,6 +19,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+import OptionGlyph from './OptionGlyph.vue'
 import { wrapWheelIndex, type WheelOption } from './wheelSwitch.ts'
 
 const props = defineProps<{
