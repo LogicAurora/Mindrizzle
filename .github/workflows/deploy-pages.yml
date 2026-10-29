@@ -11,7 +11,7 @@ permissions:
 
 # 同一时刻只允许一次发布，避免并发推送互相覆盖 Pages 产物
 concurrency:
-  group: pages
+  group: cloudflare-pages
   cancel-in-progress: true
 
 jobs:
@@ -48,29 +48,12 @@ jobs:
       - name: Type check (Vue SFC)
         run: bunx vue-tsc --noEmit
 
-      # Pages 部署在 /<仓库名>/ 子路径下，base 必须跟着变；Tauri 打包仍走默认的 /
       - name: Build
-        run: bunx vite build --base=/${{ github.event.repository.name }}/
+        run: bunx vite build --base=/
 
-      # 项目产物没有下划线前缀文件，加 .nojekyll 防止 Jekyll 未来误吞静态资源
-      - name: Disable Jekyll
-        run: touch dist/.nojekyll
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=mindrizzle
