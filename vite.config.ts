@@ -31,10 +31,8 @@ export default defineConfig(async () => ({
     // Tauri 各平台 WebView 均为现代内核，无需为旧浏览器降级转译
     target: 'esnext',
   },
-  // 路由已改为懒加载，默认只扫 index.html 的入口图不再覆盖各页面链路的依赖，
-  // 显式扫描全部源码，否则首次进入 /editor 会触发依赖重优化并整页重载
   optimizeDeps: {
-    entries: ["index.html", "src/**/*.{vue,ts}"],
+    entries: ["index.html"],
   },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
