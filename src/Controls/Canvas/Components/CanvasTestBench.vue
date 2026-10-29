@@ -6,6 +6,7 @@
         <v-tab value="config">配置</v-tab>
         <v-tab value="files">文件</v-tab>
         <v-tab value="scroll">滚动</v-tab>
+        <v-tab value="colors">颜色</v-tab>
       </v-tabs>
 
       <v-window v-model="tab" class="bench-window">
@@ -87,6 +88,23 @@
             <div v-for="row in SCROLL_ROWS" :key="row">滚动测试行 {{ row }}</div>
           </div>
         </v-window-item>
+
+        <v-window-item value="colors">
+          <div class="bench-pane">
+            <div class="bench-actions">
+              <v-chip v-for="role in PREVIEW_ROLES" :key="role" size="x-small" :color="role" label>{{ role }}</v-chip>
+            </div>
+            <v-progress-linear :model-value="PREVIEW_PROGRESS" color="secondary"
+              bg-color="rgba(var(--v-theme-on-background), 0.14)" height="4" rounded />
+            <div class="bench-metrics">
+              <div v-for="item in themeColors" :key="item.key" class="color-cell">
+                <span class="color-swatch" :style="{ background: item.css }" />
+                <code class="color-key">{{ item.key }}</code>
+                <span class="color-value">{{ item.value }}</span>
+              </div>
+            </div>
+          </div>
+        </v-window-item>
       </v-window>
     </div>
 
@@ -103,6 +121,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
+import { useTheme } from 'vuetify'
 
 import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
 import type { TestBenchConfig } from '../Registry/canvasComponents.ts'
@@ -117,6 +136,8 @@ const DATA_TEST_PATH = 'test/hello.txt'
 const DATA_TEST_CONTENT = 'hello mdrfcd'
 const DATA_TEST_IDLE = '未测试'
 const SCROLL_ROWS = Array.from({ length: 60 }, (_, index) => index + 1)
+const PREVIEW_ROLES = ['primary', 'secondary', 'success', 'warning', 'info', 'error'] as const
+const PREVIEW_PROGRESS = 60
 
 const ctx = useBlockContext<TestBenchConfig>()
 const config = computed(() => ctx.config)
@@ -126,6 +147,17 @@ const tab = ref('state')
 const viewLabel = ref('')
 const originLabel = ref('')
 const panningLabel = ref('')
+
+const theme = useTheme()
+const themeColors = computed(() =>
+  Object.entries(theme.current.value.colors)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => ({
+      key,
+      value: typeof value === 'string' ? value : JSON.stringify(value),
+      css: `rgb(var(--v-theme-${key}))`,
+    })),
+)
 
 const refreshView = () => {
   const view = ctx.getView()
@@ -276,6 +308,31 @@ const deleteData = () => runDataStep(async () => {
 .bench-status {
   font-size: 11px;
   opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+.color-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.color-swatch {
+  flex: none;
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.24);
+}
+
+.color-key {
+  flex: none;
+  min-width: 96px;
+}
+
+.color-value {
+  opacity: 0.7;
   overflow-wrap: anywhere;
 }
 </style>

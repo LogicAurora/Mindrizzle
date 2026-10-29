@@ -342,7 +342,7 @@ function navigateFromMenu(path: string) {
             :size="PROGRESS_RING_SIZE"
             :width="PROGRESS_RING_WIDTH"
             color="secondary"
-            bg-color="rgba(255,255,255,0.10)"
+            bg-color="rgba(var(--v-theme-on-background), 0.12)"
           >
             <span class="text-h6 font-weight-bold">{{ Math.round(progress) }}%</span>
           </v-progress-circular>
@@ -351,7 +351,7 @@ function navigateFromMenu(path: string) {
           <v-progress-linear
             :model-value="progress"
             color="secondary"
-            bg-color="rgba(255,255,255,0.12)"
+            bg-color="rgba(var(--v-theme-on-background), 0.14)"
             height="4"
             rounded
           />
@@ -634,6 +634,6 @@ textarea {
 }
 
 .loading-curtain__loader .v-progress-circular__content {
-  color: white;
+  color: rgb(var(--v-theme-on-background));
 }
 </style>

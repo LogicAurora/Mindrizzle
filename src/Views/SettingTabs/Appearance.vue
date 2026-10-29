@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { argbFromHex, hexFromArgb, themeFromSourceColor } from '@material/material-color-utilities'
+import { Blend, Hct, TonalPalette, argbFromHex, hexFromArgb, themeFromSourceColor } from '@material/material-color-utilities'
 import { computed, onMounted, ref } from 'vue'
 import { useTheme } from 'vuetify'
 import { mdiCheckCircle, mdiImageFilterHdr, mdiPaletteOutline } from '@mdi/js'
@@ -14,9 +14,16 @@ type MaterialScheme = ReturnType<typeof themeFromSourceColor>['schemes']['light'
 type MaterialSchemeColors = ReturnType<MaterialScheme['toJSON']>
 type MaterialThemeName = 'light' | 'dark'
 type ThemeColorMode = 'wallpaper' | 'color'
+type GeneratedColorsInput = {
+  scheme: MaterialSchemeColors
+  baseColors: typeof theme.themes.value.light.colors
+  sourceColor: string
+  isDark: boolean
+}
 const MATERIAL_COLOR_ROLES = [
   ['primary', 'primary'],
   ['on-primary', 'onPrimary'],
+  ['secondary', 'secondary'],
   ['on-secondary', 'onSecondary'],
   ['tertiary', 'tertiary'],
   ['on-tertiary', 'onTertiary'],
@@ -34,6 +41,19 @@ const MATERIAL_COLOR_ROLES = [
   ['inverse-on-surface', 'inverseOnSurface'],
   ['inverse-primary', 'inversePrimary'],
 ] as const
+// MCU 的 scheme 不包含 success/warning/info，只能从设计色派生；色相只允许在种子附近小幅摆动，否则黄橙会被拉进红区
+// error 是语义色里的判据，色相完全钉住，只让饱和度跟主题走
+const SEMANTIC_COLOR_SEEDS = [
+  ['error', 25, 0xffb3261e, false],
+  ['success', 144, 0xff2e7d32, true],
+  ['warning', 70, 0xffed6c02, true],
+  ['info', 230, 0xff0288d1, true],
+] as const
+type SemanticColorSeed = (typeof SEMANTIC_COLOR_SEEDS)[number]
+const SEMANTIC_HUE_LIMIT = 20
+const SEMANTIC_CHROMA = { min: 32, max: 64 } as const
+const SEMANTIC_TONE = { light: 40, dark: 80 } as const
+const SEMANTIC_ON_TONE = { light: 100, dark: 20 } as const
 
 // 避免未输入完整的 Hex 色值时触发 Material 色彩算法。
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i
@@ -184,16 +204,49 @@ function applyMaterialTheme(sourceColor: string, themeName: MaterialThemeName, i
   theme.themes.value[themeName] = {
     ...baseTheme,
     dark: isDark,
-    colors: createGeneratedColors(scheme, baseTheme.colors),
+    colors: createGeneratedColors({ scheme, baseColors: baseTheme.colors, sourceColor, isDark }),
   }
 }
 
-function createGeneratedColors(scheme: MaterialSchemeColors, baseColors: typeof theme.themes.value.light.colors) {
+function createGeneratedColors({ scheme, baseColors, sourceColor, isDark }: GeneratedColorsInput) {
+  const mode = isDark ? 'dark' : 'light'
   const generatedColors = Object.fromEntries(
     MATERIAL_COLOR_ROLES.map(([themeRole, materialRole]) => [themeRole, hexFromArgb(scheme[materialRole])]),
   )
 
-  return { ...baseColors, ...generatedColors }
+  return { ...baseColors, ...generatedColors, ...createSemanticColors(argbFromHex(sourceColor), mode) }
+}
+
+function createSemanticColors(sourceArgb: number, mode: MaterialThemeName) {
+  return Object.fromEntries(
+    SEMANTIC_COLOR_SEEDS.flatMap((seed) => {
+      const [role] = seed
+      const palette = createSemanticPalette(seed, sourceArgb)
+      return [
+        [role, hexFromArgb(palette.tone(SEMANTIC_TONE[mode]))],
+        [`on-${role}`, hexFromArgb(palette.tone(SEMANTIC_ON_TONE[mode]))],
+      ]
+    }),
+  )
+}
+
+function createSemanticPalette([, seedHue, seedArgb, isHarmonized]: SemanticColorSeed, sourceArgb: number) {
+  if (!isHarmonized) return TonalPalette.fromHueAndChroma(seedHue, clampSemanticChroma(Hct.fromInt(sourceArgb).chroma))
+  const harmonized = Hct.fromInt(Blend.harmonize(seedArgb, sourceArgb))
+  return TonalPalette.fromHueAndChroma(
+    limitHueOffset(seedHue, harmonized.hue),
+    clampSemanticChroma(harmonized.chroma),
+  )
+}
+
+function clampSemanticChroma(chroma: number) {
+  return Math.min(SEMANTIC_CHROMA.max, Math.max(SEMANTIC_CHROMA.min, chroma))
+}
+
+function limitHueOffset(seedHue: number, harmonizedHue: number) {
+  const shortestDelta = ((harmonizedHue - seedHue + 540) % 360) - 180
+  const clampedDelta = Math.max(-SEMANTIC_HUE_LIMIT, Math.min(SEMANTIC_HUE_LIMIT, shortestDelta))
+  return (seedHue + clampedDelta + 360) % 360
 }
 
 onMounted(() => {
