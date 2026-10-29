@@ -141,7 +141,7 @@ async function copyDiagnostics() {
           </a>
           <span>在此，特别感谢每一位为Mindrizzle做出贡献的开发者！！！</span>
         </div>
-        <span>版权所有 © {{ copyrightYear }} LogicAurora</span>
+        <span>版权所有 © {{ copyrightYear }} The LogicAurora Authors</span>
       </div>
     </section>
 
