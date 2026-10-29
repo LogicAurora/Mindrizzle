@@ -74,9 +74,11 @@ const gridHeight = computed(() =>
   height: var(--mode-grid-height);
   padding: 4px 40px 4px 4px;
   box-sizing: border-box;
-  transform: translateY(-50%);
+  transform: translateY(-50%) translateZ(0);
   transform-origin: right center;
   overflow: hidden;
+  /* 宽高动画只在弹窗内部生效，避免逐帧触发整页布局与重绘 */
+  contain: layout paint;
 }
 
 /* 尺寸交给网格，悬浮/选中反馈交给 v-btn 的 text 变体 */
@@ -96,6 +98,8 @@ const gridHeight = computed(() =>
 .mode-grid-enter-active,
 .mode-grid-leave-active {
   transition: width 0.18s ease, height 0.18s ease;
+  /* 仅在动画期间提示浏览器提前准备布局，结束后随 class 一起移除 */
+  will-change: width, height;
 }
 
 /* 边框从锚点大小长到卡片大小，图标随后淡入 */

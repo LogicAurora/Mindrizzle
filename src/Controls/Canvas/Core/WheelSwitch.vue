@@ -94,9 +94,11 @@ onUnmounted(() => {
   height: 116px;
   padding: 4px 0;
   box-sizing: border-box;
-  transform: translateY(-50%);
+  transform: translateY(-50%) translateZ(0);
   transform-origin: right center;
   overflow: hidden;
+  /* 宽高动画只在弹窗内部生效，避免逐帧触发整页布局与重绘 */
+  contain: layout paint;
 }
 
 /* 轨道独立居中，边框伸缩时当前行始终压在锚点上 */
@@ -170,6 +172,8 @@ onUnmounted(() => {
 .mode-wheel-enter-active,
 .mode-wheel-leave-active {
   transition: width 0.18s ease, height 0.18s ease;
+  /* 仅在动画期间提示浏览器提前准备布局，结束后随 class 一起移除 */
+  will-change: width, height;
 }
 
 /* 边框从锚点大小长到弹窗大小，内容随后淡入，避免整块缩放 */

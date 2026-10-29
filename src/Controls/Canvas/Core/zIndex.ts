@@ -1,6 +1,6 @@
 // 画布叠加层 z-index 体系（全项目唯一事实来源）。
 // CSS（scoped）无法引用 TS 常量，各处硬编码的 z-index 必须与本表一致，改动需同步：
-// settingsDropdown 2110 > settingsMenu 2100 > formatModePicker 1010 > blockLineHighlight 1006 > popup 1005 > 曲别针 1004 > 缩放手柄 1003 > 描边环 1002 > 拖拽栏 1001 > 选中块 1000 > itemZLimit 500
+// settingsDropdown 2110 > settingsMenu 2100 > formatDetailPicker 1011 > formatModePicker 1010 > blockLineHighlight 1006 > popup 1005 > 曲别针 1004 > 缩放手柄 1003 > 描边环 1002 > 拖拽栏 1001 > 选中块 1000 > itemZLimit 500
 export const Z_LAYER = {
   popup: 1005,
   paperclip: 1004,
@@ -15,6 +15,8 @@ export const Z_LAYER = {
   settingsDropdown: 2110,
   // 格式模式选择器挂在画布容器右上角，只需压过画布浮层
   formatModePicker: 1010,
+  // 格式详情选择器的弹窗要压在主选择器之上，展开时才能完整可见
+  formatDetailPicker: 1011,
   // 富文本 hover 行高亮挂在 body，须压过画布内容但不能盖住右上角的选择器
   blockLineHighlight: 1006,
   appLoadingCurtain: 10002,

@@ -31,7 +31,12 @@
       </ProseKit>
       <!-- 格式模式属于富文本块，选择器由块提供、定位到画布右上角 -->
       <FormatModePicker v-if="showFormatModes" :modes="FORMAT_MODES" :model-value="modeIndex"
-        :visible="showFormatModes" @update:model-value="onSelectMode" />
+        :visible="showFormatModes" :z-index="formatPickerZ" @update:model-value="onSelectMode"
+        @update:expanded="isFormatPickerExpanded = $event"
+        @update:popup-open="isFormatPopupOpen = $event" />
+      <FormatDetailPicker v-if="showFormatDetail" :options="formatDetailOptions" :model-value="headingIdx"
+        :visible="showFormatDetail" :suppressed="isFormatPickerExpanded" :z-index="detailPickerZ"
+        @update:model-value="onSelectHeadingDetail" @update:popup-open="isDetailPopupOpen = $event" />
       <v-overlay v-model="pendingApply" persistent scroll-strategy="none">
         <div class="apply-layer" @click.left="confirmApply" @mousedown.right="cancelApply" @contextmenu.prevent="cancelApply">
           <v-card :ref="setApplyCardElement" class="apply-card"
@@ -41,7 +46,7 @@
               visibility: applyPositionReady ? 'visible' : 'hidden',
             }">
             <v-card-text class="text-center pb-0">
-              <div>切换「{{ pendingLabel }}」？</div>
+              <div>切换「{{ pendingDisplayLabel }}」？</div>
               <div class="text-caption text-medium-emphasis mt-1">左键应用 · 右键取消</div>
             </v-card-text>
             <v-card-actions class="justify-end ga-1">
@@ -91,8 +96,10 @@ import { createEditor, NodeJSON } from '@prosekit/core'
 import { TextSelection } from 'prosekit/pm/state'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY, viewportToLayout } from './extensions/blockHandleUtils.ts'
 import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue'
+import { Z_LAYER } from '../../Core/zIndex.ts'
 import FormatModePicker from './FormatModePicker.vue'
-import { FORMAT_MODES } from './formatModes.ts'
+import FormatDetailPicker from './FormatDetailPicker.vue'
+import { FORMAT_MODES, HEADING_DETAILS } from './formatModes.ts'
 import type { MdrCanvasComponentContentProps } from '../../Core/MdrCanvasComponentBase.types.ts'
 import type { WidgetConfig } from '../../Registry/canvasComponents.ts'
 import type { BlockCanvasController, BlockComponentController } from '../../Core/canvasComponentControllers.ts'
@@ -285,7 +292,25 @@ function scrollContent(deltaY: number) {
 }
 
 const modeIndex = ref(0)
+const headingIdx = ref(0)
+const isFormatPickerExpanded = ref(false)
+// 哪个选择器的弹窗打开，就把它抬到上层，另一个退回基础层
+const isFormatPopupOpen = ref(false)
+const isDetailPopupOpen = ref(false)
+const formatPickerZ = computed(() => (isFormatPopupOpen.value ? Z_LAYER.formatDetailPicker : Z_LAYER.formatModePicker))
+const detailPickerZ = computed(() =>
+  isFormatPopupOpen.value && !isDetailPopupOpen.value ? Z_LAYER.formatModePicker : Z_LAYER.formatDetailPicker,
+)
 const showFormatModes = computed(() => props.base.active === true && !readOnly.value)
+const formatDetailOptions = computed(() =>
+  FORMAT_MODES[modeIndex.value]?.id === 'heading' ? HEADING_DETAILS : [],
+)
+const showFormatDetail = computed(() => showFormatModes.value && formatDetailOptions.value.length > 0)
+
+const onSelectHeadingDetail = (index: number | null) => {
+  if (index == null) return
+  headingIdx.value = index
+}
 
 // 只有本轮按过 Alt 才允许选区松手时弹确认，避免遗留格式模式反复打扰纯选字
 let formatArmed = false
@@ -309,11 +334,21 @@ watch(() => props.base.active, (active) => {
   if (active) return
   modeIndex.value = 0
   formatArmed = false
+  isFormatPickerExpanded.value = false
+  isFormatPopupOpen.value = false
+  isDetailPopupOpen.value = false
   clearEditorSelection()
 })
 
 const onAltKeyDown = (event: KeyboardEvent) => {
-  if (event.key === 'Alt' && showFormatModes.value) formatArmed = true
+  // Alt+Ctrl 是详情菜单的层级快捷键，不能顺手把应用确认武装起来
+  if (event.key !== 'Alt' || event.ctrlKey) return
+  if (showFormatModes.value) formatArmed = true
+}
+
+// 松开 Alt 立刻解除武装，纯选字不再弹出确认
+const onAltKeyUp = (event: KeyboardEvent) => {
+  if (event.key === 'Alt') formatArmed = false
 }
 
 const onSelectMode = (index: number | null) => {
@@ -326,7 +361,7 @@ const applyFormatMode = (index: number) => {
   if (!mode) return
   const commands = editor.commands
   switch (mode.id) {
-    case 'heading': commands.toggleHeading({ level: 1 }); break
+    case 'heading': commands.toggleHeading({ level: headingIdx.value + 1 }); break
     case 'bold': commands.toggleBold(); break
     case 'italic': commands.toggleItalic(); break
     case 'underline': commands.toggleUnderline(); break
@@ -357,6 +392,13 @@ interface ViewportRect {
 const pendingApply = ref(false)
 const pendingFormat = ref(0)
 const pendingLabel = computed(() => FORMAT_MODES[pendingFormat.value]?.label ?? '格式')
+// 标题等带详情选项的模式，把具体级别一并带进确认文案
+const pendingDisplayLabel = computed(() => {
+  const detail = FORMAT_MODES[pendingFormat.value]?.id === 'heading'
+    ? HEADING_DETAILS[headingIdx.value]?.label
+    : ''
+  return detail ? `${pendingLabel.value} · ${detail}` : pendingLabel.value
+})
 const overlayPos = ref({ left: 0, top: 0 })
 const applyPositionReady = ref(false)
 const applyCardElement = ref<HTMLElement | null>(null)
@@ -417,9 +459,11 @@ const openApplyOverlay = async (rect: DOMRect) => {
   applyPositionReady.value = true
 }
 
-const onSelectionMouseUp = () => {
+const onSelectionMouseUp = (event: MouseEvent) => {
   if (!showFormatModes.value || pendingApply.value) return
-  if (!formatArmed || Date.now() < applyLockUntil || !isSelectionInsideEditor()) return
+  // 任何模式（含标题）都必须按住 Alt 完成选区才询问
+  if (!event.altKey || !formatArmed) return
+  if (Date.now() < applyLockUntil || !isSelectionInsideEditor()) return
   const selection = window.getSelection()
   const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null
   if (!rect?.width || !rect.height) return
@@ -548,6 +592,7 @@ onMounted(() => {
   }
   window.addEventListener('Mindrizzle:canvas-transform', onCanvasTransform)
   window.addEventListener('keydown', onAltKeyDown)
+  window.addEventListener('keyup', onAltKeyUp)
   window.addEventListener('mouseup', onSelectionMouseUp)
   window.addEventListener('resize', keepApplyCardInViewport)
   onUnmounted(() => observer.disconnect())
@@ -563,6 +608,7 @@ onUnmounted(() => {
   editor.unmount()
   window.removeEventListener('Mindrizzle:canvas-transform', onCanvasTransform)
   window.removeEventListener('keydown', onAltKeyDown)
+  window.removeEventListener('keyup', onAltKeyUp)
   window.removeEventListener('mouseup', onSelectionMouseUp)
   window.removeEventListener('resize', keepApplyCardInViewport)
 })

@@ -1,8 +1,8 @@
 <template>
   <Teleport to=".canvas-container" defer>
     <div v-if="visible" class="format-mode-picker" :class="{ 'is-popup-open': isPopupOpen }"
-      :style="{ zIndex: Z_LAYER.formatModePicker }"
-      @pointerenter="isAnchorHovered = true" @pointerleave="isAnchorHovered = false"
+      :style="{ zIndex: zIndex ?? Z_LAYER.formatModePicker }"
+      @pointerenter="openHover" @pointerleave="scheduleHoverClose"
       @pointerdown.stop @mousedown.stop @click.stop>
       <WheelSwitch :options="modes" :model-value="modelValue" :expanded="isExpanded"
         :instant-close="isGridVisible" @update:model-value="emit('update:modelValue', $event)" />
@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { Z_LAYER } from '../../Core/zIndex.ts'
 import ModeGrid from '../../Core/ModeGrid.vue'
@@ -27,31 +27,69 @@ const props = defineProps<{
   modes: readonly FormatMode[]
   modelValue: number
   visible: boolean
+  zIndex?: number
 }>()
 
-const emit = defineEmits<{ (e: 'update:modelValue', index: number): void }>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', index: number): void
+  (e: 'update:expanded', value: boolean): void
+  (e: 'update:popup-open', value: boolean): void
+}>()
 
 const isAltDown = ref(false)
+const isCtrlDown = ref(false)
 // 开始框选/点选时立即收起，避免弹窗盖住正在选中的文字；松开 Alt 后复位
 const isDismissed = ref(false)
 const isAnchorHovered = ref(false)
+// 指针掠过锚点/弹窗边缘时留一点缓冲，避免浮层闪烁式开关
+const HOVER_CLOSE_DELAY = 80
+let hoverCloseTimer = 0
 
-const isExpanded = computed(() => props.visible && isAltDown.value && !isDismissed.value)
+const openHover = () => {
+  if (hoverCloseTimer) clearTimeout(hoverCloseTimer)
+  hoverCloseTimer = 0
+  isAnchorHovered.value = true
+}
+
+const scheduleHoverClose = () => {
+  if (hoverCloseTimer) clearTimeout(hoverCloseTimer)
+  hoverCloseTimer = window.setTimeout(() => {
+    isAnchorHovered.value = false
+    hoverCloseTimer = 0
+  }, HOVER_CLOSE_DELAY)
+}
+
+// Alt+Ctrl 保留给块下方的格式详情菜单，主轮盘此时不展开
+const isExpanded = computed(() => props.visible && isAltDown.value && !isCtrlDown.value && !isDismissed.value)
+// 详情菜单需要据此让位，避免两个面板在同一列叠在一起
+watch(isExpanded, (value) => emit('update:expanded', value), { immediate: true })
 // 悬浮图标面板与 Alt 轮盘互斥，避免同时压在锚点位置
 const isGridVisible = computed(() => props.visible && isAnchorHovered.value && !isExpanded.value)
 // 任一弹窗展开时由弹窗边框接管锚点描边，避免两条 1px 边框叠成更粗的线
 const isPopupOpen = computed(() => isExpanded.value || isGridVisible.value)
+// 悬浮网格/轮盘打开时把自身提到详情菜单之上
+watch(isPopupOpen, (value) => emit('update:popup-open', value), { immediate: true })
 const currentMode = computed(() => props.modes[props.modelValue] ?? props.modes[0])
 
 const onKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Control') {
+    isCtrlDown.value = true
+    return
+  }
   if (event.key !== 'Alt') return
   // 修饰键的重复 keydown 不能把已收起的弹窗重新打开
   if (event.repeat) return
+  // Alt+Ctrl 交给块下方的详情轮盘
+  if (event.ctrlKey) return
   isAltDown.value = true
   isDismissed.value = false
 }
 
 const onKeyUp = (event: KeyboardEvent) => {
+  if (event.key === 'Control') {
+    isCtrlDown.value = false
+    return
+  }
   if (event.key !== 'Alt') return
   isAltDown.value = false
   isDismissed.value = false
@@ -64,6 +102,7 @@ const onPointerDown = () => {
 // Alt + Tab 切走会收不到 keyup，窗口失焦时强制收起
 const onWindowBlur = () => {
   isAltDown.value = false
+  isCtrlDown.value = false
 }
 
 onMounted(() => {
@@ -74,6 +113,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (hoverCloseTimer) clearTimeout(hoverCloseTimer)
+  hoverCloseTimer = 0
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('blur', onWindowBlur)
