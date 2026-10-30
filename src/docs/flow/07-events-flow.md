@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-25 -->
+<!-- 最后验证: 2026-10-30 -->
 # 07 事件连锁反应
 
 > 事件契约见 02-contracts.md，本文件回答"派发之后发生了什么"。
@@ -85,6 +85,41 @@ flowchart TD
 ```
 
 > 富文本格式模式与添加块共用 `WheelSwitch` 三态轮盘和 `ModeGrid` 图标网格，选择器统一 Teleport 到 `.canvas-container` 右侧中部。富文本锚点按住 Alt 展开轮盘；添加块锚点滚轮展开轮盘并切一格，停手 900ms 自动收起；两者悬浮都只展开图标网格，点击才切换，悬浮本身不改选中值。标题/字体颜色/背景高亮在下方挂详情轮盘：Alt+Ctrl+滚轮切换，悬浮展开网格；颜色详情为 12 色板 + 自定义取色器，Alt+Ctrl 时主轮盘让位。只有本轮按过 Alt 的选区才弹应用确认；普通滚轮不再切格式，否则会与块内滚动冲突。
+
+## 图 7.5 富文本原子块（插入组件 / 公式块）的键盘与选区
+
+```mermaid
+flowchart TD
+  A["插入组件：insertVueComponent(At)"] --> B["placeCaretAfterEmbed<br/>节点后补空段落 + TextSelection"]
+  B --> C["用户继续打字落在组件之后<br/>组件与数据不被替换"]
+
+  D["组件被 NodeSelection 选中<br/>（工具条点击 / 拖拽 / 粘贴后）"] --> E["atom-block-keyboard.handleKeyDown"]
+  E --> F{"可打印字符？"}
+  F -->|是| G["光标让到节点后，交给默认输入处理"]
+  F -->|否| H{"方向键？"}
+  H -->|是| I["光标越到节点前/后，阻止默认行为"]
+  H -->|否| J["交给 baseKeymap<br/>Delete/Backspace 仍可显式删除"]
+
+  K["点击组件工具条"] --> L["selectBlock()<br/>NodeSelection + view.focus()"]
+  L --> M["Ctrl+C 走 toDOM 序列化<br/>粘贴经 parseDOM 校验 uuid / props / 尺寸"]
+
+  N["点击嵌入块左右/上下的空隙"] --> O["GapCursor<br/>原生光标被 hideselection 隐藏"]
+  O --> P["selectionStyles.css 画块间隙光标<br/>（不带样式时完全不可见）"]
+  O --> Q["可打印字符 → caretFromGap<br/>补空段落把光标接进去"]
+
+  R["鼠标拖拽选中文字<br/>selectionchange / 滚动 / 内容尺寸变化"] --> S["useTextSelectionHighlight：按行取 getClientRects<br/>折回布局像素 → .text-selection-highlight-rect"]
+  S --> T["原生 .ProseMirror ::selection 置透明<br/>嵌入块内部仍用浏览器原生高亮"]
+
+  U["代码块 textarea 选区<br/>pointerdown 拖拽 / select / keyup / scroll"] --> V["selectionStart/End 在高亮层上取 Range<br/>拖拽期 rAF 合并量算，自绘 .selection-rect"]
+```
+
+> 插入组件与公式块都是 atom block：被 NodeSelection 选中时，ProseMirror 的默认输入语义是「替换选区」，一次按键就会连组件带数据一起删掉。因此插入命令不建立 NodeSelection，键盘入口统一经 `atom-block-keyboard.ts` 把光标让到节点之外；组件内容区继续 `stopPropagation` 保留业务输入，工具条承担「选中整块」的选择把手。
+>
+> 原子块以 `inline-flex` 参与行内排版，块左右会留出可点击的空隙，PM 在那里只能放 GapCursor，而 `defineGapCursor()` 只带插件不带样式（`::selection`/`.ProseMirror-selectednode` 默认值也不随主题），三类选区样式统一收在 `selectionStyles.css`，它由 `RichTextEditor.vue` 随懒加载块一同引入。
+>
+> 文字选区要圆角只能自绘：`::selection` 不支持圆角，所以原生高亮置透明、按行铺圆角块；高亮层在 `.editor-scroll-shell` 里（不在 `.ProseMirror` 内，否则会被当成文档变更），坐标是布局像素，随 `.canvas` 的 zoom 自动缩放。
+>
+> 嵌入块自己要接管选区时，用比 `:where(.editor-mount.ProseMirror) ::selection` 更高的优先级把原生高亮关掉：代码块就是按 `selectionStart/End` 在高亮层 `code` 上取 Range，再画到 textarea 上的 `.selection-layer`（两层同字体、滚动同步，坐标同样折回布局像素）。
 
 ## 维护提示
 

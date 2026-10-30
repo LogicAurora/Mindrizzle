@@ -16,10 +16,12 @@ import {
   nextTick,
 } from 'vue'
 import { mdiArrowBottomRight, mdiCogOutline, mdiExportVariant } from '@mdi/js'
+import { NodeSelection } from 'prosekit/pm/state'
 import { Z_LAYER } from '../../../Core/zIndex.ts'
 import { DEFAULT_CONSTRAINTS, normalizeConstraints, type ResizeConstraints } from '../../../Registry/resizeConstraints.ts'
 import { embeddedBlockOf } from '../../../Sdk/blockRegistry.ts'
 import { EMBED_SETTINGS_HOST_KEY } from '../../../Sdk/embedSettingsHost.ts'
+import { isValidComponentUuid } from '../../../../../utils/componentDataStore.ts'
 import { createStoreResolver, findPositionerEl, layoutToViewportX, layoutToViewportY, viewportToLayout } from './blockHandleUtils.ts'
 
 const resolveBlockHandleStore = createStoreResolver()
@@ -45,6 +47,25 @@ async function loadComponent(name: string) {
   return result
 }
 
+export const EMBED_DEFAULT_WIDTH = 360
+export const EMBED_DEFAULT_HEIGHT = 240
+
+// 剪贴板里的属性是外部输入，JSON 损坏时退回默认值，否则整次粘贴都会解析失败
+const parsePropsAttr = (raw: string | null): Record<string, unknown> => {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const parseSizeAttr = (raw: string | null, fallback: number): number => {
+  const value = Number.parseFloat(raw ?? '')
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
 export const vueComponentNode = defineNodeSpec({
   name: 'vueComponent',
   group: 'block',
@@ -53,8 +74,8 @@ export const vueComponentNode = defineNodeSpec({
   attrs: {
     componentName: { default: 'MyCard' },
     props: { default: {} },
-    width: { default: 360 },
-    height: { default: 240 },
+    width: { default: EMBED_DEFAULT_WIDTH },
+    height: { default: EMBED_DEFAULT_HEIGHT },
     // 嵌入态也需要组件数据目录，拖出成块时按它迁移文件
     uuid: { default: '' },
   },
@@ -63,12 +84,14 @@ export const vueComponentNode = defineNodeSpec({
       tag: 'div[data-vue-component]',
       getAttrs(dom) {
         const el = dom as HTMLElement
+        const uuid = el.getAttribute('data-uuid') || ''
         return {
           componentName: el.getAttribute('data-component-name') || 'MyCard',
-          props: JSON.parse(el.getAttribute('data-props') || '{}'),
-          width: parseFloat(el.getAttribute('data-width') || '360'),
-          height: parseFloat(el.getAttribute('data-height') || '240'),
-          uuid: el.getAttribute('data-uuid') || '',
+          props: parsePropsAttr(el.getAttribute('data-props')),
+          width: parseSizeAttr(el.getAttribute('data-width'), EMBED_DEFAULT_WIDTH),
+          height: parseSizeAttr(el.getAttribute('data-height'), EMBED_DEFAULT_HEIGHT),
+          // uuid 会直接拼进组件数据目录，外部粘贴来的非法值一律丢弃
+          uuid: isValidComponentUuid(uuid) ? uuid : '',
         }
       },
     },
@@ -160,6 +183,8 @@ const ResizableContainer = defineComponent({
     readOnly: { type: Boolean, default: false },
     icon: { type: String, default: '' },
     title: { type: String, default: '' },
+    // 工具条不是内容区，点它选中整块，用户才能复制/剪切这个原子节点
+    selectBlock: { type: Function as PropType<() => void>, required: true },
     // NodeView 渲染上下文外调用 slot 会触发 Vue 警告，所以内容经 prop 传入
     content: { type: Object as PropType<any>, required: true },
   },
@@ -345,8 +370,12 @@ const ResizableContainer = defineComponent({
               background: `rgba(${toolTone}, 0.06)`,
               border: `1px solid rgba(${toolTone}, 0.08)`,
             },
-            // 工具条在内容外，但仍在 ProseMirror 里，不拦住会变成选段落
-            onMousedown: (event: MouseEvent) => event.stopPropagation(),
+            // 工具条在内容外，但仍在 ProseMirror 里，不拦住会变成选段落；拦住后改为选中整块
+            onMousedown: (event: MouseEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+              props.selectBlock()
+            },
           },
           [
             h(
@@ -498,6 +527,14 @@ export const vueComponentNodeView = defineVueNodeView({
         if (!hoverKeepAlive) return
         clearInterval(hoverKeepAlive)
         hoverKeepAlive = null
+      }
+
+      // 组件内容要留给业务输入，只有工具条能当选择把手；选中后 Ctrl+C/Delete 才作用在这个原子节点上
+      const selectBlock = () => {
+        const pos = getPos()
+        if (typeof pos !== 'number') return
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)))
+        view.focus()
       }
 
       // 工具条标题/图标与画布块一致：按当前 config 反推，改 props 立即更新
@@ -730,6 +767,7 @@ export const vueComponentNodeView = defineVueNodeView({
             minHeight: state.constraints.minHeight,
             maxHeight: state.constraints.maxHeight,
             readOnly: readOnly.value,
+            selectBlock,
             onResize: handleResize,
             onExtract: handleExtract,
             content: innerContent,

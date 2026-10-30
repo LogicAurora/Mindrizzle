@@ -12,6 +12,16 @@
           <div ref="scrollRef" class="editor-scroll" @scroll="updateScrollMetrics">
             <div ref="editorMount" class="editor-mount" />
           </div>
+          <!-- 原生 ::selection 只能方角，所以按行铺圆角块自绘；节点在滚动容器外，不随内容滚动 -->
+          <div class="text-selection-highlight" aria-hidden="true">
+            <div v-for="(rect, index) in textSelectionRects" :key="index" class="text-selection-highlight-rect"
+              :style="{
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+              }" />
+          </div>
           <div v-if="scrollMetrics.hasVertical" class="custom-scrollbar custom-scrollbar-vertical"
             @pointerdown="startVerticalScrollbar" @wheel="scrollVertical">
             <div class="custom-scrollbar-thumb" :style="verticalThumbStyle"
@@ -84,6 +94,7 @@ export const isHeightChangable = (config: RichTextConfig): boolean => config.aut
 import 'prosekit/basic/style.css'
 import 'prosekit/basic/typography.css'
 import 'prosekit/pm/view/style/prosemirror.css'
+import './selectionStyles.css'
 
 import blockHandle from './extensions/block-handle.vue'
 import RowDropIndicator from './extensions/RowDropIndicator.vue'
@@ -94,13 +105,14 @@ import { mdiNoteText } from '@mdi/js'
 
 import { defineExtension } from './extension.ts'
 import { createEditor, NodeJSON } from '@prosekit/core'
+import { useTextSelectionHighlight } from './extensions/useTextSelectionHighlight.ts'
 import { TextSelection } from 'prosekit/pm/state'
 import { layoutToViewportSize, layoutToViewportX, layoutToViewportY, viewportToLayout } from './extensions/blockHandleUtils.ts'
 import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue'
 import { Z_LAYER } from '../../Core/zIndex.ts'
 import FormatModePicker from './FormatModePicker.vue'
 import FormatDetailPicker from './FormatDetailPicker.vue'
-import { FORMAT_MODES, HEADING_DETAILS, colorDetailsOf } from './formatModes.ts'
+import { FORMAT_MODES, HEADING_DETAILS, colorDetailsOf, isHeadingCancelIndex } from './formatModes.ts'
 import type { FormatModeId } from './formatModes.ts'
 import type { MdrCanvasComponentContentProps } from '../../Core/MdrCanvasComponentBase.types.ts'
 import type { WidgetConfig } from '../../Registry/canvasComponents.ts'
@@ -131,6 +143,7 @@ const editor = createEditor({ extension })
 const editorMount = ref<HTMLDivElement>()
 const wrapperRef = ref<HTMLDivElement>()
 const scrollRef = ref<HTMLDivElement>()
+const { rects: textSelectionRects, refresh: refreshTextSelection } = useTextSelectionHighlight({ editor, scrollRef })
 const scrollMetrics = reactive({ scrollTop: 0, scrollLeft: 0, scrollHeight: 0, scrollWidth: 0, clientHeight: 0, clientWidth: 0, hasVertical: false, hasHorizontal: false })
 let editorMounted = false
 
@@ -384,7 +397,11 @@ const applyFormatMode = (index: number) => {
   const detailIdx = detailIndexByMode[mode.id] ?? 0
   const detail = detailOptionsFor(mode.id)[detailIdx]
   switch (mode.id) {
-    case 'heading': commands.toggleHeading({ level: detailIdx + 1 }); break
+    case 'heading':
+      // 详情最后一项是取消标题，其余索引 + 1 就是标题级别
+      if (isHeadingCancelIndex(detailIdx)) commands.setParagraph()
+      else commands.toggleHeading({ level: detailIdx + 1 })
+      break
     case 'bold': commands.toggleBold(); break
     case 'italic': commands.toggleItalic(); break
     case 'underline': commands.toggleUnderline(); break
@@ -581,6 +598,8 @@ let contentResizeFrame = 0
 // 内容容器尺寸变化需重测度量；autoHeight 时还须重报块高，否则只测到占位高度、块高停在旧值
 const onContentResize = () => {
   updateScrollMetrics()
+  // 重排后选区矩形会跟着变，但不会触发 selectionchange，所以这里主动同步一次
+  refreshTextSelection()
   if (!autoHeight.value || contentResizeFrame) return
   // RO 回调里同步改块高会触发循环告警，所以延后一帧
   contentResizeFrame = requestAnimationFrame(() => {

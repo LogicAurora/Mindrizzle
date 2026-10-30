@@ -10,7 +10,18 @@
       <pre class="highlight-layer"><code ref="highlightRef" :class="`language-${language}`"></code></pre>
       <textarea ref="textareaRef" :value="code" class="edit-layer" :readonly="readOnly"
         :style="{ caretColor: String(primaryColor) }" spellcheck="false" @scroll="syncScroll" @input="onInput"
-        @keydown="handleKeydown" />
+        @keydown="handleKeydown" @select="updateSelectionRects" @keyup="updateSelectionRects"
+        @pointerdown="startSelectionDrag" @mouseup="updateSelectionRects" @blur="clearSelectionRects" />
+      <!-- 原生 ::selection 只能方角，所以按字符偏移在高亮层上取矩形，自绘圆角块 -->
+      <div class="selection-layer" aria-hidden="true">
+        <div v-for="(rect, index) in selectionRects" :key="index" class="selection-rect"
+          :style="{
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+          }" />
+      </div>
     </div>
 
     <v-snackbar :prepend-icon="mdiCheck" v-model="snackbar" :timeout="1500" color="success" location="top">
@@ -45,6 +56,10 @@ import php from 'highlight.js/lib/languages/php'
 import ruby from 'highlight.js/lib/languages/ruby'
 import swift from 'highlight.js/lib/languages/swift'
 import kotlin from 'highlight.js/lib/languages/kotlin'
+
+import { viewportToLayout } from '../RichEditor/extensions/blockHandleUtils.ts'
+import { uniqueClientRects } from '../RichEditor/extensions/textSelectionRects.ts'
+import type { TextRect } from '../RichEditor/extensions/textSelectionRects.ts'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('js', javascript)
@@ -130,9 +145,104 @@ const highlightRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const wrapperRef = ref<HTMLElement | null>(null)
 
+const selectionRects = ref<TextRect[]>([])
+
+// 高亮层与 textarea 是同一份文本、同一套字体度量，所以按字符偏移就能在高亮层上取到选区矩形
+const rangeAtOffsets = (root: Node, start: number, end: number): Range | null => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const range = document.createRange()
+  let offset = 0
+  let isStartSet = false
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const length = node.nodeValue?.length ?? 0
+    const nodeStart = offset
+    offset += length
+    if (!isStartSet && start < offset) {
+      range.setStart(node, start - nodeStart)
+      isStartSet = true
+    }
+    if (isStartSet && end <= offset) {
+      range.setEnd(node, end - nodeStart)
+      return range
+    }
+  }
+  return null
+}
+
+// 拖拽时 select 事件可能只在松手后发，所以也要跟着指针重算；同一位置重复触发就不重复量
+let measuredKey = ''
+
+const clearSelectionRects = () => {
+  measuredKey = ''
+  if (selectionRects.value.length) selectionRects.value = []
+}
+
+const selectionKeyOf = (textarea: HTMLTextAreaElement): string => [
+  textarea.selectionStart,
+  textarea.selectionEnd,
+  textarea.scrollTop,
+  textarea.scrollLeft,
+  textarea.clientWidth,
+  textarea.clientHeight,
+  textarea.value.length,
+].join(':')
+
+const updateSelectionRects = () => {
+  const textarea = textareaRef.value
+  const codeElement = highlightRef.value
+  if (!textarea || !codeElement || textarea.selectionStart === textarea.selectionEnd) {
+    clearSelectionRects()
+    return
+  }
+  const key = selectionKeyOf(textarea)
+  if (key === measuredKey) return
+  const range = rangeAtOffsets(codeElement, textarea.selectionStart, textarea.selectionEnd)
+  if (!range) {
+    clearSelectionRects()
+    return
+  }
+  measuredKey = key
+  // 两层滚动同步、字体一致，所以客户端矩形减去 textarea 原点即覆盖层坐标；zoom 下须折回布局像素
+  const origin = textarea.getBoundingClientRect()
+  selectionRects.value = uniqueClientRects(range).map((rect) => ({
+    left: viewportToLayout(textarea, rect.left - origin.left),
+    top: viewportToLayout(textarea, rect.top - origin.top),
+    width: viewportToLayout(textarea, rect.width),
+    height: viewportToLayout(textarea, rect.height),
+  }))
+}
+
+const stopSelectionDrag = () => {
+  window.removeEventListener('pointermove', scheduleSelectionRects, true)
+  window.removeEventListener('pointerup', stopSelectionDrag)
+  window.removeEventListener('pointercancel', stopSelectionDrag)
+  // 收尾必须同步量一次，rAF 可能还没轮到
+  updateSelectionRects()
+}
+
+// 指针每秒能发上百次，量矩形会强制重排，所以拖拽期间每帧最多算一次
+let selectionFrame = 0
+const scheduleSelectionRects = () => {
+  if (selectionFrame) return
+  selectionFrame = requestAnimationFrame(() => {
+    selectionFrame = 0
+    updateSelectionRects()
+  })
+}
+
+// 原生高亮已关掉，拖拽期间必须自己给出反馈，否则要松手才看得到选区
+const startSelectionDrag = (event: PointerEvent) => {
+  if (event.button !== 0) return
+  window.addEventListener('pointermove', scheduleSelectionRects, true)
+  window.addEventListener('pointerup', stopSelectionDrag)
+  window.addEventListener('pointercancel', stopSelectionDrag)
+}
+
 const renderHighlight = () => {
   const codeElement = highlightRef.value
   if (!codeElement) return
+  // 重绘后旧的矩形已失效，去重键要清掉否则会跳过一次量算
+  measuredKey = ''
   const code = props.code || ''
   try {
     const lang = props.language
@@ -149,6 +259,7 @@ const renderHighlight = () => {
 const onInput = (event: Event) => {
   if (props.readOnly) return
   emit('update:code', (event.target as HTMLTextAreaElement).value)
+  updateSelectionRects()
 }
 
 const onLanguageChange = (value: unknown) => {
@@ -163,6 +274,8 @@ const syncScroll = () => {
   requestAnimationFrame(() => {
     pre.scrollTop = textarea.scrollTop
     pre.scrollLeft = textarea.scrollLeft
+    // 选区矩形取自高亮层，必须等两层滚动对齐后再量
+    updateSelectionRects()
   })
 }
 
@@ -216,10 +329,14 @@ const handleKeydown = (event: KeyboardEvent) => {
     textarea.selectionStart = start + 1
     textarea.selectionEnd = end + 1
     textarea.focus({ preventScroll: true })
+    updateSelectionRects()
   })
 }
 
-watch([() => props.code, () => props.language], () => nextTick(renderHighlight))
+watch([() => props.code, () => props.language], () => nextTick(() => {
+  renderHighlight()
+  updateSelectionRects()
+}))
 
 const resizeObserver = ref<ResizeObserver | null>(null)
 onMounted(() => {
@@ -235,6 +352,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', scheduleSelectionRects, true)
+  if (selectionFrame) cancelAnimationFrame(selectionFrame)
+  selectionFrame = 0
   resizeObserver.value?.disconnect()
   if (styleElement?.parentNode) {
     styleElement.parentNode.removeChild(styleElement)
@@ -385,7 +505,6 @@ onBeforeUnmount(() => {
   width: 8px;
   height: 8px;
 }
-
 .edit-layer::-webkit-scrollbar-thumb,
 .highlight-layer::-webkit-scrollbar-thumb {
   background: var(--v-theme-border, #d1d5da);
@@ -395,5 +514,24 @@ onBeforeUnmount(() => {
 .edit-layer::-webkit-scrollbar-track,
 .highlight-layer::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* 原生 ::selection 只能方角，代码块改自绘，所以关掉原生背景（光标由 caretColor 保留） */
+.code-editor-wrapper .edit-layer::selection {
+  background: transparent;
+}
+
+.selection-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.selection-rect {
+  position: absolute;
+  border-radius: 4px;
+  background: rgba(var(--v-theme-primary), 0.26);
 }
 </style>

@@ -1,0 +1,78 @@
+/* 富文本选区与光标的唯一来源：文字选区（原生 + 自绘圆角高亮）、原子块选中环、块间隙光标 */
+
+/* 原生 ::selection 只能是方角，富文本改用自绘圆角高亮，所以原生高亮透明（光标不受影响）；
+   用 :where() 把优先级压到最低，组件自己接管选区时（如代码块）才能覆盖 */
+:where(.editor-mount.ProseMirror) ::selection {
+  background: transparent;
+}
+
+/* 嵌入块内部不是富文本，选区默认交给浏览器；自绘选区的组件会用自己的规则关掉 */
+:where(.editor-mount.ProseMirror [data-node-view-root]) ::selection {
+  background: rgba(var(--v-theme-primary), 0.26);
+}
+
+/* 每行一个圆角块，坐标是编辑器布局像素，随 .canvas 的 zoom 一起缩放 */
+.text-selection-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.text-selection-highlight-rect {
+  position: absolute;
+  border-radius: 4px;
+  background: rgba(var(--v-theme-primary), 0.26);
+}
+
+/* prosemirror.css 给的是直角 #8cf，块本身有圆角，这里统一成主题色圆角环；
+   outline 在部分 WebKit 版本下不跟随圆角，所以改用 box-shadow 画 */
+.ProseMirror-selectednode {
+  outline: none;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.7);
+}
+
+/* 列表项的环由 prosemirror.css 的 :after 画（要包住前面的标记），这里只同步圆角与配色 */
+li.ProseMirror-selectednode {
+  box-shadow: none;
+}
+
+li.ProseMirror-selectednode::after {
+  border-color: rgba(var(--v-theme-primary), 0.7);
+  border-radius: 6px;
+}
+
+/* Vue 节点视图的根是 display:contents，自身没有盒子，环只能落在真正的盒子上 */
+.ProseMirror-selectednode[data-node-view-root] > :first-child {
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.7);
+}
+
+/* defineGapCursor() 只出插件不带样式，光标落在块间隙时必须自己画，否则完全不可见 */
+.ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: relative;
+}
+
+.ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid rgba(var(--v-theme-primary), 0.9);
+  animation: mdr-gap-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+@keyframes mdr-gap-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}

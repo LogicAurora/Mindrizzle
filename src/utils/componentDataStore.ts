@@ -18,6 +18,9 @@ const COMPONENT_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 const COMPONENT_PATH_MAX_LEN = 512
 const INVALID_PATH_CHARS = /[\\:*?"<>|\u0000-\u001f]/
 
+/** 校验组件数据目录名；外部粘贴的节点 uuid 必须先过这一关才能拼进路径 */
+export const isValidComponentUuid = (uuid: string): boolean => COMPONENT_UUID_PATTERN.test(uuid)
+
 export interface MdrfcdLocation {
   fileName: string
   uuid: string

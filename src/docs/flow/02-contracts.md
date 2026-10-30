@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-25 -->
+<!-- 最后验证: 2026-10-30 -->
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -68,7 +68,10 @@ flowchart LR
 | `onUpdateProps(patch)` | 一次合并多个 props | 表格 / 任务等结构化块 |
 | `EMBED_SETTINGS_HOST_KEY` | 插入块设置面板的 Teleport 宿主（`Ref<HTMLElement>`） | 块作者提供自己的设置 UI |
 
-- 插入命令 `insertVueComponent(At)(pos, name, props, uuid?)`：从画布块拖入时传源块 uuid，数据目录可直接复用。
+- 插入命令 `insertVueComponent(At)(pos, name, props, uuid?)`：从画布块拖入时传源块 uuid，数据目录可直接复用；
+  插入后光标落在节点后的文本块（没有就补一个空段落），**不建立 NodeSelection**，否则下一次输入会把组件整块替换掉。
+- 粘贴/复制走节点 spec 的 `toDOM` / `parseDOM`：`data-uuid` 需过 `isValidComponentUuid`，`data-props` 解析失败退回空对象，
+  宽度高度非法值退回默认值。
 - 拖出成块（`Mindrizzle:extract-component`）携带 `detail.uuid`，画布直接沿用该 uuid 新建块，组件数据目录无需搬迁；
   仅当 uuid 已被占用（节点被复制过）时才新起 uuid 并 `copyComponentFiles` 复制目录。
 

@@ -3351,6 +3351,8 @@ defineExpose({
   background: rgba(var(--v-theme-primary), 0.12);
   pointer-events: none;
   z-index: 55;
+  /* 在 .canvas 内随 CSS zoom 一起缩放，所以写死与块圆角同档的值即可 */
+  border-radius: 6px;
 }
 
 .drag-wrapper :deep(.handle) {
@@ -3364,6 +3366,8 @@ defineExpose({
   pointer-events: none;
   z-index: 1002;
   box-sizing: border-box;
+  /* 描边环比块边缘外扩 2px，圆角取块自身 4px + 2px 才不露尖角 */
+  border-radius: 6px;
 }
 
 .rich-text-drop-target {

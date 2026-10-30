@@ -1,6 +1,7 @@
 import {
   mdiClose,
   mdiFormatBold,
+  mdiFormatClear,
   mdiFormatColorHighlight,
   mdiFormatColorText,
   mdiFormatHeader1,
@@ -35,7 +36,7 @@ export const FORMAT_MODES: readonly FormatMode[] = [
   { id: 'highlight', icon: mdiFormatColorHighlight, label: '背景高亮', description: '设置文字背景，块下方选择颜色' },
 ]
 
-// 标题模式的详情选项，索引即 level - 1
+// 标题模式的详情选项，索引即 level - 1；最后一项是取消标题（转回正文段落）
 export const HEADING_DETAILS: readonly WheelOption[] = [
   { icon: mdiFormatHeader1, label: '一级标题', description: '应用一级标题样式' },
   { icon: mdiFormatHeader2, label: '二级标题', description: '应用二级标题样式' },
@@ -43,7 +44,11 @@ export const HEADING_DETAILS: readonly WheelOption[] = [
   { icon: mdiFormatHeader4, label: '四级标题', description: '应用四级标题样式' },
   { icon: mdiFormatHeader5, label: '五级标题', description: '应用五级标题样式' },
   { icon: mdiFormatHeader6, label: '六级标题', description: '应用六级标题样式' },
+  { icon: mdiFormatClear, label: '取消标题', description: '恢复为正文段落' },
 ]
+
+// 取消标题与标题级别共用一份详情切片，调用处按索引猜容易错位，所以统一在这里判定
+export const isHeadingCancelIndex = (index: number): boolean => index === HEADING_DETAILS.length - 1
 
 const COLOR_PALETTE = [
   { label: '红色', color: '#ef4444' },
