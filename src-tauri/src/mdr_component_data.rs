@@ -77,8 +77,6 @@ pub struct ComponentFileExportRequest {
 struct ComponentFileTarget {
     // 缓存失效要用，否则重新打包后同名暂存区还会把旧数据写回去
     cache_key: String,
-    // 日志与错误提示用，外部文件取归档文件名
-    note_name: String,
     archive: PathBuf,
     uuid: String,
     path: String,
@@ -176,7 +174,6 @@ fn resolve_scope(request: &ComponentScopeRequest) -> Result<ComponentFileTarget>
     }
     Ok(ComponentFileTarget {
         cache_key: location.archive.to_string_lossy().into_owned(),
-        note_name: location.note_name,
         compressed: is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?,
         archive: location.archive,
         uuid: request.uuid.clone(),

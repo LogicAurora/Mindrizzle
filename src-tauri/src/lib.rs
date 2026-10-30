@@ -1,9 +1,9 @@
 mod mdr_component_data;
-mod mdr_file_cache;
+pub mod mdr_file_cache;
 mod mdr_file_dir;
 mod mdr_file_op;
 mod mdr_file_struct;
-mod mdr_file_tar;
+pub mod mdr_file_tar;
 mod settings_store;
 mod system_theme;
 mod utils;

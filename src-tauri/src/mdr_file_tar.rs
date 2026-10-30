@@ -3,7 +3,7 @@
 //! ```no_run
 //! use std::fs::File;
 //! use std::io;
-//! use crate::mdr_file_tar::{pack_cache, extract_to_cache};
+//! use mindrizzle_lib::mdr_file_tar::{extract_to_cache, pack_cache};
 //!
 //! let cache_dir = std::env::temp_dir().join("example");
 //! pack_cache(&cache_dir, File::create("out.mdrf")?, true)?;

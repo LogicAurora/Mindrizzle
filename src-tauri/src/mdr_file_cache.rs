@@ -3,8 +3,8 @@
 //!
 //! ```no_run
 //! use std::fs::File;
-//! use crate::mdr_file_cache::MindrizzleFileCache;
-//! use crate::mdr_file_tar::pack_cache;
+//! use mindrizzle_lib::mdr_file_cache::MindrizzleFileCache;
+//! use mindrizzle_lib::mdr_file_tar::pack_cache;
 //!
 //! let cache = MindrizzleFileCache::new()?;
 //! cache.write_file("meta.json", b"<meta/>")?;
