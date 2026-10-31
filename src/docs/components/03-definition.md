@@ -47,7 +47,7 @@ widthChangableOf: (config, env) => !env.isCompact,
 ## 动态标题与图标
 
 ```ts
-titleOf: (config) => (config.note ? `探针 · ${config.note}` : '探针'),
+titleOf: (config) => (config.note ? `探针 : ${config.note}` : '探针'),
 iconOf: (config) => (config.kind === 'alert' ? mdiAlert : mdiNote),
 ```
 

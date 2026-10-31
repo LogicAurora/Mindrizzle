@@ -5,12 +5,14 @@ import { info } from '@tauri-apps/plugin-log'
 
 import { getErrorMessage } from './getErrorMessage'
 import { invokeCommand } from './invoke'
+import { sanitizeTags } from './tagStore'
+import { workspaceDirectories } from './workspaceStore'
 
 export interface NoteSetEntry {
   fileName: string
   name: string
   description: string
-  tag?: string
+  tag: string[]
   updatedAt: number
   dir?: string
   filePath?: string
@@ -25,7 +27,7 @@ export interface NoteSetLoadResult {
 interface NoteSetMeta {
   title: string
   description: string
-  tag: string
+  tag: string[]
   updatedAt: number
 }
 
@@ -124,4 +126,65 @@ export function touchNoteSetUpdatedAt(fileName: string, dir?: string): void {
   if (!entry) return
   entry.updatedAt = Date.now()
   appendNoteSetLog(`更新时间戳：${fileName}`)
+}
+
+// 详情弹窗只改标题/描述/标签，原对象就地改掉比整表重取快得多
+export function patchNoteSetMeta(entry: NoteSetEntry): void {
+  const cached = entriesByDir
+    .get(cacheKeyOf(entry.dir))
+    ?.find((item) => item.fileName === entry.fileName)
+  if (!cached) return
+  cached.name = entry.name
+  cached.description = entry.description
+  cached.tag = entry.tag
+  cached.updatedAt = entry.updatedAt
+}
+
+interface NoteTagPatch {
+  fileName: string
+  dir?: string
+  // 返回 null 表示这条笔记不需要改，省掉一次整包重写
+  resolveTags: (tags: string[]) => string[] | null
+}
+
+async function patchNoteTags(patch: NoteTagPatch): Promise<boolean> {
+  const { fileName, dir, resolveTags } = patch
+  const meta = await invokeCommand<NoteSetMeta>('get_mdr_file_meta', { fileName, dir })
+  const tag = resolveTags(meta.tag ?? [])
+  if (!tag) return false
+  await invokeCommand('set_mdr_file_meta', {
+    fileName,
+    dir,
+    mdrFileInfo: { title: meta.title, description: meta.description, tag },
+  })
+  return true
+}
+
+// 标签以名字标识，库里改名或删除都得回写引用它的笔记，否则会留下悬空标签
+async function updateNoteTags(resolveTags: (tags: string[]) => string[] | null): Promise<number> {
+  const dirs = [undefined, ...workspaceDirectories.value.map((entry) => entry.dir)]
+  let changedCount = 0
+  for (const dir of dirs) {
+    const fileNames = await invokeCommand<string[]>('fetch_file_list', { dir })
+    for (const fileName of fileNames) {
+      if (await patchNoteTags({ fileName, dir, resolveTags })) changedCount += 1
+    }
+  }
+  if (changedCount) invalidateNoteSetEntries()
+  appendNoteSetLog(`标签回写：${changedCount} 条笔记`)
+  return changedCount
+}
+
+export function renameTagInNotes(oldName: string, nextName: string): Promise<number> {
+  return updateNoteTags((tags) => {
+    if (!tags.includes(oldName)) return null
+    return sanitizeTags(tags.map((item) => (item === oldName ? nextName : item)))
+  })
+}
+
+export function removeTagFromNotes(name: string): Promise<number> {
+  return updateNoteTags((tags) => {
+    if (!tags.includes(name)) return null
+    return sanitizeTags(tags.filter((item) => item !== name))
+  })
 }

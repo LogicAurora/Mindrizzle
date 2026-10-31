@@ -355,13 +355,13 @@ onMounted(() => {
       <v-card class="canvas-preview" variant="flat" rounded="sm">
         <div class="canvas-grid d-flex align-center justify-center ga-7 pa-6" :style="{ backgroundColor: currentCanvasColor }">
           <v-card class="note note-main d-flex flex-column align-start ga-2 pa-3" elevation="1">
-            <v-card-subtitle class="text-caption text-primary pa-0">灵感 · 01</v-card-subtitle>
+            <v-card-subtitle class="text-caption text-primary pa-0">设计的魅力</v-card-subtitle>
             <span class="note-line note-line-long" />
             <span class="note-line note-line-short" />
-            <v-chip size="x-small" color="primary" variant="tonal">随手记下</v-chip>
+            <v-chip size="x-small" color="primary" variant="tonal">精巧的想法</v-chip>
           </v-card>
           <v-card class="note note-side d-flex flex-column align-start ga-2 pa-3" elevation="1">
-            <v-card-subtitle class="text-caption text-primary pa-0">稍后整理</v-card-subtitle>
+            <v-card-subtitle class="text-caption text-primary pa-0">未来的规划</v-card-subtitle>
             <span class="note-line note-line-long" />
             <span class="note-line note-line-medium" />
           </v-card>

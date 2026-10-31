@@ -17,7 +17,7 @@ export default defineBlock<LinkBlockConfig>({
   defaultConfig: () => ({ url: '', title: '', description: '', siteName: '', imageUrl: '' }),
   defaultSize: { w: 320, h: 170 },
   // 拖拽栏显示站点名比 url 更好认
-  titleOf: (config) => (config.siteName ? `链接 · ${config.siteName}` : '链接'),
+  titleOf: (config) => (config.siteName ? `链接 : ${config.siteName}` : '链接'),
   settings: LinkSettings,
   embed: {
     nodeName: 'LinkBlock',

@@ -79,7 +79,7 @@
               <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="deleteData">删除</v-btn>
             </div>
             <div class="bench-status" data-test="component-data-status">{{ dataStatus }}</div>
-            <div v-if="dataFiles.length" class="bench-status">{{ dataFiles.join(' · ') }}</div>
+            <div v-if="dataFiles.length" class="bench-status">{{ dataFiles.join(' : ') }}</div>
           </div>
         </v-window-item>
 

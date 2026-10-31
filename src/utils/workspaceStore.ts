@@ -21,6 +21,7 @@ export interface ExternalNoteRecord {
 const DIRECTORIES_KEY = 'workspace:directories'
 const EXTERNAL_NOTES_KEY = 'workspace:external-notes'
 const EXTERNAL_NOTE_LIMIT = 20
+const WORKSPACE_NAME_MAX_LEN = 30
 const TRAILING_SEPARATORS = /[\\/]+$/
 const PATH_SEPARATORS = /[\\/]/
 
@@ -52,6 +53,27 @@ export const addWorkspaceDirectory = async (dirPath: string): Promise<WorkspaceD
 export const removeWorkspaceDirectory = async (id: string): Promise<void> => {
   workspaceDirectories.value = workspaceDirectories.value.filter((item) => item.id !== id)
   await setSetting(DIRECTORIES_KEY, workspaceDirectories.value)
+}
+
+export const renameWorkspaceDirectory = async (id: string, name: string): Promise<void> => {
+  const resolvedName = name.trim().slice(0, WORKSPACE_NAME_MAX_LEN)
+  if (!resolvedName) throw new Error('工作区名称不能为空')
+  workspaceDirectories.value = workspaceDirectories.value.map((item) =>
+    item.id === id ? { ...item, name: resolvedName } : item,
+  )
+  await setSetting(DIRECTORIES_KEY, workspaceDirectories.value)
+}
+
+// 只挪显示顺序，id 仍是目录路径，切换工作区与文件寻址都不受影响
+export const moveWorkspaceDirectory = async (id: string, offset: number): Promise<void> => {
+  const directories = [...workspaceDirectories.value]
+  const index = directories.findIndex((item) => item.id === id)
+  const target = index + offset
+  if (index < 0 || target < 0 || target >= directories.length) return
+  const [entry] = directories.splice(index, 1)
+  directories.splice(target, 0, entry)
+  workspaceDirectories.value = directories
+  await setSetting(DIRECTORIES_KEY, directories)
 }
 
 export const externalNoteKeyOf = (record: ExternalNoteRecord): string =>

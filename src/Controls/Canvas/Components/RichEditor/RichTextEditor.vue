@@ -58,7 +58,7 @@
             }">
             <v-card-text class="text-center pb-0">
               <div>切换「{{ pendingDisplayLabel }}」？</div>
-              <div class="text-caption text-medium-emphasis mt-1">左键应用 · 右键取消</div>
+              <div class="text-caption text-medium-emphasis mt-1">左键应用 : 右键取消</div>
             </v-card-text>
             <v-card-actions class="justify-end ga-1">
               <v-btn size="small" variant="text" @click.stop="cancelApply">取消</v-btn>
@@ -444,7 +444,7 @@ const pendingLabel = computed(() => FORMAT_MODES[pendingFormat.value]?.label ?? 
 const pendingDisplayLabel = computed(() => {
   const modeId = FORMAT_MODES[pendingFormat.value]?.id
   const detail = detailOptionsFor(modeId)[detailIndexByMode[modeId ?? ''] ?? 0]?.label
-  return detail ? `${pendingLabel.value} · ${detail}` : pendingLabel.value
+  return detail ? `${pendingLabel.value} : ${detail}` : pendingLabel.value
 })
 const overlayPos = ref({ left: 0, top: 0 })
 const applyPositionReady = ref(false)

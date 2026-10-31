@@ -30,7 +30,7 @@ export default defineBlock<TaskListBlockConfig>({
     ],
   }),
   defaultSize: { w: 320, h: 220 },
-  titleOf: (config) => (config.title ? `任务 · ${config.title}` : '任务'),
+  titleOf: (config) => (config.title ? `任务 : ${config.title}` : '任务'),
   settings: TaskSettings,
   embed: {
     nodeName: 'TaskListBlock',

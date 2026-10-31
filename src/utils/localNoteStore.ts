@@ -178,6 +178,11 @@ const setFileBody = async (fileName: string, content: string): Promise<void> => 
   await writeNote(resolved, { ...note, content, updatedAt: Date.now() })
 }
 
+const setFileMeta = async (fileName: string, meta: NoteMeta): Promise<void> => {
+  const { resolved, note } = await requireNote(fileName)
+  await writeNote(resolved, { ...note, meta, updatedAt: Date.now() })
+}
+
 const createFile = async (meta: NoteMeta, fileName: string): Promise<string> => {
   const resolved = resolveFileName(fileName)
   if (await readNote(resolved)) throw new Error('同名文件已存在')
@@ -375,6 +380,10 @@ const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {
   get_mdr_file_meta: (args) => getFileMeta(String(args.fileName)),
   get_mdr_file_body: (args) => getFileBody(String(args.fileName)),
   set_mdr_file_body: (args) => setFileBody(String(args.fileName), String(args.content)),
+  set_mdr_file_meta: (args) => setFileMeta(String(args.fileName), args.mdrFileInfo as NoteMeta),
+  move_mdr_file: () => {
+    throw new Error('网页端只有默认工作区，无法跨工作区移动')
+  },
   create_mdr_file: (args) => createFile(args.mdrFileInfo as NoteMeta, String(args.fileName)),
   list_component_data_files: listComponentFiles,
   read_component_data_file: readComponentFile,

@@ -5,7 +5,7 @@
       <v-icon :icon="fileIcon" size="44" class="text-medium-emphasis" />
       <div class="file-meta">
         <span class="file-name" :title="name">{{ name }}</span>
-        <span class="file-caption">{{ formatBytes(size) }} · {{ mime || '未知类型' }}</span>
+        <span class="file-caption">{{ formatBytes(size) }} : {{ mime || '未知类型' }}</span>
       </div>
     </div>
     <div v-else class="file-empty">

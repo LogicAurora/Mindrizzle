@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { mdiClose, mdiDownload, mdiFileDocumentOutline, mdiFolderMove, mdiNoteOffOutline, mdiPencil, mdiPlus, mdiUpload } from '@mdi/js';
+import { mdiClose, mdiDownload, mdiFileDocumentOutline, mdiFolderMove, mdiInformationOutline, mdiNoteOffOutline, mdiPencil, mdiPlus, mdiUpload } from '@mdi/js';
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open as openNativeDialog } from '@tauri-apps/plugin-dialog';
 import { info } from '@tauri-apps/plugin-log';
 
 import NewFileDialog from '../Controls/NewFileDialog.vue';
+import NoteDetailDialog, { type NoteDetailTarget } from '../Controls/NoteDetailDialog.vue';
+import TagLibraryMenu from '../Controls/TagLibraryMenu.vue';
 import WorkspaceSwitcher from '../Controls/WorkspaceSwitcher.vue';
 import {
   loadEditorComponent,
@@ -17,14 +19,18 @@ import {
 import { getErrorMessage } from '../utils/getErrorMessage'
 import { invokeCommand } from '../utils/invoke'
 import { exportLocalNoteMdrf, importLocalNoteMdrf, moveLocalNoteToWorkspace } from '../utils/localNoteStore'
-import { fetchNoteSetEntry, invalidateNoteSetEntries, loadNoteSetEntries, type NoteSetEntry } from '../utils/noteSetStore'
+import { fetchNoteSetEntry, invalidateNoteSetEntries, loadNoteSetEntries, patchNoteSetMeta, type NoteSetEntry } from '../utils/noteSetStore'
 import { isDebugLoadingEnabled, noteLoadControllerKey, startEditorTransitionKey } from '../utils/routeTransition'
+import { loadTagLibrary, resolveTagColor, sanitizeTags, type TagLibraryChange } from '../utils/tagStore'
 import {
   addWorkspaceDirectory,
   externalNotes,
   forgetExternalNote,
   loadWorkspaceState,
+  moveWorkspaceDirectory,
   rememberExternalNote,
+  removeWorkspaceDirectory,
+  renameWorkspaceDirectory,
   workspaceDirectories,
 } from '../utils/workspaceStore'
 
@@ -42,6 +48,7 @@ interface WorkspaceSection {
   name: string
   kind: 'workspace' | 'external'
   dir?: string
+  isEditable?: boolean
 }
 
 function preloadEditor() {
@@ -129,6 +136,7 @@ const sections = computed<WorkspaceSection[]>(() => [
     name: item.name,
     kind: 'workspace' as const,
     dir: item.dir,
+    isEditable: true,
   })),
   { id: EXTERNAL_SECTION_ID, name: '最近打开的外部文件', kind: 'external' },
 ])
@@ -184,6 +192,7 @@ async function loadExternalItems(): Promise<NoteSetItem[]> {
           filePath: record.path,
           name: record.name,
           description: '文件已不可用',
+          tag: [],
           updatedAt: record.updatedAt,
           loading: false,
         }
@@ -222,6 +231,7 @@ onMounted(async () => {
     void fillListViewport();
   }, { rootMargin: `${SENTINEL_MARGIN_PX}px` });
   await loadWorkspaceState()
+  await loadTagLibrary()
   await loadActiveSection()
 });
 
@@ -317,6 +327,90 @@ const workspaceTargets = computed(() => [
   ...workspaceDirectories.value.map((item) => ({ id: item.id, name: item.name, dir: item.dir })),
 ])
 
+const detailTarget = ref<NoteSetItem | null>(null)
+const isDetailOpen = ref(false)
+// 外部文件没有所属工作区，移动走卡片上的既有菜单
+const canMoveNote = computed(
+  () => !isWebEnv && activeSection.value.kind === 'workspace' && workspaceTargets.value.length > 1,
+)
+
+function openDetail(noteSet: NoteSetItem) {
+  detailTarget.value = noteSet
+  isDetailOpen.value = true
+}
+
+// 未移动时只改当前卡片，避免整表重取把滚动位置和加载骨架一起翻出来
+async function onDetailSaved(payload: { note: NoteDetailTarget; isMoved: boolean }) {
+  invalidateNoteSetEntries()
+  if (payload.isMoved) {
+    await loadActiveSection()
+    showHint('已移动到工作区')
+    return
+  }
+  const entry = noteSets.value.find((item) => item.fileName === payload.note.fileName)
+  if (!entry) return
+  Object.assign(entry, {
+    name: payload.note.name,
+    description: payload.note.description,
+    tag: payload.note.tag,
+    updatedAt: Date.now(),
+  })
+  patchNoteSetMeta(entry)
+  showHint('详情已保存')
+}
+
+// 整页重取会用骨架替换列表，删/改标签只就地改卡片，不闪
+function onTagLibraryChanged(change: TagLibraryChange) {
+  noteSets.value.forEach((noteSet) => {
+    noteSet.tag = resolveChangedTags(noteSet.tag, change)
+  })
+  invalidateNoteSetEntries()
+}
+
+function resolveChangedTags(tags: string[], change: TagLibraryChange): string[] {
+  if (!tags.includes(change.name)) return tags
+  if (change.kind === 'remove') return tags.filter((tag) => tag !== change.name)
+  return sanitizeTags(tags.map((tag) => (tag === change.name ? change.nextName ?? tag : tag)))
+}
+
+const isRenameDialogOpen = ref(false)
+const renameTargetId = ref('')
+const renameDraft = ref('')
+
+function openRenameWorkspace(id: string) {
+  renameTargetId.value = id
+  renameDraft.value = workspaceDirectories.value.find((item) => item.id === id)?.name ?? ''
+  isRenameDialogOpen.value = true
+}
+
+async function submitRenameWorkspace() {
+  try {
+    await renameWorkspaceDirectory(renameTargetId.value, renameDraft.value)
+    isRenameDialogOpen.value = false
+    showHint('工作区已重命名')
+  } catch (error) {
+    showHint(`重命名失败：${getErrorMessage(error)}`)
+  }
+}
+
+async function moveWorkspace(id: string, offset: number) {
+  try {
+    await moveWorkspaceDirectory(id, offset)
+  } catch (error) {
+    showHint(`移动工作区失败：${getErrorMessage(error)}`)
+  }
+}
+
+async function removeWorkspace(id: string) {
+  try {
+    await removeWorkspaceDirectory(id)
+    if (activeSectionId.value === id) activeSectionId.value = DEFAULT_SECTION_ID
+    showHint('已移出工作区列表')
+  } catch (error) {
+    showHint(`移出失败：${getErrorMessage(error)}`)
+  }
+}
+
 async function moveExternalNote(noteSet: NoteSetItem, targetDir?: string) {
   const key = noteSet.filePath ?? noteSet.localName
   if (!key) return
@@ -361,7 +455,11 @@ function formatUpdatedAt(timestamp: number): string {
         :can-add-workspace="!isWebEnv"
         @update:model-value="activeSectionId = $event"
         @add-workspace="pickWorkspaceDirectory"
+        @rename-workspace="openRenameWorkspace"
+        @move-workspace="moveWorkspace"
+        @remove-workspace="removeWorkspace"
       />
+      <TagLibraryMenu @changed="onTagLibraryChanged" />
     </Teleport>
     <v-snackbar v-model="isError" timeout="2000">
       Oh no!便签怎么皱成一团了！
@@ -387,8 +485,25 @@ function formatUpdatedAt(timestamp: number): string {
           </v-card-subtitle>
           <v-card-text>
             {{ noteSet.description }}
+            <div v-if="noteSet.tag.length" class="mt-2">
+              <v-chip
+                v-for="tag in noteSet.tag"
+                :key="tag"
+                :color="resolveTagColor(tag)"
+                class="mr-1"
+                size="x-small"
+                variant="tonal"
+              >
+                {{ tag }}
+              </v-chip>
+            </div>
           </v-card-text>
           <v-card-actions>
+            <v-btn
+              @click="openDetail(noteSet)"
+              :icon="mdiInformationOutline"
+              variant="text"
+            ></v-btn>
             <v-btn
               @click="openEditor(noteSet)"
               @pointerenter="preloadEditor"
@@ -446,6 +561,33 @@ function formatUpdatedAt(timestamp: number): string {
       :dir="activeSection.kind === 'workspace' ? activeDir : undefined"
       @update:close="isCreateDialogOpen = $event.status"
     />
+    <NoteDetailDialog
+      :is-open="isDetailOpen"
+      :note="detailTarget"
+      :workspace-targets="workspaceTargets"
+      :is-movable="canMoveNote"
+      @update:close="isDetailOpen = $event.status"
+      @saved="onDetailSaved"
+    />
+    <v-dialog v-model="isRenameDialogOpen" max-width="420">
+      <v-card>
+        <v-card-title>重命名工作区</v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-model="renameDraft"
+            label="工作区名称"
+            :counter="30"
+            autofocus
+            @keyup.enter="submitRenameWorkspace"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn color="error" variant="text" @click="isRenameDialogOpen = false">取消</v-btn>
+          <v-spacer />
+          <v-btn color="primary" variant="text" @click="submitRenameWorkspace">保存</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 

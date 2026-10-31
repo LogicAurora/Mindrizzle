@@ -75,26 +75,36 @@ tauri_cmd! {
         let _guard = lock_file_write();
         let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
             .context("校验笔记文件位置")?;
-        let path = location.archive;
-        if !path.is_file() {
-            return Err(anyhow::anyhow!("文件不存在或者是个目录"));
-        }
-        let compressed = is_mdrf_compressed(&path).context("检测笔记压缩格式")?;
-        let mut cache = MindrizzleFileCache::new_named(&cache_key_of(&path))
-            .with_context(|| format!("创建笔记缓存：{}", location.note_name))?;
-        // 目录缺 body.json 说明此前未走 get 解包，所以在此补一次
-        if !cache.path().join("body.json").is_file() {
-            warn!("笔记缓存缺少正文，重新解包：{}", location.note_name);
-            let file = File::open(&path).with_context(|| format!("打开笔记文件：{}", location.note_name))?;
-            extract_to_cache(file, cache.path(), compressed).context("补充解包笔记正文")?;
-        }
+        require_archive_file(&location)?;
+        let compressed = is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?;
+        let mut cache = prepare_note_cache(&location, compressed, NoteCacheEntry::Body)?;
         let body_xml = serialize_mdr_file_body_xml(MindrizzleFileBody { content })
             .context("编码笔记正文")?;
         cache.write_file("body.json", body_xml.as_bytes()).context("写入笔记正文缓存")?;
         // body 已更新，所以重新打包同步到 .mdrf
-        pack_cache_atomic(&path, cache.path(), compressed).context("保存笔记文件")?;
+        pack_cache_atomic(&location.archive, cache.path(), compressed).context("保存笔记文件")?;
         cache.cleanup();
         info!("保存笔记正文成功：{}", location.note_name);
+        Ok(())
+    }
+
+    pub fn set_mdr_file_meta(
+        file_name: String,
+        mdr_file_info: MindrizzleFileMeta,
+        dir: Option<String>,
+        file_path: Option<String>
+    ) -> anyhow::Result<()> {
+        let _guard = lock_file_write();
+        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+            .context("校验笔记文件位置")?;
+        require_archive_file(&location)?;
+        let compressed = is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?;
+        let mut cache = prepare_note_cache(&location, compressed, NoteCacheEntry::Meta)?;
+        let meta_xml = serialize_mdr_file_meta_xml(mdr_file_info).context("编码笔记元信息")?;
+        cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
+        pack_cache_atomic(&location.archive, cache.path(), compressed).context("保存笔记文件")?;
+        cache.cleanup();
+        info!("保存笔记元信息成功：{}", location.note_name);
         Ok(())
     }
 
@@ -133,21 +143,39 @@ tauri_cmd! {
         let _guard = lock_file_write();
         let source = resolve_note_archive("", None, Some(file_path.as_str()))
             .context("校验外部笔记文件")?;
-        let target_dir = match dir.as_deref() {
-            Some(raw_dir) => resolve_workspace_dir(raw_dir)?,
-            None => mdr_file_dir::get_mdr_file_save_dir(),
-        };
+        let target_dir = resolve_target_workspace_dir(dir.as_deref())?;
         let target = target_dir.join(format!("{}.mdrf", source.note_name));
         if target.exists() {
             return Err(anyhow::anyhow!("目标工作区已有同名笔记"));
         }
-        // 跨分区时 rename 会失败，只能退回复制后删原文件
-        if fs::rename(&source.archive, &target).is_err() {
-            fs::copy(&source.archive, &target).context("复制笔记到目标工作区")?;
-            fs::remove_file(&source.archive).context("删除原外部笔记文件")?;
-        }
+        move_archive_file(&source.archive, &target)?;
         invalidate_named(&cache_key_of(&source.archive));
         info!("笔记移入工作区：{} -> {}", source.note_name, target.display());
+        Ok(source.note_name)
+    }
+
+    pub fn move_mdr_file(
+        file_name: String,
+        dir: Option<String>,
+        target_dir: Option<String>
+    ) -> anyhow::Result<String> {
+        let _guard = lock_file_write();
+        let source = resolve_note_archive(&file_name, dir.as_deref(), None)
+            .context("校验笔记文件位置")?;
+        let target_dir = resolve_target_workspace_dir(target_dir.as_deref())?;
+        let target = target_dir.join(format!("{}.mdrf", source.note_name));
+        // 目标就是当前目录，按成功处理，前端不必区分空移动
+        if target == source.archive {
+            return Ok(source.note_name);
+        }
+        require_archive_file(&source)?;
+        if target.exists() {
+            return Err(anyhow::anyhow!("目标工作区已有同名笔记"));
+        }
+        move_archive_file(&source.archive, &target)?;
+        invalidate_named(&cache_key_of(&source.archive));
+        invalidate_named(&cache_key_of(&target));
+        info!("笔记移动到工作区：{} -> {}", source.note_name, target.display());
         Ok(source.note_name)
     }
 }
@@ -200,8 +228,8 @@ fn read_mdr_file_body(
     }
     let compressed = detect_file_compression(window, &path, is_debug_progress)?;
     let mut cache = create_file_cache(window, &cache_key_of(&path), is_debug_progress)?;
-    let file = File::open(&path)
-        .with_context(|| format!("打开笔记文件：{}", location.note_name))?;
+    let file =
+        File::open(&path).with_context(|| format!("打开笔记文件：{}", location.note_name))?;
     emit_file_load_progress(window, PROGRESS_EXTRACT_START, is_debug_progress);
     extract_to_cache_with_progress(file, cache.path(), compressed, |value| {
         let progress = PROGRESS_EXTRACT_START + value * PROGRESS_EXTRACT_RANGE / PROGRESS_COMPLETE;
@@ -229,8 +257,7 @@ fn create_file_cache(
     is_debug_progress: bool,
 ) -> anyhow::Result<MindrizzleFileCache> {
     emit_file_load_progress(window, PROGRESS_CREATE_CACHE, is_debug_progress);
-    MindrizzleFileCache::new_named(cache_key)
-        .with_context(|| format!("创建笔记缓存：{cache_key}"))
+    MindrizzleFileCache::new_named(cache_key).with_context(|| format!("创建笔记缓存：{cache_key}"))
 }
 
 fn read_cached_mdr_file_body(
@@ -306,10 +333,7 @@ fn resolve_external_archive(raw_path: &str) -> anyhow::Result<NoteArchiveLocatio
         .and_then(|name| name.to_str())
         .unwrap_or("未命名笔记")
         .to_string();
-    Ok(NoteArchiveLocation {
-        archive,
-        note_name,
-    })
+    Ok(NoteArchiveLocation { archive, note_name })
 }
 
 pub(crate) fn resolve_workspace_dir(raw_dir: &str) -> anyhow::Result<PathBuf> {
@@ -350,6 +374,31 @@ pub(crate) fn resolve_mdrf_file_name(file_name: &str) -> anyhow::Result<String> 
     Ok(resolved)
 }
 
+fn require_archive_file(location: &NoteArchiveLocation) -> anyhow::Result<()> {
+    if !location.archive.is_file() {
+        return Err(anyhow::anyhow!("文件不存在或者是个目录"));
+    }
+    Ok(())
+}
+
+fn resolve_target_workspace_dir(raw_dir: Option<&str>) -> anyhow::Result<PathBuf> {
+    let directory = match raw_dir {
+        Some(raw_dir) => resolve_workspace_dir(raw_dir)?,
+        None => mdr_file_dir::get_mdr_file_save_dir(),
+    };
+    fs::canonicalize(&directory).context("定位目标工作区")
+}
+
+// 跨分区时 rename 会失败，只能退回复制后删原文件
+fn move_archive_file(source: &Path, target: &Path) -> anyhow::Result<()> {
+    if fs::rename(source, target).is_ok() {
+        return Ok(());
+    }
+    fs::copy(source, target).context("复制笔记到目标工作区")?;
+    fs::remove_file(source).context("删除原笔记文件")?;
+    Ok(())
+}
+
 /// 保存正文时整包重写，故 .mdrf 的修改时间即上次编辑时间
 fn read_file_modified_millis(path: &Path) -> anyhow::Result<i64> {
     let modified = fs::metadata(path)
@@ -374,6 +423,43 @@ pub(crate) fn pack_cache_atomic(path: &Path, root: &Path, compressed: bool) -> a
         let _ = fs::remove_file(&tmp_path); // 忽略清理失败，不影响主流程
         e.into()
     })
+}
+
+#[derive(Clone, Copy)]
+enum NoteCacheEntry {
+    Meta,
+    Body,
+}
+
+impl NoteCacheEntry {
+    fn file_name(self) -> &'static str {
+        match self {
+            NoteCacheEntry::Meta => "meta.json",
+            NoteCacheEntry::Body => "body.json",
+        }
+    }
+}
+
+// 缓存目录是按需解包出来的，缺目标文件说明此前没走过 get，只能整包重解一次
+fn prepare_note_cache(
+    location: &NoteArchiveLocation,
+    compressed: bool,
+    entry: NoteCacheEntry,
+) -> anyhow::Result<MindrizzleFileCache> {
+    let entry_name = entry.file_name();
+    let cache = MindrizzleFileCache::new_named(&cache_key_of(&location.archive))
+        .with_context(|| format!("创建笔记缓存：{}", location.note_name))?;
+    if cache.path().join(entry_name).is_file() {
+        return Ok(cache);
+    }
+    warn!(
+        "笔记缓存缺少 {entry_name}，重新解包：{}",
+        location.note_name
+    );
+    let file = File::open(&location.archive)
+        .with_context(|| format!("打开笔记文件：{}", location.note_name))?;
+    extract_to_cache(file, cache.path(), compressed).context("补充解包笔记缓存")?;
+    Ok(cache)
 }
 
 fn deserialize_mdr_file_meta_xml(xml: &str) -> Result<MindrizzleFileMeta, quick_xml::DeError> {
