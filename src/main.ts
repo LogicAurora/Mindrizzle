@@ -6,6 +6,7 @@ import NoteSet from "./Views/NoteSets.vue";
 import { routeTransition } from "./utils/routeTransition.ts";
 import { loadEditorComponent } from "./utils/editorRoute";
 import { getSetting } from "./utils/settingsStore";
+import { isDeveloperMode, loadDeveloperMode } from "./utils/developerMode";
 import {
   APPEARANCE_SETTING_KEY,
   isAppearancePreference,
@@ -44,6 +45,9 @@ const router = createRouter({
 });
 
 router.beforeEach((to, from) => {
+  // 调试页属于隐藏入口，直接改 URL 也要拦住
+  if (to.path === "/debug" && !isDeveloperMode.value) return "/set";
+
   const toLevel = (to.meta.level as number) ?? 0;
   const fromLevel = (from.meta.level as number) ?? 0;
 
@@ -72,6 +76,12 @@ router.onError((error) => {
 router.afterEach(() => sessionStorage.removeItem(CHUNK_RELOAD_KEY));
 
 async function mountApplication() {
+  try {
+    await loadDeveloperMode();
+  } catch (error) {
+    console.error("读取开发者模式设置失败：", error);
+  }
+
   try {
     const preference = await getSetting<unknown>(APPEARANCE_SETTING_KEY);
     if (isAppearancePreference(preference)) {

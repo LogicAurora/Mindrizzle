@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
+  mdiBug,
   mdiInformationOutline,
   mdiPalette,
   mdiSwapVertical,
@@ -11,7 +12,10 @@ import {
 import about from "./SettingTabs/About.vue";
 import advanced from "./SettingTabs/Advanced.vue";
 import appearance from "./SettingTabs/Appearance.vue";
+import developer from "./SettingTabs/Developer.vue";
 import interfaceTab from "./SettingTabs/Interface.vue";
+import { isDeveloperMode } from "../utils/developerMode";
+import { pendingSettingsTab } from "../utils/settingsTabIntent";
 
 const SETTINGS_TABS = [
   {
@@ -39,9 +43,20 @@ const SETTINGS_TABS = [
     icon: mdiTuneVariant,
   },
 ] as const;
+const DEVELOPER_TAB = {
+  value: "developer",
+  label: "开发者",
+  component: developer,
+  icon: mdiBug,
+} as const;
+const ALL_SETTINGS_TABS = [...SETTINGS_TABS, DEVELOPER_TAB] as const;
 const DEFAULT_SETTINGS_TAB = SETTINGS_TABS[0].value;
 
-type SettingsTabValue = (typeof SETTINGS_TABS)[number]["value"];
+type SettingsTabValue = (typeof ALL_SETTINGS_TABS)[number]["value"];
+
+const visibleSettingsTabs = computed(() =>
+  isDeveloperMode.value ? ALL_SETTINGS_TABS : SETTINGS_TABS,
+);
 
 const route = useRoute();
 
@@ -49,9 +64,33 @@ const route = useRoute();
 const tab = ref<SettingsTabValue>(resolveSettingsTab(route.params.tab));
 
 function resolveSettingsTab(value: unknown): SettingsTabValue {
-  const matched = SETTINGS_TABS.find((item) => item.value === value);
-  return matched?.value ?? DEFAULT_SETTINGS_TAB;
+  const matched = ALL_SETTINGS_TABS.find((item) => item.value === value);
+  if (!matched) return DEFAULT_SETTINGS_TAB;
+  if (matched.value === DEVELOPER_TAB.value && !isDeveloperMode.value)
+    return DEFAULT_SETTINGS_TAB;
+  return matched.value;
 }
+
+// 关掉开发者模式后停在该 tab 会留下空白面板
+watch(isDeveloperMode, (enabled) => {
+  if (!enabled && tab.value === DEVELOPER_TAB.value)
+    tab.value = DEFAULT_SETTINGS_TAB;
+});
+
+function isSettingsTabValue(value: unknown): value is SettingsTabValue {
+  return ALL_SETTINGS_TABS.some((item) => item.value === value);
+}
+
+// 外部（关于页连点版本号）只能提“切哪个 tab”，切完立刻清掉，下次进入设置页不会又跳过去
+watch(
+  pendingSettingsTab,
+  (value) => {
+    if (value === null) return;
+    pendingSettingsTab.value = null;
+    if (isSettingsTabValue(value)) tab.value = value;
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -67,7 +106,7 @@ function resolveSettingsTab(value: unknown): SettingsTabValue {
         density="compact"
       >
         <v-tab
-          v-for="item in SETTINGS_TABS"
+          v-for="item in visibleSettingsTabs"
           :prepend-icon="item.icon"
           :key="item.value"
           :value="item.value"
@@ -78,7 +117,7 @@ function resolveSettingsTab(value: unknown): SettingsTabValue {
 
     <v-tabs-window v-model="tab" class="settings-window">
       <v-tabs-window-item
-        v-for="item in SETTINGS_TABS"
+        v-for="item in visibleSettingsTabs"
         :key="item.value"
         :value="item.value"
       >

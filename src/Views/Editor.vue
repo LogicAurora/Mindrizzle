@@ -38,7 +38,7 @@
 
     <AddBlockPicker
       v-if="!hasSelection && MdrCRef?.isEditMode"
-      :options="ADD_OPTIONS"
+      :options="addOptions"
       :model-value="addIdx"
       :visible="true"
       @update:model-value="onSelectAdd"
@@ -72,6 +72,7 @@ import {
   type ClipboardEntry,
 } from "../utils/blockClipboard";
 import { CANVAS_COMPONENTS } from "../Controls/Canvas/Registry/canvasComponents.ts";
+import { isDeveloperMode } from "../utils/developerMode";
 import { screenToContent } from "../utils/canvasCoords";
 import { useRoute } from "vue-router";
 import { invokeCommand } from "../utils/invoke";
@@ -98,14 +99,16 @@ const canOperateSelection = computed(
 );
 
 // 添加类型单源
-const ADD_OPTIONS = CANVAS_COMPONENTS.map(
-  ({ key, title, description, icon, addId }) => ({
+const addOptions = computed(() =>
+  CANVAS_COMPONENTS.filter(
+    ({ devOnly }) => !devOnly || isDeveloperMode.value,
+  ).map(({ key, title, description, icon, addId }) => ({
     key,
     label: title,
     description,
     icon,
     addId,
-  }),
+  })),
 );
 // 添加类型单选索引
 const addIdx = ref(0);
@@ -113,6 +116,11 @@ const onSelectAdd = (index: number | null) => {
   if (index == null) return;
   addIdx.value = index;
 };
+
+// 关掉开发者模式后隐藏的块会让索引越界，回退到第一项
+watch(addOptions, (options) => {
+  if (addIdx.value >= options.length) addIdx.value = 0;
+});
 
 // 添加预览随当前类型/选中/编辑态同步
 watch(
@@ -123,7 +131,7 @@ watch(
     ojc.setAddPreview(
       hasSelection.value || !ojc.isEditMode
         ? null
-        : (ADD_OPTIONS[addIdx.value]?.key ?? null),
+        : (addOptions.value[addIdx.value]?.key ?? null),
     );
   },
   { immediate: true },
@@ -177,7 +185,7 @@ const onMouseUp = (e: MouseEvent) => {
     CLICK_DRAG_THRESHOLD
   )
     return;
-  const key = ADD_OPTIONS[addIdx.value]?.key;
+  const key = addOptions.value[addIdx.value]?.key;
   if (key)
     MdrCRef.value?.addComponent(key, canvasPointFromMouse(e) ?? undefined);
 };

@@ -12,6 +12,9 @@ import { computed, ref } from "vue";
 import packageInfo from "../../../package.json";
 import appIconUrl from "../../../app-icon.svg";
 import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
+import { useSecretKnock } from "../../utils/easterEggs";
+import { saveDeveloperMode } from "../../utils/developerMode";
+import { pendingSettingsTab } from "../../utils/settingsTabIntent";
 
 const isDiagnosticsOpen = ref(false);
 const isGitCommitLoaded = ref(!isTauri());
@@ -78,6 +81,18 @@ async function copyDiagnostics() {
     copyError.value = "无法访问剪贴板，请检查系统权限。";
   }
 }
+
+const knockVersion = useSecretKnock(() => {
+  void openDeveloperTab();
+});
+
+const snackbar = ref(false);
+
+function openDeveloperTab() {
+  snackbar.value = true;
+  void saveDeveloperMode(true).catch(() => undefined);
+  pendingSettingsTab.value = "developer";
+}
 </script>
 
 <template>
@@ -100,7 +115,7 @@ async function copyDiagnostics() {
         <div class="about-build">
           <div class="build-item">
             <span>版本</span>
-            <strong>{{ appVersion }}</strong>
+            <strong @click="knockVersion">{{ appVersion }}</strong>
           </div>
           <v-divider class="build-separator" vertical />
           <div class="build-item">
@@ -210,6 +225,9 @@ async function copyDiagnostics() {
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <v-snackbar v-model="snackbar" :timeout="3000" location="bottom"
+      >已开启开发者模式</v-snackbar
+    >
   </MdrSettingsPageBase>
 </template>
 

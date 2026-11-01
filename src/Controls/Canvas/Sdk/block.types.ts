@@ -84,6 +84,8 @@ export interface BlockDefinition<
   addId: string;
   // 添加菜单顺序；不填按 0，同序按 key
   order?: number;
+  /** 只供开发者使用，未开启开发者模式时不出现在添加菜单 */
+  devOnly?: boolean;
   defaultConfig: () => TConfig;
   defaultSize: BlockSize;
   constraints?: ResizeConstraints;

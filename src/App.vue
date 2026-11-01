@@ -63,6 +63,12 @@ import {
   loadTitleRollDirection,
   titleRollDirection,
 } from "./utils/uiPreference";
+import {
+  activeEasterEggEffect,
+  attachSecretKeyboard,
+  playEasterEgg,
+} from "./utils/easterEggs";
+import { isDeveloperMode } from "./utils/developerMode";
 import { Z_LAYER } from "./Controls/Canvas/Core/zIndex";
 const transitionClassMap = {
   VSlideXTransition: "slide-x-transition",
@@ -200,7 +206,29 @@ async function startEditorTransition(
 
 provide(startEditorTransitionKey, startEditorTransition);
 
-const isDev = computed(() => import.meta.env.DEV);
+const RAIN_DROP_COUNT = 48;
+const RAIN_DELAY_RANGE = 1_200;
+const RAIN_MIN_DURATION = 900;
+const RAIN_DURATION_RANGE = 900;
+
+// 雨滴位置/节奏每次随机，固定写死会在重复触发时显得一模一样
+const rainDrops = computed(() => {
+  if (activeEasterEggEffect.value !== "rain") return [];
+  return Array.from({ length: RAIN_DROP_COUNT }, (_, index) => ({
+    id: index,
+    style: {
+      left: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * RAIN_DELAY_RANGE}ms`,
+      animationDuration: `${
+        RAIN_MIN_DURATION + Math.random() * RAIN_DURATION_RANGE
+      }ms`,
+    },
+  }));
+});
+
+const isRainbowTitle = computed(
+  () => activeEasterEggEffect.value === "rainbow",
+);
 
 const menuRef = shallowRef(false);
 type ResizeDirection =
@@ -243,6 +271,7 @@ const currentRoute = useRoute();
 const { mobile: isMobileLayout } = useDisplay();
 const isBootTitleVisible = ref(true);
 let bootTitleTimer: number | undefined;
+let detachSecretKeyboard: (() => void) | undefined;
 
 onMounted(() => {
   bootTitleTimer = window.setTimeout(() => {
@@ -252,11 +281,16 @@ onMounted(() => {
     // 浏览器调试环境无 IPC，上报前守卫
     if (isTauri()) logError(getErrorMessage(error));
   });
+  detachSecretKeyboard = attachSecretKeyboard({
+    onKonami: () => playEasterEgg("rainbow"),
+    onDrizzle: () => playEasterEgg("rain"),
+  });
 });
 
 onBeforeUnmount(() => {
   if (bootTitleTimer !== undefined) clearTimeout(bootTitleTimer);
   clearTimeout(titleSwitchTimer);
+  detachSecretKeyboard?.();
 });
 
 const titleRollName = computed(() =>
@@ -343,9 +377,12 @@ function navigateFromMenu(path: string) {
         <div id="title-right-actions" class="toolbar-actions" />
         <span data-tauri-drag-region class="text-white app-title-wrap">
           <Transition :name="titleRollName">
-            <span :key="displayedTitle" class="app-title">{{
-              displayedTitle
-            }}</span>
+            <span
+              :key="displayedTitle"
+              class="app-title"
+              :class="{ 'is-rainbow': isRainbowTitle }"
+              >{{ displayedTitle }}</span
+            >
           </Transition>
         </span>
         <!-- 路由页面用 <Teleport to="#toolbar-actions" defer> 往这里塞自己的按钮；
@@ -380,8 +417,8 @@ function navigateFromMenu(path: string) {
           @click="navigateFromMenu('/settings/about')"
         />
       </v-list>
-      <v-divider v-if="isDev" />
-      <v-list v-if="isDev" :lines="false" density="compact" nav>
+      <v-divider v-if="isDeveloperMode" />
+      <v-list v-if="isDeveloperMode" :lines="false" density="compact" nav>
         <v-list-item
           :prepend-icon="mdiBug"
           title="调试页面"
@@ -453,6 +490,14 @@ function navigateFromMenu(path: string) {
         </div>
       </div>
     </div>
+    <div v-if="rainDrops.length" class="egg-rain" aria-hidden="true">
+      <span
+        v-for="drop in rainDrops"
+        :key="drop.id"
+        class="egg-rain__drop"
+        :style="drop.style"
+      />
+    </div>
   </v-app>
 </template>
 <style>
@@ -500,6 +545,64 @@ body,
   text-overflow: ellipsis;
   /* drag-region 判定看的是事件 target，文字不吃事件才拖得动窗口 */
   pointer-events: none;
+}
+
+/* 彩蛋：流光彩虹标题，靠背景裁切到文字上 */
+.app-title.is-rainbow {
+  background-image: linear-gradient(
+    90deg,
+    #ff8a8a,
+    #ffd166,
+    #8ae9c1,
+    #8ab6ff,
+    #d08aff,
+    #ff8a8a
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: egg-rainbow-flow 1.6s linear infinite;
+}
+
+@keyframes egg-rainbow-flow {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 300% 50%;
+  }
+}
+
+/* 彩蛋：雨滴层不拦事件，只做装饰 */
+.egg-rain {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.egg-rain__drop {
+  position: absolute;
+  top: -12vh;
+  width: 1px;
+  height: 12vh;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(138, 182, 255, 0.85)
+  );
+  animation: egg-rain-fall 1.2s linear forwards;
+}
+
+@keyframes egg-rain-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(120vh);
+  }
 }
 
 /* 标题切换滚动：down = 新字自上方落入，up = 自下方升起 */

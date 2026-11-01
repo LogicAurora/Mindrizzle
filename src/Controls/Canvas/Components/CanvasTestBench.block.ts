@@ -12,6 +12,7 @@ export default defineBlock<TestBenchConfig>({
   addId: "add-test",
   // 调试用块，排在全部正式块之后
   order: 90,
+  devOnly: true,
   constraints: TEST_BENCH_CONSTRAINTS,
   defaultConfig: () => ({ counter: 0, note: "", showViewport: true }),
   defaultSize: { w: 420, h: 360 },

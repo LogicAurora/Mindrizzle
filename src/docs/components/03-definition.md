@@ -14,6 +14,7 @@
 | `key`                                    | 是   | 持久化在 `.mdrf` 中，不能随意改                                     |
 | `title` / `icon` / `addId`               | 是   | 添加菜单文案、图标与 DOM id                                         |
 | `order`                                  | 否   | 添加菜单顺序，缺省 0                                                |
+| `devOnly`                                | 否   | 仅开发者模式可见，不出现在添加菜单（块照常渲染）                    |
 | `defaultConfig` / `defaultSize`          | 是   | 新块初始配置与尺寸                                                  |
 | `constraints`                            | 否   | 尺寸约束，缺省走画布默认值                                          |
 | `titleOf` / `iconOf`                     | 否   | 按 config 动态取标题/图标                                           |

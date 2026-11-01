@@ -81,6 +81,7 @@ flowchart LR
 - `titleOf` / `iconOf` 让拖拽栏标题随 config 变化，缺省用注册项的 `title` / `icon`。
 - 富文本内嵌组件按 `embed.nodeName` 反查同一注册表（`embeddedBlockOf`），不再有第二份组件映射。
 - 块定义经 `import.meta.glob('../Components/**/*.block.ts')` 自动注册，组件按同名 `.vue` 异步加载。
+- `devOnly: true` 的块（测试台）照常注册与渲染，但不进添加轮盘，只有开启开发者模式后才出现；该开关存在设置里，与构建环境无关。
 
 ## 图 2.2 DOM 选择器契约
 
