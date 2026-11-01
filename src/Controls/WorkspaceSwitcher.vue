@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 import {
   mdiArrowDown,
   mdiArrowUp,
@@ -11,54 +11,65 @@ import {
   mdiFolderOutline,
   mdiFolderPlus,
   mdiPencilOutline,
-} from '@mdi/js'
+} from "@mdi/js";
 
 export interface WorkspaceOption {
-  id: string
-  name: string
-  kind: 'workspace' | 'external'
-  isEditable?: boolean
+  id: string;
+  name: string;
+  kind: "workspace" | "external";
+  isEditable?: boolean;
 }
 
-const MOVE_UP = -1
-const MOVE_DOWN = 1
+const MOVE_UP = -1;
+const MOVE_DOWN = 1;
 
 const props = defineProps<{
-  modelValue: string
-  options: WorkspaceOption[]
-  canAddWorkspace: boolean
-}>()
+  modelValue: string;
+  options: WorkspaceOption[];
+  canAddWorkspace: boolean;
+}>();
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  'add-workspace': []
-  'rename-workspace': [id: string]
-  'move-workspace': [id: string, offset: number]
-  'remove-workspace': [id: string]
-}>()
+  "update:modelValue": [value: string];
+  "add-workspace": [];
+  "rename-workspace": [id: string];
+  "move-workspace": [id: string, offset: number];
+  "remove-workspace": [id: string];
+}>();
 
 const activeOption = computed(
-  () => props.options.find((option) => option.id === props.modelValue) ?? props.options[0],
-)
+  () =>
+    props.options.find((option) => option.id === props.modelValue) ??
+    props.options[0],
+);
 
 const editableIds = computed(() =>
-  props.options.filter((option) => option.isEditable).map((option) => option.id),
-)
+  props.options
+    .filter((option) => option.isEditable)
+    .map((option) => option.id),
+);
 
 function isMoveDisabled(id: string, offset: number): boolean {
-  const target = editableIds.value.indexOf(id) + offset
-  return target < 0 || target >= editableIds.value.length
+  const target = editableIds.value.indexOf(id) + offset;
+  return target < 0 || target >= editableIds.value.length;
 }
 
-const selectOption = (id: string) => emit('update:modelValue', id)
+const selectOption = (id: string) => emit("update:modelValue", id);
 </script>
 
 <template>
   <v-menu location="bottom start" offset="4">
     <template #activator="{ props: activatorProps }">
-      <v-btn v-bind="activatorProps" color="white" variant="text" class="workspace-switcher__trigger">
+      <v-btn
+        v-bind="activatorProps"
+        color="white"
+        variant="text"
+        class="workspace-switcher__trigger"
+      >
         <v-icon :icon="mdiFolderOutline" start />
-        <span class="workspace-switcher__label">{{ activeOption?.name ?? '默认工作区' }}</span>
+        <span class="workspace-switcher__label">{{
+          activeOption?.name ?? "默认工作区"
+        }}</span>
         <v-icon :icon="mdiChevronDown" end />
       </v-btn>
     </template>
@@ -70,37 +81,61 @@ const selectOption = (id: string) => emit('update:modelValue', id)
         @click="selectOption(option.id)"
       >
         <template #prepend>
-          <v-icon :icon="option.kind === 'external' ? mdiFileDocumentOutline : mdiFolderOutline" />
+          <v-icon
+            :icon="
+              option.kind === 'external'
+                ? mdiFileDocumentOutline
+                : mdiFolderOutline
+            "
+          />
         </template>
         <v-list-item-title>{{ option.name }}</v-list-item-title>
         <template #append>
-          <v-icon v-if="option.id === modelValue" :icon="mdiCheck" size="small" />
+          <v-icon
+            v-if="option.id === modelValue"
+            :icon="mdiCheck"
+            size="small"
+          />
           <v-menu v-if="option.isEditable" location="bottom end" offset="4">
             <template #activator="{ props: menuProps }">
-              <v-btn v-bind="menuProps" :icon="mdiDotsVertical" size="x-small" variant="text" @click.stop />
+              <v-btn
+                v-bind="menuProps"
+                :icon="mdiDotsVertical"
+                size="x-small"
+                variant="text"
+                @click.stop
+              />
             </template>
             <v-list density="compact" min-width="140">
               <v-list-item @click="emit('rename-workspace', option.id)">
-                <template #prepend><v-icon :icon="mdiPencilOutline" size="small" /></template>
+                <template #prepend
+                  ><v-icon :icon="mdiPencilOutline" size="small"
+                /></template>
                 <v-list-item-title>重命名</v-list-item-title>
               </v-list-item>
               <v-list-item
                 :disabled="isMoveDisabled(option.id, MOVE_UP)"
                 @click="emit('move-workspace', option.id, MOVE_UP)"
               >
-                <template #prepend><v-icon :icon="mdiArrowUp" size="small" /></template>
+                <template #prepend
+                  ><v-icon :icon="mdiArrowUp" size="small"
+                /></template>
                 <v-list-item-title>上移</v-list-item-title>
               </v-list-item>
               <v-list-item
                 :disabled="isMoveDisabled(option.id, MOVE_DOWN)"
                 @click="emit('move-workspace', option.id, MOVE_DOWN)"
               >
-                <template #prepend><v-icon :icon="mdiArrowDown" size="small" /></template>
+                <template #prepend
+                  ><v-icon :icon="mdiArrowDown" size="small"
+                /></template>
                 <v-list-item-title>下移</v-list-item-title>
               </v-list-item>
               <v-divider class="my-1" />
               <v-list-item @click="emit('remove-workspace', option.id)">
-                <template #prepend><v-icon :icon="mdiClose" size="small" /></template>
+                <template #prepend
+                  ><v-icon :icon="mdiClose" size="small"
+                /></template>
                 <v-list-item-title>移出列表</v-list-item-title>
               </v-list-item>
             </v-list>

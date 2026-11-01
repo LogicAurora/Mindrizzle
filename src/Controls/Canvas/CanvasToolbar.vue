@@ -17,7 +17,13 @@
       />
       <v-btn
         v-tooltip:right="'当前 : ' + mobileLabel"
-        :icon="mobileLabel === '移动端' ? mdiCellphone : mobileLabel === '桌面端' ? mdiLaptop : mdiDevices"
+        :icon="
+          mobileLabel === '移动端'
+            ? mdiCellphone
+            : mobileLabel === '桌面端'
+              ? mdiLaptop
+              : mdiDevices
+        "
         variant="text"
         @click="emit('toggle-mobile')"
       />
@@ -54,9 +60,15 @@
           />
         </template>
         <v-list density="compact" max-height="320" min-width="240">
-          <v-list-item v-for="entry in clipboard" :key="entry.id" @click="emit('paste', entry)">
+          <v-list-item
+            v-for="entry in clipboard"
+            :key="entry.id"
+            @click="emit('paste', entry)"
+          >
             <v-list-item-title>{{ entryTitle(entry) }}</v-list-item-title>
-            <v-list-item-subtitle>{{ formatTime(entry.createdAt) }}</v-list-item-subtitle>
+            <v-list-item-subtitle>{{
+              formatTime(entry.createdAt)
+            }}</v-list-item-subtitle>
           </v-list-item>
         </v-list>
       </v-menu>
@@ -97,57 +109,62 @@ import {
   mdiLaptop,
   mdiDevices,
   mdiPencilOff,
-} from '@mdi/js'
+} from "@mdi/js";
 
-import { Z_LAYER } from './Core/zIndex.ts'
-import { componentMetaOf } from './Registry/canvasComponents.ts'
-import type { ClipboardEntry } from '../../utils/blockClipboard.ts'
+import { Z_LAYER } from "./Core/zIndex.ts";
+import { componentMetaOf } from "./Registry/canvasComponents.ts";
+import type { ClipboardEntry } from "../../utils/blockClipboard.ts";
 
 const props = defineProps<{
-  isEditMode: boolean
-  mobileLabel: string
-  canDelete: boolean
-  canCopy: boolean
-  canPaste: boolean
-  clipboard: ClipboardEntry[]
-  zoom: number
-}>()
+  isEditMode: boolean;
+  mobileLabel: string;
+  canDelete: boolean;
+  canCopy: boolean;
+  canPaste: boolean;
+  clipboard: ClipboardEntry[];
+  zoom: number;
+}>();
 
 const emit = defineEmits<{
-  'toggle-edit': []
-  'toggle-mobile': []
-  delete: []
-  copy: []
-  paste: [entry: ClipboardEntry]
-  'set-zoom': [value: number]
-}>()
+  "toggle-edit": [];
+  "toggle-mobile": [];
+  delete: [];
+  copy: [];
+  paste: [entry: ClipboardEntry];
+  "set-zoom": [value: number];
+}>();
 
 const ZOOM_OPTIONS = [
-  { title: '50%', value: 0.5 },
-  { title: '100%', value: 1 },
-  { title: '200%', value: 2 },
-  { title: '300%', value: 3 },
-] as const
+  { title: "50%", value: 0.5 },
+  { title: "100%", value: 1 },
+  { title: "200%", value: 2 },
+  { title: "300%", value: 3 },
+] as const;
 
 // 历史只给出数量与类型摘要，缩略图级别就够用户辨认是哪一次复制
 function entryTitle(entry: ClipboardEntry): string {
-  const names = entry.blocks.map((block) => componentMetaOf(block.component)?.title ?? block.component)
-  const unique = [...new Set(names)]
-  const suffix = unique.length > 2 ? '…' : ''
-  return `${entry.blocks.length} 个块 · ${unique.slice(0, 2).join('、')}${suffix}`
+  const names = entry.blocks.map(
+    (block) => componentMetaOf(block.component)?.title ?? block.component,
+  );
+  const unique = [...new Set(names)];
+  const suffix = unique.length > 2 ? "…" : "";
+  return `${entry.blocks.length} 个块 · ${unique.slice(0, 2).join("、")}${suffix}`;
 }
 
 const formatTime = (timestamp: number): string => {
-  const date = new Date(timestamp)
-  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  const isToday = date.toDateString() === new Date().toDateString()
-  return isToday ? time : `${date.getMonth() + 1}/${date.getDate()} ${time}`
-}
+  const date = new Date(timestamp);
+  const time = date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const isToday = date.toDateString() === new Date().toDateString();
+  return isToday ? time : `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+};
 
 const pasteLatest = () => {
-  const [latest] = props.clipboard
-  if (latest) emit('paste', latest)
-}
+  const [latest] = props.clipboard;
+  if (latest) emit("paste", latest);
+};
 </script>
 
 <style scoped>

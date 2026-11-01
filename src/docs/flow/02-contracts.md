@@ -1,4 +1,5 @@
 <!-- 最后验证: 2026-11-01 -->
+
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -34,17 +35,17 @@ flowchart LR
 
 ### 事件明细
 
-| 事件名 | 派发方 | 监听方 | 目的 |
-|---|---|---|---|
-| `Mindrizzle:canvas-transform` | MdrCanvas | RichTextEditor / block-handle / useHoverState / useHoverUi | pan/zoom 变化 |
-| `Mindrizzle:block-selection` | MdrCanvas | useHoverUi | 块选中变化 |
-| `Mindrizzle:block-popup` | block-handle | MdrCanvas | popup 遮挡 tm 手柄 |
-| `Mindrizzle:block-popup-top` | block-handle | MdrCanvas | popup 上方开启 |
-| `Mindrizzle:block-handle-active` | block-handle | MdrCanvas | popup 激活 |
-| `Mindrizzle:canvas-pan` | useBlockDrag | MdrCanvas | 拖拽贴边驱动画布平移 |
-| `Mindrizzle:extract-component` | vue-component | MdrCanvas | 插入组件拖出成块 |
-| `Mindrizzle:rich-text-read-only` | RichTextEditor | vue-component | 只读态同步 |
-| `Mindrizzle:scrollbar-drag` | RichTextEditor | block-handle | 滚动条拖拽时收 popup |
+| 事件名                           | 派发方         | 监听方                                                     | 目的                 |
+| -------------------------------- | -------------- | ---------------------------------------------------------- | -------------------- |
+| `Mindrizzle:canvas-transform`    | MdrCanvas      | RichTextEditor / block-handle / useHoverState / useHoverUi | pan/zoom 变化        |
+| `Mindrizzle:block-selection`     | MdrCanvas      | useHoverUi                                                 | 块选中变化           |
+| `Mindrizzle:block-popup`         | block-handle   | MdrCanvas                                                  | popup 遮挡 tm 手柄   |
+| `Mindrizzle:block-popup-top`     | block-handle   | MdrCanvas                                                  | popup 上方开启       |
+| `Mindrizzle:block-handle-active` | block-handle   | MdrCanvas                                                  | popup 激活           |
+| `Mindrizzle:canvas-pan`          | useBlockDrag   | MdrCanvas                                                  | 拖拽贴边驱动画布平移 |
+| `Mindrizzle:extract-component`   | vue-component  | MdrCanvas                                                  | 插入组件拖出成块     |
+| `Mindrizzle:rich-text-read-only` | RichTextEditor | vue-component                                              | 只读态同步           |
+| `Mindrizzle:scrollbar-drag`      | RichTextEditor | block-handle                                               | 滚动条拖拽时收 popup |
 
 ## 图 2.3 块 SDK 契约（`src/Controls/Canvas/Sdk/`）
 
@@ -57,16 +58,16 @@ flowchart LR
   H -->|"applyConfig(config)"| H
 ```
 
-| 宿主调用 | 块侧实现 | 用途 |
-| --- | --- | --- |
-| `snapshotHtml()` | 按 `snapshot` 声明返回静态 HTML（函数形式可读块内 DOM） | 虚拟化 |
-| `flushConfig()` | 返回内存中的 config | 保存与虚拟化前落库 |
-| `applyConfig(config)` | 覆盖内存 config | 载入文档 |
-| `resolveDropAtElement` / `scrollContent` | 由块组件调 `ctx.setDropHandlers` 注册 | 接收画布拖入 |
-| `ctx.getView()` | 读画布视图 | 插件不接触 DOM 坐标与原始事件 |
-| `blockUuid` prop | 嵌入节点自带 uuid，附件类块用它开组件目录 | 富文本内读写组件数据 |
-| `onUpdateProps(patch)` | 一次合并多个 props | 表格 / 任务等结构化块 |
-| `EMBED_SETTINGS_HOST_KEY` | 插入块设置面板的 Teleport 宿主（`Ref<HTMLElement>`） | 块作者提供自己的设置 UI |
+| 宿主调用                                 | 块侧实现                                                | 用途                          |
+| ---------------------------------------- | ------------------------------------------------------- | ----------------------------- |
+| `snapshotHtml()`                         | 按 `snapshot` 声明返回静态 HTML（函数形式可读块内 DOM） | 虚拟化                        |
+| `flushConfig()`                          | 返回内存中的 config                                     | 保存与虚拟化前落库            |
+| `applyConfig(config)`                    | 覆盖内存 config                                         | 载入文档                      |
+| `resolveDropAtElement` / `scrollContent` | 由块组件调 `ctx.setDropHandlers` 注册                   | 接收画布拖入                  |
+| `ctx.getView()`                          | 读画布视图                                              | 插件不接触 DOM 坐标与原始事件 |
+| `blockUuid` prop                         | 嵌入节点自带 uuid，附件类块用它开组件目录               | 富文本内读写组件数据          |
+| `onUpdateProps(patch)`                   | 一次合并多个 props                                      | 表格 / 任务等结构化块         |
+| `EMBED_SETTINGS_HOST_KEY`                | 插入块设置面板的 Teleport 宿主（`Ref<HTMLElement>`）    | 块作者提供自己的设置 UI       |
 
 - 插入命令 `insertVueComponent(At)(pos, name, props, uuid?)`：从画布块拖入时传源块 uuid，数据目录可直接复用；
   插入后光标落在节点后的文本块（没有就补一个空段落），**不建立 NodeSelection**，否则下一次输入会把组件整块替换掉。
@@ -122,21 +123,21 @@ flowchart TB
 
 ### 选择器明细
 
-| 选择器 | 定义处 | 读取方 |
-|---|---|---|
-| `.canvas-container` | MdrCanvas | useBlockDrag / blockHandleUtils / useHoverState |
-| `.canvas` | MdrCanvas | block-handle（Teleport 目标） / blockHandleUtils |
-| `.drag-wrapper[data-uuid]` | ResizeBox | 几乎全部 |
-| `.component-settings-menu` | MdrCanvasComponentBase | 块设置菜单（挂 body、视觉坐标） |
-| `.editor-wrapper` | RichTextEditor | useBlockDrag / useHoverUi |
-| `.editor-scroll` | RichTextEditor | blockHandleUtils / useHoverUi |
-| `.ProseMirror` | ProseKit | 所有 hook |
-| `.block-handle-popup[data-uuid]` | block-handle | block-handle / useBlockDrag |
-| `.block-handle-positioner[data-owner]` | block-handle | blockHandleUtils |
-| `.handle-tm` / `.floating-handle` / `.side-settings` | MdrCanvas（`.handle-tm`）/ MdrCanvasComponentBase（浮层） | useHoverState / useHoverUi |
-| `.selected-outline[data-uuid]` | MdrCanvas | MdrCanvas（单选描边环、拖拽期命令式跟随） |
-| `.selected-outline-union` / `.outline-band-outer` / `.outline-band-inner` | MdrCanvas | MdrCanvas（多选并集轮廓、拖拽期命令式跟随；整层画不出归属块，故 z 恒低于拖拽栏） |
-| `.custom-scrollbar` / `.editor-scroll-shell` | RichTextEditor | block-handle |
+| 选择器                                                                    | 定义处                                                    | 读取方                                                                           |
+| ------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `.canvas-container`                                                       | MdrCanvas                                                 | useBlockDrag / blockHandleUtils / useHoverState                                  |
+| `.canvas`                                                                 | MdrCanvas                                                 | block-handle（Teleport 目标） / blockHandleUtils                                 |
+| `.drag-wrapper[data-uuid]`                                                | ResizeBox                                                 | 几乎全部                                                                         |
+| `.component-settings-menu`                                                | MdrCanvasComponentBase                                    | 块设置菜单（挂 body、视觉坐标）                                                  |
+| `.editor-wrapper`                                                         | RichTextEditor                                            | useBlockDrag / useHoverUi                                                        |
+| `.editor-scroll`                                                          | RichTextEditor                                            | blockHandleUtils / useHoverUi                                                    |
+| `.ProseMirror`                                                            | ProseKit                                                  | 所有 hook                                                                        |
+| `.block-handle-popup[data-uuid]`                                          | block-handle                                              | block-handle / useBlockDrag                                                      |
+| `.block-handle-positioner[data-owner]`                                    | block-handle                                              | blockHandleUtils                                                                 |
+| `.handle-tm` / `.floating-handle` / `.side-settings`                      | MdrCanvas（`.handle-tm`）/ MdrCanvasComponentBase（浮层） | useHoverState / useHoverUi                                                       |
+| `.selected-outline[data-uuid]`                                            | MdrCanvas                                                 | MdrCanvas（单选描边环、拖拽期命令式跟随）                                        |
+| `.selected-outline-union` / `.outline-band-outer` / `.outline-band-inner` | MdrCanvas                                                 | MdrCanvas（多选并集轮廓、拖拽期命令式跟随；整层画不出归属块，故 z 恒低于拖拽栏） |
+| `.custom-scrollbar` / `.editor-scroll-shell`                              | RichTextEditor                                            | block-handle                                                                     |
 
 ## 维护提示
 

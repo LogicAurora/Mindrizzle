@@ -1,9 +1,9 @@
-import { invoke, isTauri } from '@tauri-apps/api/core'
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
-const SETTINGS_KEY_PREFIX = 'mindrizzle:setting:'
+const SETTINGS_KEY_PREFIX = "mindrizzle:setting:";
 
 function validateKey(key: string): void {
-  if (!key.trim()) throw new Error('设置键不能为空')
+  if (!key.trim()) throw new Error("设置键不能为空");
 }
 
 /**
@@ -12,11 +12,11 @@ function validateKey(key: string): void {
  * @example const theme = await getSetting<'light' | 'dark'>('theme')
  */
 export async function getSetting<T>(key: string): Promise<T | null> {
-  validateKey(key)
-  if (isTauri()) return invoke<T | null>('get_setting', { key })
+  validateKey(key);
+  if (isTauri()) return invoke<T | null>("get_setting", { key });
 
-  const storedValue = localStorage.getItem(`${SETTINGS_KEY_PREFIX}${key}`)
-  return storedValue === null ? null : JSON.parse(storedValue) as T
+  const storedValue = localStorage.getItem(`${SETTINGS_KEY_PREFIX}${key}`);
+  return storedValue === null ? null : (JSON.parse(storedValue) as T);
 }
 
 /**
@@ -25,15 +25,16 @@ export async function getSetting<T>(key: string): Promise<T | null> {
  * @example await setSetting('theme', 'dark')
  */
 export async function setSetting<T>(key: string, value: T): Promise<void> {
-  validateKey(key)
+  validateKey(key);
   if (isTauri()) {
-    await invoke('set_setting', { key, value })
-    return
+    await invoke("set_setting", { key, value });
+    return;
   }
 
-  const serializedValue = JSON.stringify(value)
-  if (serializedValue === undefined) throw new Error('设置值必须可序列化为 JSON')
-  localStorage.setItem(`${SETTINGS_KEY_PREFIX}${key}`, serializedValue)
+  const serializedValue = JSON.stringify(value);
+  if (serializedValue === undefined)
+    throw new Error("设置值必须可序列化为 JSON");
+  localStorage.setItem(`${SETTINGS_KEY_PREFIX}${key}`, serializedValue);
 }
 
 /**
@@ -41,11 +42,11 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
  * @example await removeSetting('theme')
  */
 export async function removeSetting(key: string): Promise<void> {
-  validateKey(key)
+  validateKey(key);
   if (isTauri()) {
-    await invoke('remove_setting', { key })
-    return
+    await invoke("remove_setting", { key });
+    return;
   }
 
-  localStorage.removeItem(`${SETTINGS_KEY_PREFIX}${key}`)
+  localStorage.removeItem(`${SETTINGS_KEY_PREFIX}${key}`);
 }

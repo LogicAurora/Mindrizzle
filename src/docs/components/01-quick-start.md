@@ -1,4 +1,5 @@
 <!-- 最后验证: 2026-10-24 -->
+
 # 01 快速上手
 
 目标：一个能勾选的待办块。两个同名文件，注册表不用动。
@@ -8,20 +9,20 @@
 显示名、图标、默认尺寸、初始配置都在这里；文件名必须与组件同名。
 
 ```ts
-import { mdiCheckboxMarkedOutline } from '@mdi/js'
+import { mdiCheckboxMarkedOutline } from "@mdi/js";
 
-import type { TodoConfig } from '../Registry/canvasComponents.ts'
-import { defineBlock } from '../Sdk/defineBlock.ts'
+import type { TodoConfig } from "../Registry/canvasComponents.ts";
+import { defineBlock } from "../Sdk/defineBlock.ts";
 
 export default defineBlock<TodoConfig>({
-  key: 'TodoBlock',
-  title: '待办',
+  key: "TodoBlock",
+  title: "待办",
   icon: mdiCheckboxMarkedOutline,
-  addId: 'add-todo',
+  addId: "add-todo",
   order: 60,
   defaultConfig: () => ({ items: [] }),
   defaultSize: { w: 320, h: 260 },
-})
+});
 ```
 
 字段含义见 [03 块定义](03-definition.md)。
@@ -35,8 +36,17 @@ export default defineBlock<TodoConfig>({
 <template>
   <BlockShell>
     <div class="todo-block">
-      <label v-for="(item, index) in config.items" :key="index" class="todo-item">
-        <input type="checkbox" :checked="item.done" :disabled="ctx.readOnly" @change="toggle(index)" />
+      <label
+        v-for="(item, index) in config.items"
+        :key="index"
+        class="todo-item"
+      >
+        <input
+          type="checkbox"
+          :checked="item.done"
+          :disabled="ctx.readOnly"
+          @change="toggle(index)"
+        />
         <span :class="{ done: item.done }">{{ item.text }}</span>
       </label>
       <p v-if="!config.items.length" class="todo-empty">还没有条目</p>
@@ -45,10 +55,22 @@ export default defineBlock<TodoConfig>({
     <template #settings>
       <v-list density="compact">
         <v-list-item>
-          <v-text-field v-model="draft" label="新条目" density="compact" variant="outlined" hide-details />
+          <v-text-field
+            v-model="draft"
+            label="新条目"
+            density="compact"
+            variant="outlined"
+            hide-details
+          />
         </v-list-item>
         <v-list-item class="d-flex justify-end">
-          <v-btn size="small" variant="tonal" :disabled="ctx.readOnly" @click="addItem">添加</v-btn>
+          <v-btn
+            size="small"
+            variant="tonal"
+            :disabled="ctx.readOnly"
+            @click="addItem"
+            >添加</v-btn
+          >
         </v-list-item>
       </v-list>
     </template>
@@ -56,28 +78,29 @@ export default defineBlock<TodoConfig>({
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref } from "vue";
 
-import type { TodoConfig } from '../Registry/canvasComponents.ts'
-import BlockShell from '../Sdk/BlockShell.vue'
-import { useBlockContext } from '../Sdk/blockContext.ts'
+import type { TodoConfig } from "../Registry/canvasComponents.ts";
+import BlockShell from "../Sdk/BlockShell.vue";
+import { useBlockContext } from "../Sdk/blockContext.ts";
 
-const ctx = useBlockContext<TodoConfig>()
-const config = computed(() => ctx.config)
-const draft = ref('')
+const ctx = useBlockContext<TodoConfig>();
+const config = computed(() => ctx.config);
+const draft = ref("");
 
 const toggle = (index: number) => {
   const items = config.value.items.map((item, i) =>
-    i === index ? { ...item, done: !item.done } : item)
-  ctx.setConfig({ items })
-}
+    i === index ? { ...item, done: !item.done } : item,
+  );
+  ctx.setConfig({ items });
+};
 
 const addItem = () => {
-  const text = draft.value.trim()
-  if (!text) return
-  ctx.setConfig({ items: [...config.value.items, { text, done: false }] })
-  draft.value = ''
-}
+  const text = draft.value.trim();
+  if (!text) return;
+  ctx.setConfig({ items: [...config.value.items, { text, done: false }] });
+  draft.value = "";
+};
 </script>
 ```
 
@@ -90,8 +113,8 @@ const addItem = () => {
 
 ```ts
 export type TodoConfig = WidgetConfig & {
-  items: { text: string; done: boolean }[]
-}
+  items: { text: string; done: boolean }[];
+};
 ```
 
 注册表本身不用改：`canvasComponents.ts` 用 `import.meta.glob` 自动收集所有 `*.block.ts`，

@@ -1,74 +1,108 @@
 <template>
   <Transition name="mode-grid" :css="!instantClose">
-    <v-sheet v-if="expanded" class="mode-grid" color="surface" elevation="8" rounded="md" border
+    <v-sheet
+      v-if="expanded"
+      class="mode-grid"
+      color="surface"
+      elevation="8"
+      rounded="md"
+      border
       :style="{
         '--mode-grid-height': `${gridHeight}px`,
         '--mode-grid-width': `${gridWidth}px`,
         '--mode-grid-columns': gridColumns,
-      }">
-      <v-tooltip v-for="(option, index) in options" :key="option.label" location="start"
-        :open-delay="0" :close-delay="0">
+      }"
+    >
+      <v-tooltip
+        v-for="(option, index) in options"
+        :key="option.label"
+        location="start"
+        :open-delay="0"
+        :close-delay="0"
+      >
         <template #activator="{ props: activatorProps }">
-          <v-btn v-bind="activatorProps" class="mode-grid-item" icon variant="text"
+          <v-btn
+            v-bind="activatorProps"
+            class="mode-grid-item"
+            icon
+            variant="text"
             :color="index === modelValue ? 'primary' : undefined"
-            @click="selectOption(option, index)">
-            <OptionGlyph :icon="option.icon" :color="option.swatch" :custom="option.custom" />
+            @click="selectOption(option, index)"
+          >
+            <OptionGlyph
+              :icon="option.icon"
+              :color="option.swatch"
+              :custom="option.custom"
+            />
           </v-btn>
         </template>
         <div class="text-body-2 font-weight-medium">{{ option.label }}</div>
-        <div v-if="option.description" class="text-caption mode-tip-desc">{{ option.description }}</div>
+        <div v-if="option.description" class="text-caption mode-tip-desc">
+          {{ option.description }}
+        </div>
       </v-tooltip>
     </v-sheet>
   </Transition>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 
-import OptionGlyph from './OptionGlyph.vue'
-import type { WheelOption } from './wheelSwitch.ts'
+import OptionGlyph from "./OptionGlyph.vue";
+import type { WheelOption } from "./wheelSwitch.ts";
 
 const props = defineProps<{
-  options: readonly WheelOption[]
-  modelValue: number
-  expanded: boolean
-  instantClose?: boolean
-}>()
+  options: readonly WheelOption[];
+  modelValue: number;
+  expanded: boolean;
+  instantClose?: boolean;
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', index: number): void
-  (e: 'pick-custom', index: number): void
-}>()
+  (e: "update:modelValue", index: number): void;
+  (e: "pick-custom", index: number): void;
+}>();
 
 // 自定义颜色交给调用方打开取色器，其余项直接切换
 const selectOption = (option: WheelOption, index: number) => {
   if (option.custom) {
-    emit('pick-custom', index)
-    return
+    emit("pick-custom", index);
+    return;
   }
-  emit('update:modelValue', index)
-}
+  emit("update:modelValue", index);
+};
 
-const GRID_CELL_SIZE = 36
-const GRID_GAP = 2
+const GRID_CELL_SIZE = 36;
+const GRID_GAP = 2;
 // 与 .mode-grid 的 padding 保持一致
-const GRID_PADDING = 4
+const GRID_PADDING = 4;
 // 右侧给锚点留出的总宽度：36 锚点 + 4 间距
-const GRID_ANCHOR_COLUMN = 40
-const GRID_BORDER_WIDTH = 2
-const GRID_MAX_ROWS = 3
+const GRID_ANCHOR_COLUMN = 40;
+const GRID_BORDER_WIDTH = 2;
+const GRID_MAX_ROWS = 3;
 
 // 行数锁死三行内，图标多时加列而不是加行
-const gridColumns = computed(() => Math.max(1, Math.ceil(props.options.length / GRID_MAX_ROWS)))
-const gridRows = computed(() => Math.ceil(props.options.length / gridColumns.value))
-const gridWidth = computed(() =>
-  gridColumns.value * GRID_CELL_SIZE + Math.max(gridColumns.value - 1, 0) * GRID_GAP +
-  GRID_PADDING + GRID_ANCHOR_COLUMN + GRID_BORDER_WIDTH,
-)
-const gridHeight = computed(() =>
-  gridRows.value * GRID_CELL_SIZE + Math.max(gridRows.value - 1, 0) * GRID_GAP +
-  GRID_PADDING * 2 + GRID_BORDER_WIDTH,
-)
+const gridColumns = computed(() =>
+  Math.max(1, Math.ceil(props.options.length / GRID_MAX_ROWS)),
+);
+const gridRows = computed(() =>
+  Math.ceil(props.options.length / gridColumns.value),
+);
+const gridWidth = computed(
+  () =>
+    gridColumns.value * GRID_CELL_SIZE +
+    Math.max(gridColumns.value - 1, 0) * GRID_GAP +
+    GRID_PADDING +
+    GRID_ANCHOR_COLUMN +
+    GRID_BORDER_WIDTH,
+);
+const gridHeight = computed(
+  () =>
+    gridRows.value * GRID_CELL_SIZE +
+    Math.max(gridRows.value - 1, 0) * GRID_GAP +
+    GRID_PADDING * 2 +
+    GRID_BORDER_WIDTH,
+);
 </script>
 
 <style scoped>
@@ -110,7 +144,9 @@ const gridHeight = computed(() =>
 
 .mode-grid-enter-active,
 .mode-grid-leave-active {
-  transition: width 0.18s ease, height 0.18s ease;
+  transition:
+    width 0.18s ease,
+    height 0.18s ease;
   /* 仅在动画期间提示浏览器提前准备布局，结束后随 class 一起移除 */
   will-change: width, height;
 }

@@ -14,20 +14,20 @@
 
 ## 文件索引
 
-| 文件 | 关注点 |
-|---|---|
-| 00-architecture.md | 全景与依赖 |
-| 01-coordinates.md | 坐标系换算 |
-| 02-contracts.md | 事件 + DOM 契约 |
-| 03-sessions.md | 交互会话状态机 |
-| 04-drag-resize.md | 拖拽与缩放主流程 |
+| 文件                  | 关注点             |
+| --------------------- | ------------------ |
+| 00-architecture.md    | 全景与依赖         |
+| 01-coordinates.md     | 坐标系换算         |
+| 02-contracts.md       | 事件 + DOM 契约    |
+| 03-sessions.md        | 交互会话状态机     |
+| 04-drag-resize.md     | 拖拽与缩放主流程   |
 | 05-block-lifecycle.md | 块挂载/虚拟化/高度 |
-| 06-block-handle.md | 悬浮手柄与 popup |
-| 07-events-flow.md | 事件连锁反应 |
-| 08-save-load.md | 序列化与兼容 |
-| 09-perf.md | 节流与缓存 |
-| 10-utils.md | 工具函数索引 |
-| 11-workarounds.md | 非逻辑防御清单 |
+| 06-block-handle.md    | 悬浮手柄与 popup   |
+| 07-events-flow.md     | 事件连锁反应       |
+| 08-save-load.md       | 序列化与兼容       |
+| 09-perf.md            | 节流与缓存         |
+| 10-utils.md           | 工具函数索引       |
+| 11-workarounds.md     | 非逻辑防御清单     |
 
 > 组件开发（定义、上下文、设置面板、私有文件）见 [../components/](../components/)：
 > 先读 [快速上手](../components/01-quick-start.md)。

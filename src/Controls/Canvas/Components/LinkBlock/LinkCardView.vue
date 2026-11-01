@@ -1,8 +1,13 @@
 <template>
   <div class="link-view">
     <div v-if="hasUrl" class="link-card" @dblclick="openLink">
-      <img v-if="coverUrl && !coverFailed" class="link-cover" :src="coverUrl" :alt="displayTitle"
-        @error="coverFailed = true" />
+      <img
+        v-if="coverUrl && !coverFailed"
+        class="link-cover"
+        :src="coverUrl"
+        :alt="displayTitle"
+        @error="coverFailed = true"
+      />
       <div class="link-body">
         <span class="link-title" :title="displayTitle">{{ displayTitle }}</span>
         <span v-if="description" class="link-desc">{{ description }}</span>
@@ -12,10 +17,23 @@
 
     <div v-else class="link-empty">
       <v-icon :icon="mdiLinkVariant" size="36" class="text-medium-emphasis" />
-      <v-text-field v-model="draftUrl" placeholder="粘贴网址" density="compact" variant="outlined" hide-details
-        :readonly="readOnly" @keydown.enter.prevent="applyDraft" />
-      <v-btn size="small" variant="tonal" color="primary" :disabled="readOnly" :loading="isFetching"
-        @click="applyDraft">
+      <v-text-field
+        v-model="draftUrl"
+        placeholder="粘贴网址"
+        density="compact"
+        variant="outlined"
+        hide-details
+        :readonly="readOnly"
+        @keydown.enter.prevent="applyDraft"
+      />
+      <v-btn
+        size="small"
+        variant="tonal"
+        color="primary"
+        :disabled="readOnly"
+        :loading="isFetching"
+        @click="applyDraft"
+      >
         保存并读取
       </v-btn>
     </div>
@@ -25,94 +43,103 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { isTauri } from '@tauri-apps/api/core'
-import { openUrl } from '@tauri-apps/plugin-opener'
-import { mdiLinkVariant } from '@mdi/js'
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { mdiLinkVariant } from "@mdi/js";
 
-import { getErrorMessage } from '../../../../utils/getErrorMessage.ts'
-import { useAutoHideNotice } from '../../../../utils/useAutoHideNotice.ts'
-import { fetchLinkMeta, parseHttpUrl, resolveUrl } from './linkMeta.ts'
+import { getErrorMessage } from "../../../../utils/getErrorMessage.ts";
+import { useAutoHideNotice } from "../../../../utils/useAutoHideNotice.ts";
+import { fetchLinkMeta, parseHttpUrl, resolveUrl } from "./linkMeta.ts";
 
-const FETCH_TIMEOUT_MS = 8000
+const FETCH_TIMEOUT_MS = 8000;
 
 const props = defineProps<{
-  url: string
-  title: string
-  description: string
-  siteName: string
-  imageUrl: string
-  readOnly: boolean
-}>()
+  url: string;
+  title: string;
+  description: string;
+  siteName: string;
+  imageUrl: string;
+  readOnly: boolean;
+}>();
 
-const emit = defineEmits<{ (e: 'update', patch: Record<string, unknown>): void }>()
+const emit = defineEmits<{
+  (e: "update", patch: Record<string, unknown>): void;
+}>();
 
-const draftUrl = ref('')
-const { notice, showNotice, clearNotice } = useAutoHideNotice()
-const isFetching = ref(false)
-const coverFailed = ref(false)
-let abortController: AbortController | null = null
+const draftUrl = ref("");
+const { notice, showNotice, clearNotice } = useAutoHideNotice();
+const isFetching = ref(false);
+const coverFailed = ref(false);
+let abortController: AbortController | null = null;
 
-const hasUrl = computed(() => props.url !== '')
-const parsedUrl = computed(() => parseHttpUrl(props.url))
-const coverUrl = computed(() => resolveUrl(props.imageUrl, parsedUrl.value?.href ?? ''))
-const hostLabel = computed(() => parsedUrl.value?.hostname ?? props.url)
-const displayTitle = computed(() => props.title || hostLabel.value)
+const hasUrl = computed(() => props.url !== "");
+const parsedUrl = computed(() => parseHttpUrl(props.url));
+const coverUrl = computed(() =>
+  resolveUrl(props.imageUrl, parsedUrl.value?.href ?? ""),
+);
+const hostLabel = computed(() => parsedUrl.value?.hostname ?? props.url);
+const displayTitle = computed(() => props.title || hostLabel.value);
 
-watch(coverUrl, () => { coverFailed.value = false })
-onBeforeUnmount(() => { abortController?.abort() })
+watch(coverUrl, () => {
+  coverFailed.value = false;
+});
+onBeforeUnmount(() => {
+  abortController?.abort();
+});
 
 // 刚写入的网址还不在 props 里，所以允许显式传目标
 const fetchPreview = async (target?: string) => {
-  const url = target ?? parsedUrl.value?.href
-  if (!url || isFetching.value) return
-  abortController?.abort()
-  const controller = new AbortController()
-  abortController = controller
-  isFetching.value = true
-  clearNotice()
-  const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const url = target ?? parsedUrl.value?.href;
+  if (!url || isFetching.value) return;
+  abortController?.abort();
+  const controller = new AbortController();
+  abortController = controller;
+  isFetching.value = true;
+  clearNotice();
+  const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const meta = await fetchLinkMeta(url, controller.signal)
-    emit('update', {
+    const meta = await fetchLinkMeta(url, controller.signal);
+    emit("update", {
       title: meta.title || props.title,
       description: meta.description || props.description,
       siteName: meta.siteName || props.siteName,
       imageUrl: meta.imageUrl || props.imageUrl,
-    })
-    if (!meta.title && !meta.description) showNotice('没有读到标题或描述，可以手动填写')
+    });
+    if (!meta.title && !meta.description)
+      showNotice("没有读到标题或描述，可以手动填写");
   } catch (cause) {
-    showNotice(`读取失败，请手动填写标题（${getErrorMessage(cause)}）`)
+    showNotice(`读取失败，请手动填写标题（${getErrorMessage(cause)}）`);
   } finally {
-    window.clearTimeout(timer)
-    if (abortController === controller) abortController = null
-    isFetching.value = false
+    window.clearTimeout(timer);
+    if (abortController === controller) abortController = null;
+    isFetching.value = false;
   }
-}
+};
 
 const applyDraft = async () => {
-  const url = parseHttpUrl(draftUrl.value)
+  const url = parseHttpUrl(draftUrl.value);
   if (!url) {
-    showNotice('网址无效，需要 http 或 https 开头')
-    return
+    showNotice("网址无效，需要 http 或 https 开头");
+    return;
   }
-  emit('update', { url: url.href })
-  draftUrl.value = ''
-  clearNotice()
-  await fetchPreview(url.href)
-}
+  emit("update", { url: url.href });
+  draftUrl.value = "";
+  clearNotice();
+  await fetchPreview(url.href);
+};
 
-defineExpose({ fetchPreview: () => fetchPreview() })
+defineExpose({ fetchPreview: () => fetchPreview() });
 
 const openLink = () => {
-  const url = parsedUrl.value?.href
-  if (!url) return
+  const url = parsedUrl.value?.href;
+  if (!url) return;
   if (isTauri()) {
-    void openUrl(url)
-    return
+    void openUrl(url);
+    return;
   }
-  window.open(url, '_blank', 'noopener,noreferrer')
-}
+  window.open(url, "_blank", "noopener,noreferrer");
+};
 </script>
 
 <style scoped>

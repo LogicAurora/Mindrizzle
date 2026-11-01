@@ -20,4 +20,4 @@ export const Z_LAYER = {
   // 富文本 hover 行高亮挂在 body，须压过画布内容但不能盖住右上角的选择器
   blockLineHighlight: 1006,
   appLoadingCurtain: 10002,
-} as const
+} as const;

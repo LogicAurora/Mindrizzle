@@ -1,14 +1,14 @@
-import { createVuetify } from 'vuetify'
-import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
-import 'vuetify/styles'
-import { md3 } from 'vuetify/blueprints'
+import { createVuetify } from "vuetify";
+import { aliases, mdi } from "vuetify/iconsets/mdi-svg";
+import "vuetify/styles";
+import { md3 } from "vuetify/blueprints";
 
 const vuetify = createVuetify({
   theme: {
-    defaultTheme: 'light',
+    defaultTheme: "light",
   },
   icons: {
-    defaultSet: 'mdi',
+    defaultSet: "mdi",
     aliases,
     sets: {
       mdi,
@@ -17,14 +17,20 @@ const vuetify = createVuetify({
   blueprint: md3,
   defaults: {
     global: {
-      density: 'comfortable',
+      density: "comfortable",
     },
   },
-})
+});
 
 export const defaultThemes = {
-  light: { ...vuetify.theme.themes.value.light, colors: { ...vuetify.theme.themes.value.light.colors } },
-  dark: { ...vuetify.theme.themes.value.dark, colors: { ...vuetify.theme.themes.value.dark.colors } },
-}
+  light: {
+    ...vuetify.theme.themes.value.light,
+    colors: { ...vuetify.theme.themes.value.light.colors },
+  },
+  dark: {
+    ...vuetify.theme.themes.value.dark,
+    colors: { ...vuetify.theme.themes.value.dark.colors },
+  },
+};
 
-export default vuetify
+export default vuetify;

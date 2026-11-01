@@ -35,16 +35,16 @@ cd src-tauri && cargo test   # 含模块文档里的 no_run doctest
 4. 复杂正则、位运算、坐标换算公式上方必须有一行中文说明意图。
 5. 禁止 `// ====================` 之类装饰性分隔线；`// #region` / `// #endregion` 是编辑器折叠标记，**保留**。
 6. 多行 why 注释要压到一行；只有真正复杂的坐标系/时序陷阱才允许两三行。
-7.  删代码时同时删除其专属注释；改行为时同步更新相关 why 注释——注释说谎比没有注释更糟。
+7. 删代码时同时删除其专属注释；改行为时同步更新相关 why 注释——注释说谎比没有注释更糟。
 
 示例：
 
 ```ts
 // 浏览器 BCR 是否含 zoom 不一致，所以用实测比例反推
-domScale: blockRect.width / blockLayout.w
+domScale: blockRect.width / blockLayout.w;
 
 // 邻块会盖住块边缘内侧的缩放手柄，所以选中块 z 取 Z_LAYER.selectedBlock 提层
-const SELECTED_Z_BASE = Z_LAYER.selectedBlock
+const SELECTED_Z_BASE = Z_LAYER.selectedBlock;
 ```
 
 ## 代码规范
@@ -62,25 +62,25 @@ const SELECTED_Z_BASE = Z_LAYER.selectedBlock
 
 ## 目录与职责
 
-| 路径 | 职责 |
-| --- | --- |
-| `src/Controls/Canvas/Core/` | 画布本体：`MdrCanvas.vue`、块壳、缩放手柄、浮层几何与 z-index |
-| `src/Controls/Canvas/Core/MdrCanvas.vue` | 画布核心：平移/缩放/框选/拖拽/联结/贴合遮罩/自动布局 |
-| `src/Controls/Canvas/Core/ResizeBox.vue` | 单块容器与缩放手柄（手柄 Teleport 到 `.canvas` 顶层） |
-| `src/Controls/Canvas/Core/MdrCanvasComponentBase.vue` | 块壳：几何、拖拽栏、设置插槽、虚拟化（`virtualized` / `snapshot`） |
-| `src/Controls/Canvas/Core/canvasComponentControllers.ts` | 块 ↔ 画布控制器契约（移动 / 改尺寸 / 平移 / 缩放 / 视图） |
-| `src/Controls/Canvas/Core/blockFloatGeometry.ts` | 拖拽栏、设置栏、遮罩几何与浮层 z 的唯一来源 |
-| `src/Controls/Canvas/Core/zIndex.ts` | 叠加层 z-index 的唯一事实来源 |
-| `src/Controls/Canvas/Sdk/` | 块 SDK：`BlockShell.vue`、`blockContext.ts`、`defineBlock.ts`、`blockRegistry.ts`、`PluginBlockHost.vue` |
-| `src/Controls/Canvas/Registry/` | 块定义自动收集（`canvasComponents.ts` 扫 `*.block.ts`）与尺寸约束 |
-| `src/Controls/Canvas/Components/` | 内置块：富文本、代码块、图片、附件、链接、表格、任务、测试台（每个都有同名 `.block.ts`） |
-| `src/Controls/Canvas/Components/RichEditor/` | 富文本编辑器、block-handle 扩展、插入组件节点视图 |
-| `src/Controls/Canvas/Components/RichEditor/extensions/` | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`） |
-| `src/utils/canvasCoords.ts` | content ↔ 视口坐标换算的唯一来源 |
-| `src/utils/componentDataStore.ts` | 组件私有文件 `mdrfcd://` 读写唯一入口（归档内 `ComponentsData/<uuid>/`） |
-| `src/Views/Editor.vue` | 路由页面与工具栏交互（滚轮切工具、选区确认 overlay） |
-| `src/docs/components/` | 块开发文档（从 `01-quick-start.md` 读起） |
-| `src-tauri/src/mdr_file_*.rs` | `.mdrf` 归档读写、缓存目录、IPC 命令 |
+| 路径                                                     | 职责                                                                                                     |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/Controls/Canvas/Core/`                              | 画布本体：`MdrCanvas.vue`、块壳、缩放手柄、浮层几何与 z-index                                            |
+| `src/Controls/Canvas/Core/MdrCanvas.vue`                 | 画布核心：平移/缩放/框选/拖拽/联结/贴合遮罩/自动布局                                                     |
+| `src/Controls/Canvas/Core/ResizeBox.vue`                 | 单块容器与缩放手柄（手柄 Teleport 到 `.canvas` 顶层）                                                    |
+| `src/Controls/Canvas/Core/MdrCanvasComponentBase.vue`    | 块壳：几何、拖拽栏、设置插槽、虚拟化（`virtualized` / `snapshot`）                                       |
+| `src/Controls/Canvas/Core/canvasComponentControllers.ts` | 块 ↔ 画布控制器契约（移动 / 改尺寸 / 平移 / 缩放 / 视图）                                                |
+| `src/Controls/Canvas/Core/blockFloatGeometry.ts`         | 拖拽栏、设置栏、遮罩几何与浮层 z 的唯一来源                                                              |
+| `src/Controls/Canvas/Core/zIndex.ts`                     | 叠加层 z-index 的唯一事实来源                                                                            |
+| `src/Controls/Canvas/Sdk/`                               | 块 SDK：`BlockShell.vue`、`blockContext.ts`、`defineBlock.ts`、`blockRegistry.ts`、`PluginBlockHost.vue` |
+| `src/Controls/Canvas/Registry/`                          | 块定义自动收集（`canvasComponents.ts` 扫 `*.block.ts`）与尺寸约束                                        |
+| `src/Controls/Canvas/Components/`                        | 内置块：富文本、代码块、图片、附件、链接、表格、任务、测试台（每个都有同名 `.block.ts`）                 |
+| `src/Controls/Canvas/Components/RichEditor/`             | 富文本编辑器、block-handle 扩展、插入组件节点视图                                                        |
+| `src/Controls/Canvas/Components/RichEditor/extensions/`  | ProseKit 扩展与命中/坐标工具（坐标工具见 `blockHandleUtils.ts`）                                         |
+| `src/utils/canvasCoords.ts`                              | content ↔ 视口坐标换算的唯一来源                                                                         |
+| `src/utils/componentDataStore.ts`                        | 组件私有文件 `mdrfcd://` 读写唯一入口（归档内 `ComponentsData/<uuid>/`）                                 |
+| `src/Views/Editor.vue`                                   | 路由页面与工具栏交互（滚轮切工具、选区确认 overlay）                                                     |
+| `src/docs/components/`                                   | 块开发文档（从 `01-quick-start.md` 读起）                                                                |
+| `src-tauri/src/mdr_file_*.rs`                            | `.mdrf` 归档读写、缓存目录、IPC 命令                                                                     |
 
 ## 硬约束
 

@@ -34,7 +34,14 @@ flate2 = "1.1.10"
 walkdir = "2.5.0"
 anyhow = "1.0.104"
 base64 = "0.23.1"
-image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "tiff", "webp"] }
+image = { version = "0.25.10", default-features = false, features = [
+  "bmp",
+  "gif",
+  "jpeg",
+  "png",
+  "tiff",
+  "webp",
+] }
 url = "2.5.8"
 wallpaper = "3.2.0"
 

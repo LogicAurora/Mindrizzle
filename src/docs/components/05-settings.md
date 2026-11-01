@@ -1,4 +1,5 @@
 <!-- 最后验证: 2026-10-24 -->
+
 # 05 设置面板
 
 设置面板写在块组件的 `#settings` 插槽里，壳负责把它渲染进设置菜单。
@@ -11,7 +12,13 @@
     <template #settings>
       <v-list density="compact">
         <v-list-item>
-          <v-text-field v-model="draft" label="新条目" density="compact" variant="outlined" hide-details />
+          <v-text-field
+            v-model="draft"
+            label="新条目"
+            density="compact"
+            variant="outlined"
+            hide-details
+          />
         </v-list-item>
       </v-list>
     </template>
@@ -30,11 +37,14 @@
 设置面板与内容在**同一个组件实例**里，所以直接共用 `ref`，不需要通过 `config` 来回搬：
 
 ```ts
-const draft = ref('')          // 设置面板里编辑
-const addItem = () => {        // 内容区/设置面板都能调
-  ctx.setConfig({ items: [...ctx.config.items, { text: draft.value, done: false }] })
-  draft.value = ''
-}
+const draft = ref(""); // 设置面板里编辑
+const addItem = () => {
+  // 内容区/设置面板都能调
+  ctx.setConfig({
+    items: [...ctx.config.items, { text: draft.value, done: false }],
+  });
+  draft.value = "";
+};
 ```
 
 需要落盘的才进 `config`，纯 UI 状态留在 `ref` 里。
@@ -45,16 +55,37 @@ const addItem = () => {        // 内容区/设置面板都能调
 <template #settings>
   <v-list density="compact">
     <v-list-item>
-      <v-select :model-value="config.fit" :items="FIT_OPTIONS" item-title="title" item-value="value"
-        label="显示方式" density="compact" variant="outlined" hide-details
-        :disabled="ctx.readOnly" @update:model-value="onFitChange" />
+      <v-select
+        :model-value="config.fit"
+        :items="FIT_OPTIONS"
+        item-title="title"
+        item-value="value"
+        label="显示方式"
+        density="compact"
+        variant="outlined"
+        hide-details
+        :disabled="ctx.readOnly"
+        @update:model-value="onFitChange"
+      />
     </v-list-item>
     <v-list-item>
-      <v-switch :model-value="autoSize" color="primary" label="自动大小" hide-details
-        :disabled="ctx.readOnly" @update:model-value="onAutoSizeToggle" />
+      <v-switch
+        :model-value="autoSize"
+        color="primary"
+        label="自动大小"
+        hide-details
+        :disabled="ctx.readOnly"
+        @update:model-value="onAutoSizeToggle"
+      />
     </v-list-item>
     <v-list-item class="d-flex justify-end ga-2">
-      <v-btn size="small" variant="tonal" :disabled="ctx.readOnly" @click="pickFile">选择文件</v-btn>
+      <v-btn
+        size="small"
+        variant="tonal"
+        :disabled="ctx.readOnly"
+        @click="pickFile"
+        >选择文件</v-btn
+      >
     </v-list-item>
   </v-list>
 </template>

@@ -1,4 +1,5 @@
 <!-- 最后验证: 2026-10-24 -->
+
 # 04 生命周期与快照
 
 ## 谁在什么时候调你
@@ -39,13 +40,13 @@ flowchart TD
 
 ```ts
 // 默认：克隆块内 DOM
-snapshot: 'html'
+snapshot: "html";
 
 // 自绘：canvas、WebGL、iframe 必须用这个，DOM 克隆是空白
-snapshot: (config, root) => `<div class="chart">${config.title}</div>`
+snapshot: (config, root) => `<div class="chart">${config.title}</div>`;
 
 // 无视觉价值：只留占位
-snapshot: 'none'
+snapshot: "none";
 ```
 
 - 快照必须**同步**返回。
@@ -56,10 +57,10 @@ snapshot: 'none'
 
 ```ts
 const syncAutoHeight = () => {
-  const el = scrollEl.value
-  if (!el) return
-  ctx.resizeTo({ h: Math.ceil(el.offsetHeight + CONTENT_EXTRA) })
-}
+  const el = scrollEl.value;
+  if (!el) return;
+  ctx.resizeTo({ h: Math.ceil(el.offsetHeight + CONTENT_EXTRA) });
+};
 ```
 
 - 高度会被 `constraints.minHeight + 8` 钳制，内容不足时停在最小高。

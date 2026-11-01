@@ -1,17 +1,18 @@
 <!-- 最后验证: 2026-10-18 -->
+
 # 03 交互会话状态机（MdrCanvas 内部）
 
 > 这个文件里有 5 个会话变量互相抢鼠标，是 bug 高发区。
 
 ## 五个会话
 
-| 会话 | 变量 | 启动 | 结束 |
-|---|---|---|---|
-| 手动平移 | `panSession` | 右键 mousedown | mouseup → stopPan |
-| 框选 | `selectionState` | 左键空白 mousedown | mouseup → finishSelection |
-| 拖块 | `customDrag` | 左键块/拖拽栏 | mouseup → onCustomDragUp |
-| 缩放 | `resizeSession` | 手柄 mousedown | mouseup → onResizeStop |
-| 自动平移 | `autoPan` | 任何会话贴边 | 会话结束 → stopAutoPan |
+| 会话     | 变量             | 启动               | 结束                      |
+| -------- | ---------------- | ------------------ | ------------------------- |
+| 手动平移 | `panSession`     | 右键 mousedown     | mouseup → stopPan         |
+| 框选     | `selectionState` | 左键空白 mousedown | mouseup → finishSelection |
+| 拖块     | `customDrag`     | 左键块/拖拽栏      | mouseup → onCustomDragUp  |
+| 缩放     | `resizeSession`  | 手柄 mousedown     | mouseup → onResizeStop    |
+| 自动平移 | `autoPan`        | 任何会话贴边       | 会话结束 → stopAutoPan    |
 
 ## 图 3.1 五大交互会话总状态机
 

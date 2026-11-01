@@ -1,22 +1,60 @@
 <template>
-  <ResizeBox ref="resizeBoxRef" :uuid="uuid" :x="x" :y="y" :w="width" :h="height" :min-width="minWidth"
-    :min-height="minHeight" :max-width="maxWidth" :max-height="maxHeight" :handles="effectiveHandles"
-    :disabled="!draggable || readOnly" :active="active" :dragging="dragging" :z-index="zIndex" :zoom="zoom"
-    class="drag-wrapper mdr-canvas-component" :class="{
+  <ResizeBox
+    ref="resizeBoxRef"
+    :uuid="uuid"
+    :x="x"
+    :y="y"
+    :w="width"
+    :h="height"
+    :min-width="minWidth"
+    :min-height="minHeight"
+    :max-width="maxWidth"
+    :max-height="maxHeight"
+    :handles="effectiveHandles"
+    :disabled="!draggable || readOnly"
+    :active="active"
+    :dragging="dragging"
+    :z-index="zIndex"
+    :zoom="zoom"
+    class="drag-wrapper mdr-canvas-component"
+    :class="{
       selected: active,
       'popup-open': popupOpen,
       'drag-passthrough': dragging,
-    }" :data-uuid="uuid"
+    }"
+    :data-uuid="uuid"
     @resizestart="(handle: string) => emit('resizestart', handle)"
-    @resizing="(rx: number, ry: number, rw: number, rh: number) => emit('resizing', rx, ry, rw, rh)"
-    @resizestop="(rx: number, ry: number, rw: number, rh: number) => emit('resizestop', rx, ry, rw, rh)">
-    <v-sheet class="block-container" color="surface" elevation="0" rounded :style="cornerStyle">
+    @resizing="
+      (rx: number, ry: number, rw: number, rh: number) =>
+        emit('resizing', rx, ry, rw, rh)
+    "
+    @resizestop="
+      (rx: number, ry: number, rw: number, rh: number) =>
+        emit('resizestop', rx, ry, rw, rh)
+    "
+  >
+    <v-sheet
+      class="block-container"
+      color="surface"
+      elevation="0"
+      rounded
+      :style="cornerStyle"
+    >
       <!-- 只盖接触段、露出段保留边框，所以按段渲染同色遮罩 -->
-      <div v-for="mask in masks" :key="`${mask.side}-${mask.start}`" class="edge-mask" :style="maskStyleOf(mask)" />
+      <div
+        v-for="mask in masks"
+        :key="`${mask.side}-${mask.start}`"
+        class="edge-mask"
+        :style="maskStyleOf(mask)"
+      />
       <div class="content-area">
         <!-- 未传 virtualized 是 raw 旧写法，快照由块自己渲染 -->
         <slot v-if="virtualized === undefined" />
-        <div v-else-if="virtualized" class="virtual-snapshot inner-component" v-html="snapshot" />
+        <div
+          v-else-if="virtualized"
+          class="virtual-snapshot inner-component"
+          v-html="snapshot"
+        />
         <div v-else ref="contentEl" class="inner-component"><slot /></div>
       </div>
     </v-sheet>
@@ -24,19 +62,43 @@
     <!-- 浮层需压过邻块且与手柄同处 content 坐标空间，所以 Teleport 到 .canvas -->
     <Teleport :to="canvasEl" :disabled="!canvasEl">
       <Transition name="pop-up">
-        <div v-if="showFloatingHandle" class="floating-handle drag-handle"
-          :class="{ 'handle-bottom': placement === 'bottom' }" :data-uuid="uuid" :style="handleStyle"
-          @mousedown="onHandleDown">
-          <v-icon size="16" color="on-surface-variant" :icon="icon" class="mr-1" />
-          <span class="text-caption text-medium-emphasis user-select-none">{{ title }}</span>
+        <div
+          v-if="showFloatingHandle"
+          class="floating-handle drag-handle"
+          :class="{ 'handle-bottom': placement === 'bottom' }"
+          :data-uuid="uuid"
+          :style="handleStyle"
+          @mousedown="onHandleDown"
+        >
+          <v-icon
+            size="16"
+            color="on-surface-variant"
+            :icon="icon"
+            class="mr-1"
+          />
+          <span class="text-caption text-medium-emphasis user-select-none">{{
+            title
+          }}</span>
         </div>
       </Transition>
 
       <Transition name="pop-up">
-        <div v-if="showFloatingSettings" class="side-settings"
-          :class="{ 'handle-bottom': placement === 'bottom' }" :data-uuid="uuid" :style="settingsStyle">
-          <v-btn size="x-small" variant="tonal" color="grey" icon title="块设置" @mousedown.stop
-            @click.stop="onSettingsToggle">
+        <div
+          v-if="showFloatingSettings"
+          class="side-settings"
+          :class="{ 'handle-bottom': placement === 'bottom' }"
+          :data-uuid="uuid"
+          :style="settingsStyle"
+        >
+          <v-btn
+            size="x-small"
+            variant="tonal"
+            color="grey"
+            icon
+            title="块设置"
+            @mousedown.stop
+            @click.stop="onSettingsToggle"
+          >
             <v-icon :icon="mdiCogOutline" size="13" />
           </v-btn>
         </div>
@@ -46,8 +108,14 @@
     <!-- 菜单挂在 body、按视觉坐标定位：v-menu 读 zoom 内的布局矩形会整体错位 -->
     <Teleport to="body">
       <Transition name="settings-menu">
-        <div v-if="settingsOpen" ref="settingsMenuEl" class="component-settings-menu" :style="settingsMenuStyle"
-          @mousedown.stop @click.stop>
+        <div
+          v-if="settingsOpen"
+          ref="settingsMenuEl"
+          class="component-settings-menu"
+          :style="settingsMenuStyle"
+          @mousedown.stop
+          @click.stop
+        >
           <v-card class="auto-height-menu" elevation="4">
             <slot name="settings" />
           </v-card>
@@ -58,24 +126,41 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, useSlots, watch, type CSSProperties } from 'vue'
-import { mdiCogOutline } from '@mdi/js'
-import ResizeBox from './ResizeBox.vue'
-import { handleBarStyleOf, maskStyleOf, sideSettingsStyleOf } from './blockFloatGeometry.ts'
-import { layoutToViewportX, layoutToViewportY } from '../Components/RichEditor/extensions/blockHandleUtils.ts'
-import { Z_LAYER } from './zIndex.ts'
-import type { MdrCanvasComponentBaseProps } from './MdrCanvasComponentBase.types.ts'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  provide,
+  ref,
+  useSlots,
+  watch,
+  type CSSProperties,
+} from "vue";
+import { mdiCogOutline } from "@mdi/js";
+import ResizeBox from "./ResizeBox.vue";
+import {
+  handleBarStyleOf,
+  maskStyleOf,
+  sideSettingsStyleOf,
+} from "./blockFloatGeometry.ts";
+import {
+  layoutToViewportX,
+  layoutToViewportY,
+} from "../Components/RichEditor/extensions/blockHandleUtils.ts";
+import { Z_LAYER } from "./zIndex.ts";
+import type { MdrCanvasComponentBaseProps } from "./MdrCanvasComponentBase.types.ts";
 import {
   CANVAS_CONTROLLER_KEY,
   COMPONENT_CONTROLLER_KEY,
   type BlockCanvasController,
   type BlockComponentController,
   type SizeChangeable,
-} from './canvasComponentControllers.ts'
+} from "./canvasComponentControllers.ts";
 
-const SETTINGS_MENU_WIDTH = 240
-const SETTINGS_MENU_GAP = 6
-const SETTINGS_MENU_MARGIN = 8
+const SETTINGS_MENU_WIDTH = 240;
+const SETTINGS_MENU_GAP = 6;
+const SETTINGS_MENU_MARGIN = 8;
 
 const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   minWidth: 0,
@@ -93,185 +178,213 @@ const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   showSettings: false,
   settingsAvailable: true,
   settingsWidth: SETTINGS_MENU_WIDTH,
-  handles: () => ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'],
+  handles: () => ["tl", "tm", "tr", "ml", "mr", "bl", "bm", "br"],
   zIndex: 0,
   zoom: 1,
-  placement: 'top',
+  placement: "top",
   popupOpen: false,
   cornerStyle: () => ({}),
   masks: () => [],
-})
+});
 
 const emit = defineEmits<{
-  (e: 'resizestart', handle: string): void
-  (e: 'resizing', x: number, y: number, w: number, h: number): void
-  (e: 'resizestop', x: number, y: number, w: number, h: number): void
-  (e: 'dragstart', event: MouseEvent): void
-}>()
+  (e: "resizestart", handle: string): void;
+  (e: "resizing", x: number, y: number, w: number, h: number): void;
+  (e: "resizestop", x: number, y: number, w: number, h: number): void;
+  (e: "dragstart", event: MouseEvent): void;
+}>();
 
-const resizeBoxRef = ref<{ rootEl: HTMLElement | null } | null>(null)
-const canvasEl = ref<HTMLElement | null>(null)
-const contentEl = ref<HTMLElement | null>(null)
+const resizeBoxRef = ref<{ rootEl: HTMLElement | null } | null>(null);
+const canvasEl = ref<HTMLElement | null>(null);
+const contentEl = ref<HTMLElement | null>(null);
 onMounted(() => {
-  canvasEl.value = resizeBoxRef.value?.rootEl?.closest('.canvas') ?? null
-})
+  canvasEl.value = resizeBoxRef.value?.rootEl?.closest(".canvas") ?? null;
+});
 
-const roundToPx = (value: number) => Math.round(value * props.zoom) / props.zoom
+const roundToPx = (value: number) =>
+  Math.round(value * props.zoom) / props.zoom;
 const geometry = computed(() => ({
   layout: { x: props.x, y: props.y, w: props.width, h: props.height },
   placement: props.placement,
   round: roundToPx,
-}))
-const handleStyle = computed(() => handleBarStyleOf(geometry.value))
-const settingsStyle = computed(() => sideSettingsStyleOf(geometry.value))
+}));
+const handleStyle = computed(() => handleBarStyleOf(geometry.value));
+const settingsStyle = computed(() => sideSettingsStyleOf(geometry.value));
 
 // 该轴不可变时联结不得改它，手柄同步收掉；两轴都锁时不留手柄，否则只剩单轴手柄
 const effectiveHandles = computed<string[]>(() => {
-  if (!props.heightChangable && !props.widthChangable) return []
-  if (!props.heightChangable) return props.handles.filter((handle) => handle === 'ml' || handle === 'mr')
-  if (!props.widthChangable) return props.handles.filter((handle) => handle === 'tm' || handle === 'bm')
-  return props.handles
-})
+  if (!props.heightChangable && !props.widthChangable) return [];
+  if (!props.heightChangable)
+    return props.handles.filter((handle) => handle === "ml" || handle === "mr");
+  if (!props.widthChangable)
+    return props.handles.filter((handle) => handle === "tm" || handle === "bm");
+  return props.handles;
+});
 
-const showFloatingHandle = computed(() =>
-  props.showHandle && props.active && props.draggable && !props.readOnly)
+const showFloatingHandle = computed(
+  () => props.showHandle && props.active && props.draggable && !props.readOnly,
+);
 
 // 无设置插槽的块不该出现空按钮，所以显隐由插槽实际存在与否兜底
-const slots = useSlots()
-const showFloatingSettings = computed(() =>
-  props.showSettings && props.active && props.draggable && !props.readOnly &&
-  props.settingsAvailable && !!slots.settings)
+const slots = useSlots();
+const showFloatingSettings = computed(
+  () =>
+    props.showSettings &&
+    props.active &&
+    props.draggable &&
+    !props.readOnly &&
+    props.settingsAvailable &&
+    !!slots.settings,
+);
 
 // 菜单挂在 body，须与按钮同处视觉坐标；`.canvas` 的 zoom 会让 BCR 变成布局坐标，所以经工具换算
-const settingsOpen = ref(false)
-const settingsMenuEl = ref<HTMLElement | null>(null)
-const settingsAnchorEl = ref<HTMLElement | null>(null)
-const settingsMenuStyle = ref<CSSProperties>({})
+const settingsOpen = ref(false);
+const settingsMenuEl = ref<HTMLElement | null>(null);
+const settingsAnchorEl = ref<HTMLElement | null>(null);
+const settingsMenuStyle = ref<CSSProperties>({});
 
 const settingsMenuPosition = (anchor: HTMLElement): CSSProperties => {
-  const rect = anchor.getBoundingClientRect()
-  const width = Math.min(props.settingsWidth, window.innerWidth - SETTINGS_MENU_MARGIN * 2)
-  const left = layoutToViewportX(anchor, rect.left)
-  const right = layoutToViewportX(anchor, rect.right)
-  const bottom = layoutToViewportY(anchor, rect.bottom)
+  const rect = anchor.getBoundingClientRect();
+  const width = Math.min(
+    props.settingsWidth,
+    window.innerWidth - SETTINGS_MENU_MARGIN * 2,
+  );
+  const left = layoutToViewportX(anchor, rect.left);
+  const right = layoutToViewportX(anchor, rect.right);
+  const bottom = layoutToViewportY(anchor, rect.bottom);
   // 优先与按钮右缘对齐，放不下再左对齐，最后夹进视口
-  const preferred = right - width
-  const fitted = preferred >= SETTINGS_MENU_MARGIN
-    ? preferred
-    : (left + width <= window.innerWidth - SETTINGS_MENU_MARGIN ? left : right - width)
+  const preferred = right - width;
+  const fitted =
+    preferred >= SETTINGS_MENU_MARGIN
+      ? preferred
+      : left + width <= window.innerWidth - SETTINGS_MENU_MARGIN
+        ? left
+        : right - width;
   return {
-    position: 'fixed',
+    position: "fixed",
     left: `${Math.max(SETTINGS_MENU_MARGIN, Math.min(fitted, window.innerWidth - width - SETTINGS_MENU_MARGIN))}px`,
     top: `${bottom + SETTINGS_MENU_GAP}px`,
     width: `${width}px`,
     zIndex: Z_LAYER.settingsMenu,
-  }
-}
+  };
+};
 
 // 菜单渲染后才能量到高度，底部放不下时翻到按钮上方
 const fitSettingsMenuVertically = () => {
-  const menu = settingsMenuEl.value
-  const anchor = settingsAnchorEl.value
-  if (!menu || !anchor) return
-  const menuRect = menu.getBoundingClientRect()
-  if (menuRect.bottom <= window.innerHeight - SETTINGS_MENU_MARGIN) return
-  const anchorTop = layoutToViewportY(anchor, anchor.getBoundingClientRect().top)
-  const top = Math.max(SETTINGS_MENU_MARGIN, anchorTop - menuRect.height - SETTINGS_MENU_GAP)
-  settingsMenuStyle.value = { ...settingsMenuStyle.value, top: `${top}px` }
-}
+  const menu = settingsMenuEl.value;
+  const anchor = settingsAnchorEl.value;
+  if (!menu || !anchor) return;
+  const menuRect = menu.getBoundingClientRect();
+  if (menuRect.bottom <= window.innerHeight - SETTINGS_MENU_MARGIN) return;
+  const anchorTop = layoutToViewportY(
+    anchor,
+    anchor.getBoundingClientRect().top,
+  );
+  const top = Math.max(
+    SETTINGS_MENU_MARGIN,
+    anchorTop - menuRect.height - SETTINGS_MENU_GAP,
+  );
+  settingsMenuStyle.value = { ...settingsMenuStyle.value, top: `${top}px` };
+};
 
 const onSettingsToggle = async (event: MouseEvent) => {
-  const anchor = event.currentTarget as HTMLElement
+  const anchor = event.currentTarget as HTMLElement;
   if (settingsOpen.value) {
-    settingsOpen.value = false
-    return
+    settingsOpen.value = false;
+    return;
   }
-  settingsAnchorEl.value = anchor
-  settingsMenuStyle.value = settingsMenuPosition(anchor)
-  settingsOpen.value = true
+  settingsAnchorEl.value = anchor;
+  settingsMenuStyle.value = settingsMenuPosition(anchor);
+  settingsOpen.value = true;
   // 入场首帧 opacity 仍为 0，此时改 top 不会被看到
-  await nextTick()
-  fitSettingsMenuVertically()
-}
+  await nextTick();
+  fitSettingsMenuVertically();
+};
 
 // 设置项里的下拉菜单/浮层挂在 body 的 overlay 容器，不能当成「点了外面」
 const isInsideSettingsUi = (target: EventTarget | null): boolean => {
-  const element = target instanceof Element ? target : null
-  return !!settingsMenuEl.value?.contains(element) ||
+  const element = target instanceof Element ? target : null;
+  return (
+    !!settingsMenuEl.value?.contains(element) ||
     !!settingsAnchorEl.value?.contains(element) ||
-    !!element?.closest('.v-overlay-container')
-}
+    !!element?.closest(".v-overlay-container")
+  );
+};
 
 const closeSettings = () => {
-  settingsOpen.value = false
-}
+  settingsOpen.value = false;
+};
 
 const onDocumentPointerDown = (event: MouseEvent) => {
-  if (isInsideSettingsUi(event.target)) return
-  closeSettings()
-}
+  if (isInsideSettingsUi(event.target)) return;
+  closeSettings();
+};
 
 // 下拉菜单内部滚动（选项滚动/scrollIntoView）不应关掉设置面板
 const onDocumentScroll = (event: Event) => {
-  if (isInsideSettingsUi(event.target)) return
-  closeSettings()
-}
+  if (isInsideSettingsUi(event.target)) return;
+  closeSettings();
+};
 
 const onDocumentKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape') closeSettings()
-}
+  if (event.key === "Escape") closeSettings();
+};
 
 const bindSettingsDismiss = (open: boolean) => {
   if (open) {
-    window.addEventListener('mousedown', onDocumentPointerDown, true)
-    window.addEventListener('keydown', onDocumentKeydown, true)
-    window.addEventListener('scroll', onDocumentScroll, true)
-    window.addEventListener('resize', closeSettings)
-    window.addEventListener('Mindrizzle:canvas-transform', closeSettings)
-    return
+    window.addEventListener("mousedown", onDocumentPointerDown, true);
+    window.addEventListener("keydown", onDocumentKeydown, true);
+    window.addEventListener("scroll", onDocumentScroll, true);
+    window.addEventListener("resize", closeSettings);
+    window.addEventListener("Mindrizzle:canvas-transform", closeSettings);
+    return;
   }
-  window.removeEventListener('mousedown', onDocumentPointerDown, true)
-  window.removeEventListener('keydown', onDocumentKeydown, true)
-  window.removeEventListener('scroll', onDocumentScroll, true)
-  window.removeEventListener('resize', closeSettings)
-  window.removeEventListener('Mindrizzle:canvas-transform', closeSettings)
-}
+  window.removeEventListener("mousedown", onDocumentPointerDown, true);
+  window.removeEventListener("keydown", onDocumentKeydown, true);
+  window.removeEventListener("scroll", onDocumentScroll, true);
+  window.removeEventListener("resize", closeSettings);
+  window.removeEventListener("Mindrizzle:canvas-transform", closeSettings);
+};
 
-watch(settingsOpen, bindSettingsDismiss)
+watch(settingsOpen, bindSettingsDismiss);
 watch([() => props.active, () => props.showSettings], ([active, show]) => {
-  if (!active || !show) closeSettings()
-})
-onUnmounted(() => bindSettingsDismiss(false))
+  if (!active || !show) closeSettings();
+});
+onUnmounted(() => bindSettingsDismiss(false));
 
 const sizeChangeable = computed<SizeChangeable>(() => ({
   width: props.widthChangable,
   height: props.heightChangable,
-}))
+}));
 
 const componentController: BlockComponentController = {
   moveBy: (dx, dy) => props.handlers.moveBy(dx, dy),
   resizeTo: (size) => props.handlers.resizeTo(size),
   getSize: () => ({ width: props.width, height: props.height }),
   getChangeable: () => ({ ...sizeChangeable.value }),
-}
+};
 
 const canvasController: BlockCanvasController = {
   panBy: (dx, dy) => props.handlers.panCanvas(dx, dy),
   zoomTo: (zoom) => props.handlers.zoomCanvas(zoom),
   getViewData: () => props.handlers.getCanvasView(),
-}
+};
 
-provide(COMPONENT_CONTROLLER_KEY, componentController)
-provide(CANVAS_CONTROLLER_KEY, canvasController)
+provide(COMPONENT_CONTROLLER_KEY, componentController);
+provide(CANVAS_CONTROLLER_KEY, canvasController);
 
 // provide 只对后代生效，而块组件是 base 的父级，所以同时 expose 给块组件直接调用
-defineExpose({ controller: componentController, canvasController, getContentEl: () => contentEl.value })
+defineExpose({
+  controller: componentController,
+  canvasController,
+  getContentEl: () => contentEl.value,
+});
 
 const onHandleDown = (event: MouseEvent) => {
-  if (event.button !== 0) return
-  emit('dragstart', event)
-  event.preventDefault()
-}
+  if (event.button !== 0) return;
+  emit("dragstart", event);
+  event.preventDefault();
+};
 </script>
 
 <style scoped>
@@ -284,7 +397,9 @@ const onHandleDown = (event: MouseEvent) => {
 /* 80ms 足够利落，再长就显得拖沓 */
 .settings-menu-enter-active,
 .settings-menu-leave-active {
-  transition: opacity 80ms ease-out, transform 80ms ease-out;
+  transition:
+    opacity 80ms ease-out,
+    transform 80ms ease-out;
 }
 
 .settings-menu-enter-from,

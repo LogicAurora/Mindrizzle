@@ -6,18 +6,27 @@ import {
   mdiWindowClose,
   mdiFormatListBulleted,
   mdiCalendarBlankOutline,
-  mdiCogOutline
-} from '@mdi/js'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { isTauri } from '@tauri-apps/api/core';
+  mdiCogOutline,
+} from "@mdi/js";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isTauri } from "@tauri-apps/api/core";
 
-import { attachConsole } from '@tauri-apps/plugin-log';
-import { useDisplay } from 'vuetify'
-import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router';
-import { error as logError } from '@tauri-apps/plugin-log';
+import { attachConsole } from "@tauri-apps/plugin-log";
+import { useDisplay } from "vuetify";
+import { useRoute, useRouter, type RouteLocationRaw } from "vue-router";
+import { error as logError } from "@tauri-apps/plugin-log";
 
-import { getErrorMessage } from  "./utils/getErrorMessage"
+import { getErrorMessage } from "./utils/getErrorMessage";
 
 if (isTauri()) {
   attachConsole();
@@ -31,96 +40,105 @@ if (isTauri()) {
 const router = useRouter();
 
 onMounted(async () => {
-  await router.isReady()
+  await router.isReady();
 
   // 非 Tauri 环境无 IPC、plugin-log 内部 invoke 会抛错，所以提前返回
-  if (!isTauri()) return
+  if (!isTauri()) return;
 
   try {
     const win = getCurrentWindow();
     await win.show();
   } catch (error) {
-    logError(getErrorMessage(error))
+    logError(getErrorMessage(error));
   }
 });
 
-import { isDebugLoadingEnabled, noteLoadControllerKey, routeTransition, startEditorTransitionKey } from './utils/routeTransition'
-import { loadTitleRollDirection, titleRollDirection } from './utils/uiPreference'
-import { Z_LAYER } from './Controls/Canvas/Core/zIndex'
+import {
+  isDebugLoadingEnabled,
+  noteLoadControllerKey,
+  routeTransition,
+  startEditorTransitionKey,
+} from "./utils/routeTransition";
+import {
+  loadTitleRollDirection,
+  titleRollDirection,
+} from "./utils/uiPreference";
+import { Z_LAYER } from "./Controls/Canvas/Core/zIndex";
 const transitionClassMap = {
-  VSlideXTransition: 'slide-x-transition',
-  VSlideXReverseTransition: 'slide-x-reverse-transition',
-  VFadeTransition: 'fade-transition',
-} as const
+  VSlideXTransition: "slide-x-transition",
+  VSlideXReverseTransition: "slide-x-reverse-transition",
+  VFadeTransition: "fade-transition",
+} as const;
 
-const resolveTransitionName = () => transitionClassMap[routeTransition.value]
+const resolveTransitionName = () => transitionClassMap[routeTransition.value];
 
 function hideLeavingRoute(element: Element) {
-  (element as HTMLElement).style.setProperty('display', 'none', 'important')
+  (element as HTMLElement).style.setProperty("display", "none", "important");
 }
 
-const CURTAIN_DURATION = 560
-const CURTAIN_STAGGER = 110
-const LOADING_THRESHOLD = 300
-const MIN_LOADING_DURATION = 520
-const MAX_PROGRESS = 100
-const PROGRESS_RING_SIZE = 72
-const PROGRESS_RING_WIDTH = 5
-const curtainState = ref<'idle' | 'covering' | 'covered' | 'revealing'>('idle')
-const progress = ref(0)
-const loadingName = ref('')
+const CURTAIN_DURATION = 560;
+const CURTAIN_STAGGER = 110;
+const LOADING_THRESHOLD = 300;
+const MIN_LOADING_DURATION = 520;
+const MAX_PROGRESS = 100;
+const PROGRESS_RING_SIZE = 72;
+const PROGRESS_RING_WIDTH = 5;
+const curtainState = ref<"idle" | "covering" | "covered" | "revealing">("idle");
+const progress = ref(0);
+const loadingName = ref("");
 const loadingStage = computed(() => {
-  if (progress.value <= 2) return '正在校验笔记文件'
-  if (progress.value <= 5) return '正在识别归档格式'
-  if (progress.value <= 8) return '正在准备本地缓存'
-  if (progress.value <= 12) return '正在准备解包内容'
-  if (progress.value <= 70) return '正在解包笔记内容'
-  if (progress.value <= 75) return '正在读取笔记正文'
-  if (progress.value <= 85) return '正在解析笔记正文'
-  if (progress.value <= 90) return '正在完成笔记读取'
-  return '正在载入画布'
-})
+  if (progress.value <= 2) return "正在校验笔记文件";
+  if (progress.value <= 5) return "正在识别归档格式";
+  if (progress.value <= 8) return "正在准备本地缓存";
+  if (progress.value <= 12) return "正在准备解包内容";
+  if (progress.value <= 70) return "正在解包笔记内容";
+  if (progress.value <= 75) return "正在读取笔记正文";
+  if (progress.value <= 85) return "正在解析笔记正文";
+  if (progress.value <= 90) return "正在完成笔记读取";
+  return "正在载入画布";
+});
 const curtainStyle = {
-  '--curtain-duration': `${CURTAIN_DURATION}ms`,
-  '--curtain-stagger': `${CURTAIN_STAGGER}ms`,
-  '--loading-curtain-z-index': Z_LAYER.appLoadingCurtain,
-}
+  "--curtain-duration": `${CURTAIN_DURATION}ms`,
+  "--curtain-stagger": `${CURTAIN_STAGGER}ms`,
+  "--loading-curtain-z-index": Z_LAYER.appLoadingCurtain,
+};
 
-let resolveFinish: (() => void) | null = null
-let curtainCoveredAt: number | null = null
-let isEditorNavigationPending = false
+let resolveFinish: (() => void) | null = null;
+let curtainCoveredAt: number | null = null;
+let isEditorNavigationPending = false;
 
-const wait = (duration: number) => new Promise<void>((resolve) => setTimeout(resolve, duration))
+const wait = (duration: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, duration));
 
 function createFinishPromise() {
-  let resolveCurrentFinish: () => void = () => undefined
+  let resolveCurrentFinish: () => void = () => undefined;
   const finishPromise = new Promise<void>((resolve) => {
-    resolveCurrentFinish = resolve
-  })
-  resolveFinish = resolveCurrentFinish
-  return finishPromise
+    resolveCurrentFinish = resolve;
+  });
+  resolveFinish = resolveCurrentFinish;
+  return finishPromise;
 }
 
 provide(noteLoadControllerKey, {
   setProgress(value) {
-    if (!Number.isFinite(value)) return
-    progress.value = Math.max(progress.value, Math.min(MAX_PROGRESS, value))
+    if (!Number.isFinite(value)) return;
+    progress.value = Math.max(progress.value, Math.min(MAX_PROGRESS, value));
   },
   setName(name) {
-    loadingName.value = name
+    loadingName.value = name;
   },
   finish() {
-    resolveFinish?.()
-    resolveFinish = null
+    resolveFinish?.();
+    resolveFinish = null;
   },
-})
+});
 
 async function coverCurtain() {
-  curtainState.value = 'covering'
-  await wait(CURTAIN_DURATION + CURTAIN_STAGGER)
-  curtainState.value = 'covered'
-  await nextTick()
-  curtainCoveredAt = performance.now()
+  curtainState.value = "covering";
+  await wait(CURTAIN_DURATION + CURTAIN_STAGGER);
+  curtainState.value = "covered";
+  await nextTick();
+  curtainCoveredAt = performance.now();
 }
 
 async function runEditorTransition(
@@ -128,139 +146,165 @@ async function runEditorTransition(
   prepare: () => Promise<void>,
   finishPromise: Promise<void>,
 ) {
-  const preparation = prepare()
-  const shouldCover = isDebugLoadingEnabled.value || await Promise.race([
-    preparation.then(() => false),
-    wait(LOADING_THRESHOLD).then(() => true),
-  ])
-  if (shouldCover) await coverCurtain()
-  await preparation
-  await router.push(target)
-  await nextTick()
-  await finishPromise
+  const preparation = prepare();
+  const shouldCover =
+    isDebugLoadingEnabled.value ||
+    (await Promise.race([
+      preparation.then(() => false),
+      wait(LOADING_THRESHOLD).then(() => true),
+    ]));
+  if (shouldCover) await coverCurtain();
+  await preparation;
+  await router.push(target);
+  await nextTick();
+  await finishPromise;
 }
 
 async function waitForMinimumCurtainDuration() {
-  if (curtainCoveredAt === null) return
-  const elapsed = performance.now() - curtainCoveredAt
-  const remaining = MIN_LOADING_DURATION - elapsed
-  if (remaining > 0) await wait(remaining)
+  if (curtainCoveredAt === null) return;
+  const elapsed = performance.now() - curtainCoveredAt;
+  const remaining = MIN_LOADING_DURATION - elapsed;
+  if (remaining > 0) await wait(remaining);
 }
 
 async function resetEditorTransition() {
-  resolveFinish?.()
-  resolveFinish = null
-  if (curtainState.value !== 'idle') {
-    await waitForMinimumCurtainDuration()
-    curtainState.value = 'revealing'
-    await wait(CURTAIN_DURATION + CURTAIN_STAGGER)
-    curtainState.value = 'idle'
+  resolveFinish?.();
+  resolveFinish = null;
+  if (curtainState.value !== "idle") {
+    await waitForMinimumCurtainDuration();
+    curtainState.value = "revealing";
+    await wait(CURTAIN_DURATION + CURTAIN_STAGGER);
+    curtainState.value = "idle";
   }
-  curtainCoveredAt = null
-  progress.value = 0
-  loadingName.value = ''
+  curtainCoveredAt = null;
+  progress.value = 0;
+  loadingName.value = "";
 }
 
-async function startEditorTransition(target: RouteLocationRaw, prepare: () => Promise<void>) {
-  if (isEditorNavigationPending || curtainState.value !== 'idle') return
-  isEditorNavigationPending = true
-  progress.value = 0
-  loadingName.value = ''
-  const finishPromise = createFinishPromise()
+async function startEditorTransition(
+  target: RouteLocationRaw,
+  prepare: () => Promise<void>,
+) {
+  if (isEditorNavigationPending || curtainState.value !== "idle") return;
+  isEditorNavigationPending = true;
+  progress.value = 0;
+  loadingName.value = "";
+  const finishPromise = createFinishPromise();
   try {
-    await runEditorTransition(target, prepare, finishPromise)
+    await runEditorTransition(target, prepare, finishPromise);
   } finally {
-    await resetEditorTransition()
-    isEditorNavigationPending = false
+    await resetEditorTransition();
+    isEditorNavigationPending = false;
   }
 }
 
-provide(startEditorTransitionKey, startEditorTransition)
+provide(startEditorTransitionKey, startEditorTransition);
 
 const isDev = computed(() => import.meta.env.DEV);
 
-const menuRef = shallowRef(false)
-type ResizeDirection = 'East' | 'North' | 'NorthEast' | 'NorthWest' | 'South' | 'SouthEast' | 'SouthWest' | 'West'
+const menuRef = shallowRef(false);
+type ResizeDirection =
+  | "East"
+  | "North"
+  | "NorthEast"
+  | "NorthWest"
+  | "South"
+  | "SouthEast"
+  | "SouthWest"
+  | "West";
 
 const resizeEdges: Array<{ direction: ResizeDirection; cursor: string }> = [
-  { direction: 'NorthWest', cursor: 'nwse-resize' },
-  { direction: 'North', cursor: 'ns-resize' },
-  { direction: 'NorthEast', cursor: 'nesw-resize' },
-  { direction: 'West', cursor: 'ew-resize' },
-  { direction: 'East', cursor: 'ew-resize' },
-  { direction: 'SouthWest', cursor: 'nesw-resize' },
-  { direction: 'South', cursor: 'ns-resize' },
-  { direction: 'SouthEast', cursor: 'nwse-resize' },
-]
+  { direction: "NorthWest", cursor: "nwse-resize" },
+  { direction: "North", cursor: "ns-resize" },
+  { direction: "NorthEast", cursor: "nesw-resize" },
+  { direction: "West", cursor: "ew-resize" },
+  { direction: "East", cursor: "ew-resize" },
+  { direction: "SouthWest", cursor: "nesw-resize" },
+  { direction: "South", cursor: "ns-resize" },
+  { direction: "SouthEast", cursor: "nwse-resize" },
+];
 
 const startResize = (direction: ResizeDirection) => {
   if (isTauri()) {
-    void getCurrentWindow().startResizeDragging(direction)
+    void getCurrentWindow().startResizeDragging(direction);
   }
-}
+};
 
-const APP_TITLE_FALLBACK = 'Mindrizzle'
-const BOOT_TITLE_DURATION = 3_000
-const DRAWER_SETTLE_DURATION = 260
+const APP_TITLE_FALLBACK = "Mindrizzle";
+const BOOT_TITLE_DURATION = 3_000;
+const DRAWER_SETTLE_DURATION = 260;
 // 工具栏主行 compact 密度下的实际高度（height 64 - 16）
-const TOOLBAR_ROW_HEIGHT = 48
-const TOOLBAR_TABS_HEIGHT = 36
+const TOOLBAR_ROW_HEIGHT = 48;
+const TOOLBAR_TABS_HEIGHT = 36;
 // extensionHeight 会被 compact 密度减 8，补回来才能得到 36px 的 tab 行
-const TOOLBAR_EXTENSION_HEIGHT = TOOLBAR_TABS_HEIGHT + 8
+const TOOLBAR_EXTENSION_HEIGHT = TOOLBAR_TABS_HEIGHT + 8;
 
-const currentRoute = useRoute()
-const { mobile: isMobileLayout } = useDisplay()
-const isBootTitleVisible = ref(true)
-let bootTitleTimer: number | undefined
+const currentRoute = useRoute();
+const { mobile: isMobileLayout } = useDisplay();
+const isBootTitleVisible = ref(true);
+let bootTitleTimer: number | undefined;
 
 onMounted(() => {
-  bootTitleTimer = window.setTimeout(() => { isBootTitleVisible.value = false }, BOOT_TITLE_DURATION)
+  bootTitleTimer = window.setTimeout(() => {
+    isBootTitleVisible.value = false;
+  }, BOOT_TITLE_DURATION);
   void loadTitleRollDirection().catch((error: unknown) => {
     // 浏览器调试环境无 IPC，上报前守卫
-    if (isTauri()) logError(getErrorMessage(error))
-  })
-})
+    if (isTauri()) logError(getErrorMessage(error));
+  });
+});
 
 onBeforeUnmount(() => {
-  if (bootTitleTimer !== undefined) clearTimeout(bootTitleTimer)
-  clearTimeout(titleSwitchTimer)
-})
+  if (bootTitleTimer !== undefined) clearTimeout(bootTitleTimer);
+  clearTimeout(titleSwitchTimer);
+});
 
-const titleRollName = computed(() => titleRollDirection.value === 'top-down' ? 'title-roll-down' : 'title-roll-up')
+const titleRollName = computed(() =>
+  titleRollDirection.value === "top-down" ? "title-roll-down" : "title-roll-up",
+);
 
 // 页面把 tab 行 teleport 进工具栏后工具栏会变高，页面高度得按同一个值算
-const hasToolbarTabs = computed(() => currentRoute.meta.toolbarTabs === true)
-const toolbarHeight = computed(() => `${TOOLBAR_ROW_HEIGHT + (hasToolbarTabs.value ? TOOLBAR_TABS_HEIGHT : 0)}px`)
+const hasToolbarTabs = computed(() => currentRoute.meta.toolbarTabs === true);
+const toolbarHeight = computed(
+  () =>
+    `${TOOLBAR_ROW_HEIGHT + (hasToolbarTabs.value ? TOOLBAR_TABS_HEIGHT : 0)}px`,
+);
 
 // 启动瞬间先立住品牌名，随后交给路由 meta；编辑页要显示具体文件名
 const appTitle = computed(() => {
-  if (isBootTitleVisible.value) return APP_TITLE_FALLBACK
-  if (currentRoute.name === 'editor') return String(currentRoute.params.fileName ?? APP_TITLE_FALLBACK)
-  const title = currentRoute.meta.title
-  return typeof title === 'string' ? title : APP_TITLE_FALLBACK
-})
+  if (isBootTitleVisible.value) return APP_TITLE_FALLBACK;
+  if (currentRoute.name === "editor")
+    return String(currentRoute.params.fileName ?? APP_TITLE_FALLBACK);
+  const title = currentRoute.meta.title;
+  return typeof title === "string" ? title : APP_TITLE_FALLBACK;
+});
 
-const displayedTitle = ref(appTitle.value)
-let titleSwitchTimer: number | undefined
-let drawerClosedAt = 0
+const displayedTitle = ref(appTitle.value);
+let titleSwitchTimer: number | undefined;
+let drawerClosedAt = 0;
 
 // 抽屉退场还没走完就切字，两个动画会叠在一起糊成一团
 watch(appTitle, (nextTitle) => {
-  clearTimeout(titleSwitchTimer)
-  const settleDelay = Math.max(0, DRAWER_SETTLE_DURATION - (performance.now() - drawerClosedAt))
-  titleSwitchTimer = window.setTimeout(() => { displayedTitle.value = nextTitle }, settleDelay)
-})
+  clearTimeout(titleSwitchTimer);
+  const settleDelay = Math.max(
+    0,
+    DRAWER_SETTLE_DURATION - (performance.now() - drawerClosedAt),
+  );
+  titleSwitchTimer = window.setTimeout(() => {
+    displayedTitle.value = nextTitle;
+  }, settleDelay);
+});
 
 function setDrawerOpen(open: boolean) {
-  if (menuRef.value === open) return
-  menuRef.value = open
-  if (open) return
-  drawerClosedAt = isMobileLayout.value ? 0 : performance.now()
+  if (menuRef.value === open) return;
+  menuRef.value = open;
+  if (open) return;
+  drawerClosedAt = isMobileLayout.value ? 0 : performance.now();
 }
 
 function navigateFromMenu(path: string) {
-  setDrawerOpen(false)
-  router.push(path).catch(() => undefined)
+  setDrawerOpen(false);
+  router.push(path).catch(() => undefined);
 }
 </script>
 
@@ -276,22 +320,32 @@ function navigateFromMenu(path: string) {
       :style="{ cursor: edge.cursor }"
       @mousedown.prevent="startResize(edge.direction)"
     />
-    <v-toolbar color="primary" density="compact" :extended="hasToolbarTabs"
-      :extension-height="TOOLBAR_EXTENSION_HEIGHT" style="padding: 0;">
-      <div data-tauri-drag-region style="
-          display: flex; 
-          align-items: center; 
-          width: 100%; 
+    <v-toolbar
+      color="primary"
+      density="compact"
+      :extended="hasToolbarTabs"
+      :extension-height="TOOLBAR_EXTENSION_HEIGHT"
+      style="padding: 0"
+    >
+      <div
+        data-tauri-drag-region
+        style="
+          display: flex;
+          align-items: center;
+          width: 100%;
           height: 100%;
           margin-left: 5px;
           margin-right: 5px;
-        ">
+        "
+      >
         <div id="title-left-actions" class="toolbar-actions" />
         <v-app-bar-nav-icon @click.stop="menuRef = !menuRef" />
         <div id="title-right-actions" class="toolbar-actions" />
         <span data-tauri-drag-region class="text-white app-title-wrap">
           <Transition :name="titleRollName">
-            <span :key="displayedTitle" class="app-title">{{ displayedTitle }}</span>
+            <span :key="displayedTitle" class="app-title">{{
+              displayedTitle
+            }}</span>
           </Transition>
         </span>
         <!-- 路由页面用 <Teleport to="#toolbar-actions" defer> 往这里塞自己的按钮；
@@ -304,28 +358,62 @@ function navigateFromMenu(path: string) {
       </template>
     </v-toolbar>
 
-
-    <v-navigation-drawer v-model="menuRef" :location="isMobileLayout ? 'bottom' : undefined" temporary>
+    <v-navigation-drawer
+      v-model="menuRef"
+      :location="isMobileLayout ? 'bottom' : undefined"
+      temporary
+    >
       <v-list :lines="false" density="compact" nav>
-        <v-list-item :prepend-icon="mdiFormatListBulleted" title="便签集" @click="navigateFromMenu('/set')" />
-        <v-list-item :prepend-icon="mdiCalendarBlankOutline" title="记事板" @click="navigateFromMenu('/board')" />
-        <v-list-item :prepend-icon="mdiCogOutline" title="设置" @click="navigateFromMenu('/settings/about')" />
+        <v-list-item
+          :prepend-icon="mdiFormatListBulleted"
+          title="便签集"
+          @click="navigateFromMenu('/set')"
+        />
+        <v-list-item
+          :prepend-icon="mdiCalendarBlankOutline"
+          title="记事板"
+          @click="navigateFromMenu('/board')"
+        />
+        <v-list-item
+          :prepend-icon="mdiCogOutline"
+          title="设置"
+          @click="navigateFromMenu('/settings/about')"
+        />
       </v-list>
       <v-divider v-if="isDev" />
       <v-list v-if="isDev" :lines="false" density="compact" nav>
-        <v-list-item :prepend-icon="mdiBug" title="调试页面" @click="navigateFromMenu('/debug')" />
+        <v-list-item
+          :prepend-icon="mdiBug"
+          title="调试页面"
+          @click="navigateFromMenu('/debug')"
+        />
       </v-list>
       <v-divider v-if="isTauri()" />
       <v-list v-if="isTauri()" :lines="false" density="compact" nav>
-        <v-list-item :prepend-icon="mdiWindowMinimize" title="最小化" @click="appWindow?.minimize()" />
-        <v-list-item :prepend-icon="mdiWindowMaximize" title="最大化" @click="appWindow?.toggleMaximize()" />
-        <v-list-item :prepend-icon="mdiWindowClose" title="关闭" @click="appWindow?.close()" />
+        <v-list-item
+          :prepend-icon="mdiWindowMinimize"
+          title="最小化"
+          @click="appWindow?.minimize()"
+        />
+        <v-list-item
+          :prepend-icon="mdiWindowMaximize"
+          title="最大化"
+          @click="appWindow?.toggleMaximize()"
+        />
+        <v-list-item
+          :prepend-icon="mdiWindowClose"
+          title="关闭"
+          @click="appWindow?.close()"
+        />
       </v-list>
     </v-navigation-drawer>
 
     <v-main class="no-scrollbar">
-      <router-view style="height: 100%;" v-slot="{ Component, route }">
-        <Transition :name="resolveTransitionName()" @before-leave="hideLeavingRoute">
+      <router-view style="height: 100%" v-slot="{ Component, route }">
+        <Transition
+          :name="resolveTransitionName()"
+          @before-leave="hideLeavingRoute"
+        >
           <component :is="Component" :key="route.path" />
         </Transition>
       </router-view>
@@ -347,10 +435,14 @@ function navigateFromMenu(path: string) {
             color="secondary"
             bg-color="rgba(var(--v-theme-on-background), 0.12)"
           >
-            <span class="text-h6 font-weight-bold">{{ Math.round(progress) }}%</span>
+            <span class="text-h6 font-weight-bold"
+              >{{ Math.round(progress) }}%</span
+            >
           </v-progress-circular>
           <div class="loading-curtain__stage">{{ loadingStage }}</div>
-          <div class="loading-curtain__filename">{{ loadingName || '正在打开笔记' }}</div>
+          <div class="loading-curtain__filename">
+            {{ loadingName || "正在打开笔记" }}
+          </div>
           <v-progress-linear
             :model-value="progress"
             color="secondary"
@@ -366,7 +458,6 @@ function navigateFromMenu(path: string) {
 <style>
 * {
   -webkit-tap-highlight-color: transparent !important;
-
 }
 
 html,
@@ -416,7 +507,9 @@ body,
 .title-roll-down-leave-active,
 .title-roll-up-enter-active,
 .title-roll-up-leave-active {
-  transition: transform 240ms ease, opacity 240ms ease;
+  transition:
+    transform 240ms ease,
+    opacity 240ms ease;
 }
 
 .title-roll-down-enter-from {
@@ -598,7 +691,12 @@ textarea {
 }
 
 .loading-curtain__layer--back {
-  background: linear-gradient(115deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.84) 55%, rgba(var(--v-theme-primary), 0.68) 100%);
+  background: linear-gradient(
+    115deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgba(var(--v-theme-primary), 0.84) 55%,
+    rgba(var(--v-theme-primary), 0.68) 100%
+  );
 }
 
 .loading-curtain__layer--front {
@@ -615,7 +713,9 @@ textarea {
   gap: 20px;
   opacity: 0;
   transform: translateY(12px) scale(0.95);
-  transition: opacity 300ms ease, transform 340ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  transition:
+    opacity 300ms ease,
+    transform 340ms cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 .is-covered .loading-curtain__loader {

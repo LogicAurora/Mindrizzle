@@ -1,37 +1,46 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { mdiPlus, mdiDragVerticalVariant } from '@mdi/js'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { mdiPlus, mdiDragVerticalVariant } from "@mdi/js";
 import {
   BlockHandleAdd,
   BlockHandleDraggable,
   BlockHandlePopup,
   BlockHandlePositioner,
   BlockHandleRoot,
-} from 'prosekit/vue/block-handle'
-import type { Editor } from '@prosekit/core'
-import { createOverlayStoreResolver, createStoreResolver, getBlockRect, getScrollEl, getView, layoutToViewportX, layoutToViewportY } from './blockHandleUtils'
-import { useHoverState } from './useHoverState'
-import { useHoverUi } from './useHoverUi'
-import { useBlockDrag } from './useBlockDrag'
-import { activeHandleUuid } from './blockHandleOwner'
+} from "prosekit/vue/block-handle";
+import type { Editor } from "@prosekit/core";
+import {
+  createOverlayStoreResolver,
+  createStoreResolver,
+  getBlockRect,
+  getScrollEl,
+  getView,
+  layoutToViewportX,
+  layoutToViewportY,
+} from "./blockHandleUtils";
+import { useHoverState } from "./useHoverState";
+import { useHoverUi } from "./useHoverUi";
+import { useBlockDrag } from "./useBlockDrag";
+import { activeHandleUuid } from "./blockHandleOwner";
 
 interface Props {
-  dir?: 'ltr' | 'rtl'
-  editor?: Editor | null
-  readOnly?: boolean
+  dir?: "ltr" | "rtl";
+  editor?: Editor | null;
+  readOnly?: boolean;
 }
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 // BlockHandleStore 每编辑器独立，按实例闭包缓存解析
-const getStore = createStoreResolver()
-const getOverlayStore = createOverlayStoreResolver()
+const getStore = createStoreResolver();
+const getOverlayStore = createOverlayStoreResolver();
 
-const { hoveredBlock, activeHover, handlePlacement, onBlockStateChange } = useHoverState(
-  props.editor ?? null,
-  props.dir ?? 'ltr',
-  getStore,
-  getOverlayStore,
-)
+const { hoveredBlock, activeHover, handlePlacement, onBlockStateChange } =
+  useHoverState(
+    props.editor ?? null,
+    props.dir ?? "ltr",
+    getStore,
+    getOverlayStore,
+  );
 const {
   highlightRect,
   highlightStyle,
@@ -47,197 +56,261 @@ const {
   hoveredBlock,
   activeHover,
   placement: handlePlacement,
-})
+});
 const { isDragging, onDragPointerDown } = useBlockDrag({
   editor: props.editor ?? null,
   hoveredBlock,
   suppressUI,
-})
+});
 
 // 拖滚动条时指针会滑出块行，原生 hover 扩展反复清/置 hover 会让 popup 与滚动条闪烁（force-hover 被反复加/清），
 // 拖拽期间收起 popup，松开后由 hover 自然恢复
-const scrollbarDragging = ref(false)
-const showPopup = computed(() => handleVisible.value && !scrollbarDragging.value)
+const scrollbarDragging = ref(false);
+const showPopup = computed(
+  () => handleVisible.value && !scrollbarDragging.value,
+);
 
 // setup 阶段 editor 尚未挂载、closest('.drag-wrapper') 为空，所以监听 editor 变化后再赋值
-const blockUuid = ref<string | null>(null)
+const blockUuid = ref<string | null>(null);
 watch(
   () => props.editor,
   async () => {
-    await nextTick()
-    const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-    blockUuid.value = wrapper?.dataset.uuid ?? null
+    await nextTick();
+    const wrapper = getView(props.editor)?.dom?.closest(
+      ".drag-wrapper",
+    ) as HTMLElement | null;
+    blockUuid.value = wrapper?.dataset.uuid ?? null;
   },
   { immediate: true },
-)
+);
 
 // computed 会因 editor 引用不变而取到过期的 null，所以用函数实时查 DOM
-const currentUuid = () => getView(props.editor)?.dom?.closest('.drag-wrapper')?.dataset.uuid ?? null
+const currentUuid = () =>
+  getView(props.editor)?.dom?.closest(".drag-wrapper")?.dataset.uuid ?? null;
 
 // 任一实例改 owner 时其余实例立即收到更新并收起自己，保证只显示最后激活的块
 watch(activeHandleUuid, (ownerUuid) => {
-  if (!ownerUuid) return
-  const uuid = currentUuid()
-  if (uuid && ownerUuid !== uuid) suppressUI()
-})
+  if (!ownerUuid) return;
+  const uuid = currentUuid();
+  if (uuid && ownerUuid !== uuid) suppressUI();
+});
 
 // 仅在确实显示时占有 owner，避免隐藏块残留占用
 watch(showPopup, (visible) => {
-  const uuid = currentUuid()
+  const uuid = currentUuid();
   if (visible && uuid) {
-    activeHandleUuid.value = uuid
+    activeHandleUuid.value = uuid;
   } else if (!visible && activeHandleUuid.value === uuid) {
-    activeHandleUuid.value = null
+    activeHandleUuid.value = null;
   }
-})
+});
 
 // 卸载时释放 owner，避免残留 id 阻塞其他块
 onUnmounted(() => {
   if (activeHandleUuid.value === currentUuid()) {
-    activeHandleUuid.value = null
+    activeHandleUuid.value = null;
   }
-})
+});
 
 // popup 移到非首行时不盖 tm，所以经双 rAF 量取实际矩形判断遮挡后再派发
 function popupOverlapsTm(): boolean {
-  const dom = getView(props.editor)?.dom as HTMLElement | null
-  const wrapper = dom?.closest('.drag-wrapper') as HTMLElement | null
-  if (!wrapper) return false
+  const dom = getView(props.editor)?.dom as HTMLElement | null;
+  const wrapper = dom?.closest(".drag-wrapper") as HTMLElement | null;
+  if (!wrapper) return false;
   // popup 已 Teleport 到 .canvas，此处全局查找
-  const popup = document.querySelector<HTMLElement>('.block-handle-popup')
-  const tm = wrapper.querySelector<HTMLElement>('.handle-tm')
-  if (!popup || !tm) return false
-  const pr = popup.getBoundingClientRect()
-  const tr = tm.getBoundingClientRect()
-  if (pr.width <= 0 || pr.height <= 0 || tr.width <= 0 || tr.height <= 0) return false
-  return pr.left < tr.right && pr.right > tr.left && pr.top < tr.bottom && pr.bottom > tr.top
+  const popup = document.querySelector<HTMLElement>(".block-handle-popup");
+  const tm = wrapper.querySelector<HTMLElement>(".handle-tm");
+  if (!popup || !tm) return false;
+  const pr = popup.getBoundingClientRect();
+  const tr = tm.getBoundingClientRect();
+  if (pr.width <= 0 || pr.height <= 0 || tr.width <= 0 || tr.height <= 0)
+    return false;
+  return (
+    pr.left < tr.right &&
+    pr.right > tr.left &&
+    pr.top < tr.bottom &&
+    pr.bottom > tr.top
+  );
 }
 
-let tmSyncRaf = 0
+let tmSyncRaf = 0;
 function syncTmOverlap() {
-  cancelAnimationFrame(tmSyncRaf)
+  cancelAnimationFrame(tmSyncRaf);
   // popup 位置由 floating-ui 异步更新，所以双 rAF 确保量到最新位置
   tmSyncRaf = requestAnimationFrame(() => {
     tmSyncRaf = requestAnimationFrame(() => {
-      const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-      const uuid = wrapper?.dataset.uuid ?? null
-      const open = !!showPopup.value && popupOverlapsTm()
-      window.dispatchEvent(new CustomEvent('Mindrizzle:block-popup', { detail: { open, uuid } }))
-    })
-  })
+      const wrapper = getView(props.editor)?.dom?.closest(
+        ".drag-wrapper",
+      ) as HTMLElement | null;
+      const uuid = wrapper?.dataset.uuid ?? null;
+      const open = !!showPopup.value && popupOverlapsTm();
+      window.dispatchEvent(
+        new CustomEvent("Mindrizzle:block-popup", { detail: { open, uuid } }),
+      );
+    });
+  });
 }
 
 // 桥接区必须恰好跨过 popup 与块之间的空隙：过宽会盖住紧贴 popup 的文字（左/上/下）或滚动条（右），
 // 所以四侧都按实测空隙自适应；量不到时退回 CSS 的 48px 保守值（宁可闪灭也不能漏掉桥接）
-const BRIDGE_OVERLAP = 2
-let bridgeRaf = 0
+const BRIDGE_OVERLAP = 2;
+let bridgeRaf = 0;
 function syncBridgeGap() {
   const measure = () => {
-    const view = getView(props.editor)
-    const wrapper = view?.dom?.closest('.drag-wrapper') as HTMLElement | null
+    const view = getView(props.editor);
+    const wrapper = view?.dom?.closest(".drag-wrapper") as HTMLElement | null;
     // 多块各自都渲染 popup，所以必须按块 uuid 精确取，否则会量到别的隐藏 popup
-    const uuid = wrapper?.dataset.uuid
-    const popup = uuid ? document.querySelector<HTMLElement>(`.block-handle-popup[data-uuid="${uuid}"]`) : null
-    const row = activeHover.value ? getBlockRect(view, activeHover.value.pos) : null
-    if (!wrapper || !popup) return
-    const pr = popup.getBoundingClientRect()
-    if (pr.width <= 0 || pr.height <= 0) return
-    const wr = wrapper.getBoundingClientRect()
+    const uuid = wrapper?.dataset.uuid;
+    const popup = uuid
+      ? document.querySelector<HTMLElement>(
+          `.block-handle-popup[data-uuid="${uuid}"]`,
+        )
+      : null;
+    const row = activeHover.value
+      ? getBlockRect(view, activeHover.value.pos)
+      : null;
+    if (!wrapper || !popup) return;
+    const pr = popup.getBoundingClientRect();
+    if (pr.width <= 0 || pr.height <= 0) return;
+    const wr = wrapper.getBoundingClientRect();
     // 两者同为布局坐标（Chrome 下 BCR 不含 zoom），相减与画布缩放无关；加 2px 余量后桥接区只压住块边缘 2px
-    const bridgeOf = (gap: number) => `${Math.max(Math.ceil(gap) + BRIDGE_OVERLAP, 1)}px`
-    popup.style.setProperty('--block-handle-bridge', bridgeOf(pr.left - wr.right))
-    popup.style.setProperty('--block-handle-bridge-left', bridgeOf(wr.left - pr.right))
-    if (!row) return
-    const verticalGap = handlePlacement.value === 'top' ? row.top - pr.bottom
-      : handlePlacement.value === 'bottom' ? pr.top - row.bottom : 0
-    popup.style.setProperty('--block-handle-bridge-y', bridgeOf(verticalGap))
-  }
-  cancelAnimationFrame(bridgeRaf)
-  bridgeRaf = requestAnimationFrame(measure)
+    const bridgeOf = (gap: number) =>
+      `${Math.max(Math.ceil(gap) + BRIDGE_OVERLAP, 1)}px`;
+    popup.style.setProperty(
+      "--block-handle-bridge",
+      bridgeOf(pr.left - wr.right),
+    );
+    popup.style.setProperty(
+      "--block-handle-bridge-left",
+      bridgeOf(wr.left - pr.right),
+    );
+    if (!row) return;
+    const verticalGap =
+      handlePlacement.value === "top"
+        ? row.top - pr.bottom
+        : handlePlacement.value === "bottom"
+          ? pr.top - row.bottom
+          : 0;
+    popup.style.setProperty("--block-handle-bridge-y", bridgeOf(verticalGap));
+  };
+  cancelAnimationFrame(bridgeRaf);
+  bridgeRaf = requestAnimationFrame(measure);
   // 后台标签页 rAF 不派发，所以用定时器兜底（重复测量幂等）
-  setTimeout(measure, 0)
+  setTimeout(measure, 0);
 }
 
 // tm 遮挡与桥接区宽度需随 hover 位置/显隐/放置方向/keepAlive 一起重算
 watch([showPopup, activeHover, popupKeep, handlePlacement], () => {
-  syncTmOverlap()
-  syncBridgeGap()
-})
+  syncTmOverlap();
+  syncBridgeGap();
+});
 
 // popup 上侧开启会盖住连接点曲别针，所以派发事件通知画布隐藏
 watch([showPopup, handlePlacement], () => {
-  const topOpen = !!showPopup.value && handlePlacement.value === 'top'
-  window.dispatchEvent(new CustomEvent('Mindrizzle:block-popup-top', { detail: { open: topOpen } }))
-})
+  const topOpen = !!showPopup.value && handlePlacement.value === "top";
+  window.dispatchEvent(
+    new CustomEvent("Mindrizzle:block-popup-top", {
+      detail: { open: topOpen },
+    }),
+  );
+});
 
 // 鼠标移向 popup 会经过上方组件、焦点被切走会让 popup 消失，所以派发"该块 popup 激活"让画布暂停 hover 聚焦
 watch(showPopup, (visible) => {
-  const wrapper = getView(props.editor)?.dom?.closest('.drag-wrapper') as HTMLElement | null
-  const uuid = wrapper?.dataset.uuid ?? null
+  const wrapper = getView(props.editor)?.dom?.closest(
+    ".drag-wrapper",
+  ) as HTMLElement | null;
+  const uuid = wrapper?.dataset.uuid ?? null;
   // popup 关闭后桥接区消失，所以手动补上的滚动条 hover 必须一并撤回
-  if (!visible) clearScrollbarHover()
-  window.dispatchEvent(new CustomEvent('Mindrizzle:block-handle-active', { detail: { active: !!visible, uuid } }))
-})
+  if (!visible) clearScrollbarHover();
+  window.dispatchEvent(
+    new CustomEvent("Mindrizzle:block-handle-active", {
+      detail: { active: !!visible, uuid },
+    }),
+  );
+});
 
 // 滚动条是 overlay（原生已隐藏，offsetWidth-clientWidth 恒为 0），popup 压住滚动条时 wheel 滚不动，
 // 按滚动条元素矩形判定并手动转发 delta
-const LINE_HEIGHT = 16
-const barAt = (shell: Element, clientX: number, clientY: number): HTMLElement | null => {
-  for (const bar of shell.querySelectorAll<HTMLElement>('.custom-scrollbar')) {
-    const r = bar.getBoundingClientRect()
+const LINE_HEIGHT = 16;
+const barAt = (
+  shell: Element,
+  clientX: number,
+  clientY: number,
+): HTMLElement | null => {
+  for (const bar of shell.querySelectorAll<HTMLElement>(".custom-scrollbar")) {
+    const r = bar.getBoundingClientRect();
     // CSS zoom 下 BCR 是布局坐标、而 clientX/Y 是视觉坐标，所以矩形须换算到视觉空间再比较
-    const left = layoutToViewportX(bar, r.left), right = layoutToViewportX(bar, r.right)
-    const top = layoutToViewportY(bar, r.top), bottom = layoutToViewportY(bar, r.bottom)
-    if (clientX >= left && clientX <= right && clientY >= top && clientY <= bottom) return bar
+    const left = layoutToViewportX(bar, r.left),
+      right = layoutToViewportX(bar, r.right);
+    const top = layoutToViewportY(bar, r.top),
+      bottom = layoutToViewportY(bar, r.bottom);
+    if (
+      clientX >= left &&
+      clientX <= right &&
+      clientY >= top &&
+      clientY <= bottom
+    )
+      return bar;
   }
-  return null
-}
+  return null;
+};
 
 const onPopupWheel = (e: WheelEvent) => {
-  const scrollEl = getScrollEl(getView(props.editor))
-  const shell = scrollEl?.closest('.editor-scroll-shell')
-  if (!scrollEl || !shell) return
-  const bar = barAt(shell, e.clientX, e.clientY)
-  if (!bar) return
+  const scrollEl = getScrollEl(getView(props.editor));
+  const shell = scrollEl?.closest(".editor-scroll-shell");
+  if (!scrollEl || !shell) return;
+  const bar = barAt(shell, e.clientX, e.clientY);
+  if (!bar) return;
   // deltaMode 2 为整页、1 为行
-  const extent = bar.classList.contains('custom-scrollbar-vertical') ? scrollEl.clientHeight : scrollEl.clientWidth
-  const unit = e.deltaMode === 2 ? extent : e.deltaMode === 1 ? LINE_HEIGHT : 1
-  if (bar.classList.contains('custom-scrollbar-vertical')) scrollEl.scrollTop += e.deltaY * unit
-  else scrollEl.scrollLeft += (e.deltaX || e.deltaY) * unit
-  e.preventDefault()
-  e.stopPropagation()
-}
+  const extent = bar.classList.contains("custom-scrollbar-vertical")
+    ? scrollEl.clientHeight
+    : scrollEl.clientWidth;
+  const unit = e.deltaMode === 2 ? extent : e.deltaMode === 1 ? LINE_HEIGHT : 1;
+  if (bar.classList.contains("custom-scrollbar-vertical"))
+    scrollEl.scrollTop += e.deltaY * unit;
+  else scrollEl.scrollLeft += (e.deltaX || e.deltaY) * unit;
+  e.preventDefault();
+  e.stopPropagation();
+};
 
 // popup 向块方向伸 48px 的透明桥接区会盖住紧贴文本右缘的滚动条，CSS :hover 收不到，
 // 指针在 popup（含桥接区）上时按矩形判定并手动补 hover
-let hoveredBar: HTMLElement | null = null
+let hoveredBar: HTMLElement | null = null;
 const clearScrollbarHover = () => {
-  hoveredBar?.classList.remove('force-hover')
-  hoveredBar = null
-}
+  hoveredBar?.classList.remove("force-hover");
+  hoveredBar = null;
+};
 
 const syncScrollbarHover = (clientX: number, clientY: number) => {
-  const shell = getScrollEl(getView(props.editor))?.closest('.editor-scroll-shell')
-  const next = shell ? barAt(shell, clientX, clientY) : null
-  if (next === hoveredBar) return
-  hoveredBar?.classList.remove('force-hover')
-  next?.classList.add('force-hover')
-  hoveredBar = next
-}
+  const shell = getScrollEl(getView(props.editor))?.closest(
+    ".editor-scroll-shell",
+  );
+  const next = shell ? barAt(shell, clientX, clientY) : null;
+  if (next === hoveredBar) return;
+  hoveredBar?.classList.remove("force-hover");
+  next?.classList.add("force-hover");
+  hoveredBar = next;
+};
 
 const onPopupPointerMove = (e: PointerEvent) => {
   // 坐标落在滚动条外（含清 hover 的 -9999 伪事件）时同样会清掉 class，所以无需 isTrusted 过滤
-  syncScrollbarHover(e.clientX, e.clientY)
-}
+  syncScrollbarHover(e.clientX, e.clientY);
+};
 
 const onScrollbarDrag = (e: Event) => {
-  const detail = (e as CustomEvent<{ active?: boolean; uuid?: string | null }>).detail
-  if (detail?.uuid && detail.uuid !== currentUuid()) return
-  scrollbarDragging.value = !!detail?.active
-  if (scrollbarDragging.value) clearScrollbarHover()
-}
-onMounted(() => window.addEventListener('Mindrizzle:scrollbar-drag', onScrollbarDrag))
-onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScrollbarDrag))
+  const detail = (e as CustomEvent<{ active?: boolean; uuid?: string | null }>)
+    .detail;
+  if (detail?.uuid && detail.uuid !== currentUuid()) return;
+  scrollbarDragging.value = !!detail?.active;
+  if (scrollbarDragging.value) clearScrollbarHover();
+};
+onMounted(() =>
+  window.addEventListener("Mindrizzle:scrollbar-drag", onScrollbarDrag),
+);
+onUnmounted(() =>
+  window.removeEventListener("Mindrizzle:scrollbar-drag", onScrollbarDrag),
+);
 </script>
 
 <template>
@@ -249,37 +322,56 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
         :placement="handlePlacement"
         :hide="false"
         :data-owner="blockUuid"
-        :class="['block-handle-positioner', `placement-${handlePlacement}`, { interactive: showPopup }]"
-        :style="{ '--block-handle-shift': popupShiftPx + 'px', '--block-handle-hshift': popupHShiftPx + 'px' }"
+        :class="[
+          'block-handle-positioner',
+          `placement-${handlePlacement}`,
+          { interactive: showPopup },
+        ]"
+        :style="{
+          '--block-handle-shift': popupShiftPx + 'px',
+          '--block-handle-hshift': popupHShiftPx + 'px',
+        }"
         @pointerenter="onPopupEnter"
         @pointerleave="onPopupLeave"
       >
-      <BlockHandlePopup
-        class="block-handle-popup"
-        :data-uuid="blockUuid"
-        :class="{ 'popup-keep': popupKeep, 'forced-open': showPopup, 'ui-hidden': !showPopup }"
-        @pointerenter="onPopupEnter"
-        @pointerleave="onPopupLeave(); clearScrollbarHover()"
-        @pointermove="onPopupPointerMove"
-        @wheel="onPopupWheel"
-      >
-        <BlockHandleAdd class="block-handle-btn">
-          <v-icon :icon="mdiPlus" size="20" />
-        </BlockHandleAdd>
-        <BlockHandleDraggable
-          class="block-handle-btn block-handle-drag"
-          @pointerdown.prevent="onDragPointerDown"
+        <BlockHandlePopup
+          class="block-handle-popup"
+          :data-uuid="blockUuid"
+          :class="{
+            'popup-keep': popupKeep,
+            'forced-open': showPopup,
+            'ui-hidden': !showPopup,
+          }"
+          @pointerenter="onPopupEnter"
+          @pointerleave="
+            onPopupLeave();
+            clearScrollbarHover();
+          "
+          @pointermove="onPopupPointerMove"
+          @wheel="onPopupWheel"
         >
-          <v-icon :icon="mdiDragVerticalVariant" size="20" />
-        </BlockHandleDraggable>
-      </BlockHandlePopup>
+          <BlockHandleAdd class="block-handle-btn">
+            <v-icon :icon="mdiPlus" size="20" />
+          </BlockHandleAdd>
+          <BlockHandleDraggable
+            class="block-handle-btn block-handle-drag"
+            @pointerdown.prevent="onDragPointerDown"
+          >
+            <v-icon :icon="mdiDragVerticalVariant" size="20" />
+          </BlockHandleDraggable>
+        </BlockHandlePopup>
       </BlockHandlePositioner>
     </BlockHandleRoot>
   </Teleport>
 
   <!-- .vdr 的 transform/overflow 会裁剪 fixed 高亮，所以 Teleport 到 body -->
   <Teleport to="body">
-    <div v-if="highlightRect && !isDragging" class="block-handle-line-highlight" :class="`placement-${handlePlacement}`" :style="highlightStyle" />
+    <div
+      v-if="highlightRect && !isDragging"
+      class="block-handle-line-highlight"
+      :class="`placement-${handlePlacement}`"
+      :style="highlightStyle"
+    />
   </Teleport>
 </template>
 
@@ -324,7 +416,11 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
 }
 
 .block-handle-popup {
-  background-color: color-mix(in srgb, rgb(var(--v-theme-surface)) 90%, rgb(var(--v-theme-on-surface)) 10%);
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--v-theme-surface)) 90%,
+    rgb(var(--v-theme-on-surface)) 10%
+  );
   border-radius: 6px;
   margin-right: 12px;
   display: inline-flex;
@@ -333,7 +429,9 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
   padding: 2px;
   pointer-events: auto;
   box-sizing: border-box;
-  transition: opacity 0.1s, scale 0.1s;
+  transition:
+    opacity 0.1s,
+    scale 0.1s;
   transform-origin: var(--transform-origin, center);
   opacity: 1;
   position: relative;
@@ -344,7 +442,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
    桥接区**必须恰好跨过空隙**：过宽会盖住紧贴 popup 的文字（左/上/下）或文本右缘的滚动条（右）。
    故下方默认值只是「未量到空隙前」的保守兜底，真实尺寸由 syncBridgeGap() 实测后写入 CSS 变量。 */
 .block-handle-popup::before {
-  content: '';
+  content: "";
   position: absolute;
   pointer-events: auto;
 }
@@ -399,7 +497,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
   }
 }
 
-.block-handle-popup[data-state='closed'] {
+.block-handle-popup[data-state="closed"] {
   opacity: 0;
   scale: 0.95;
   transition-duration: 0.15s;
@@ -429,7 +527,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
 }
 
 @starting-style {
-  .block-handle-popup[data-state='open'] {
+  .block-handle-popup[data-state="open"] {
     opacity: 0;
     scale: 0.95;
   }
@@ -461,7 +559,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
   background-color: rgba(var(--v-theme-on-surface), 0.1);
 }
 
-:root[class*='dark'] .block-handle-btn:hover {
+:root[class*="dark"] .block-handle-btn:hover {
   background-color: rgba(var(--v-theme-on-surface), 0.08);
 }
 

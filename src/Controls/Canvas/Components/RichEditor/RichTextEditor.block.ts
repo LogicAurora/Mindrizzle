@@ -1,16 +1,16 @@
-import { mdiNoteText } from '@mdi/js'
+import { mdiNoteText } from "@mdi/js";
 
-import { defineBlock } from '../../Sdk/defineBlock.ts'
-import type { RichTextConfig } from '../../Registry/canvasComponents.ts'
-import { RICH_TEXT_CONSTRAINTS } from '../../Registry/componentConstraints.ts'
-import RichTextEditor from './RichTextEditor.vue'
+import { defineBlock } from "../../Sdk/defineBlock.ts";
+import type { RichTextConfig } from "../../Registry/canvasComponents.ts";
+import { RICH_TEXT_CONSTRAINTS } from "../../Registry/componentConstraints.ts";
+import RichTextEditor from "./RichTextEditor.vue";
 
 export default defineBlock<RichTextConfig>({
-  key: 'RichTextEditor',
-  title: '富文本',
-  description: '自由排版的文字块，支持标题与行内格式',
+  key: "RichTextEditor",
+  title: "富文本",
+  description: "自由排版的文字块，支持标题与行内格式",
   icon: mdiNoteText,
-  addId: 'add-rich',
+  addId: "add-rich",
   order: 10,
   constraints: RICH_TEXT_CONSTRAINTS,
   defaultConfig: () => ({ content: null }),
@@ -18,7 +18,7 @@ export default defineBlock<RichTextConfig>({
   // 高度由内容驱动，联结传播不能改它
   heightChangableOf: (config) => config.autoHeight !== true,
   acceptsDrop: true,
-  kind: 'raw',
+  kind: "raw",
   // 自带壳的块不能包异步组件：画布要直接拿到它的 expose（commands / saveConfig）
   rawComponent: RichTextEditor,
-})
+});

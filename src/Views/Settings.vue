@@ -1,31 +1,56 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { mdiInformationOutline, mdiPalette, mdiSwapVertical, mdiTuneVariant } from '@mdi/js'
+import { ref } from "vue";
+import { useRoute } from "vue-router";
+import {
+  mdiInformationOutline,
+  mdiPalette,
+  mdiSwapVertical,
+  mdiTuneVariant,
+} from "@mdi/js";
 
-import about from './SettingTabs/About.vue'
-import advanced from './SettingTabs/Advanced.vue'
-import appearance from './SettingTabs/Appearance.vue'
-import interfaceTab from './SettingTabs/Interface.vue'
+import about from "./SettingTabs/About.vue";
+import advanced from "./SettingTabs/Advanced.vue";
+import appearance from "./SettingTabs/Appearance.vue";
+import interfaceTab from "./SettingTabs/Interface.vue";
 
 const SETTINGS_TABS = [
-  { value: 'about', label: '关于', component: about, icon: mdiInformationOutline },
-  { value: 'appearance', label: '外观', component: appearance, icon: mdiPalette },
-  { value: 'interface', label: '界面', component: interfaceTab, icon: mdiSwapVertical },
-  { value: 'advanced', label: '高级', component: advanced, icon: mdiTuneVariant },
-] as const
-const DEFAULT_SETTINGS_TAB = SETTINGS_TABS[0].value
+  {
+    value: "about",
+    label: "关于",
+    component: about,
+    icon: mdiInformationOutline,
+  },
+  {
+    value: "appearance",
+    label: "外观",
+    component: appearance,
+    icon: mdiPalette,
+  },
+  {
+    value: "interface",
+    label: "界面",
+    component: interfaceTab,
+    icon: mdiSwapVertical,
+  },
+  {
+    value: "advanced",
+    label: "高级",
+    component: advanced,
+    icon: mdiTuneVariant,
+  },
+] as const;
+const DEFAULT_SETTINGS_TAB = SETTINGS_TABS[0].value;
 
-type SettingsTabValue = typeof SETTINGS_TABS[number]['value']
+type SettingsTabValue = (typeof SETTINGS_TABS)[number]["value"];
 
-const route = useRoute()
+const route = useRoute();
 
 // tab 只从路由入参取初值：写回路由会让 App.vue 的 :key="route.path" 重建整个设置页，切 tab 的滑窗动画就没了
-const tab = ref<SettingsTabValue>(resolveSettingsTab(route.params.tab))
+const tab = ref<SettingsTabValue>(resolveSettingsTab(route.params.tab));
 
 function resolveSettingsTab(value: unknown): SettingsTabValue {
-  const matched = SETTINGS_TABS.find((item) => item.value === value)
-  return matched?.value ?? DEFAULT_SETTINGS_TAB
+  const matched = SETTINGS_TABS.find((item) => item.value === value);
+  return matched?.value ?? DEFAULT_SETTINGS_TAB;
 }
 </script>
 
@@ -33,14 +58,30 @@ function resolveSettingsTab(value: unknown): SettingsTabValue {
   <v-sheet elevation="4" class="settings-host">
     <!-- tab 行进工具栏（App.vue 的 #toolbar-tabs）；defer 等 App 的 DOM 就绪，align-tabs="title" 让它与上方标题同左缘 -->
     <Teleport to="#toolbar-tabs" defer>
-      <v-tabs v-model="tab" class="settings-tabs" align-tabs="title" color="white" slider-color="white"
-        density="compact">
-        <v-tab v-for="item in SETTINGS_TABS" :prepend-icon="item.icon" :key="item.value" :value="item.value">{{ item.label }}</v-tab>
+      <v-tabs
+        v-model="tab"
+        class="settings-tabs"
+        align-tabs="title"
+        color="white"
+        slider-color="white"
+        density="compact"
+      >
+        <v-tab
+          v-for="item in SETTINGS_TABS"
+          :prepend-icon="item.icon"
+          :key="item.value"
+          :value="item.value"
+          >{{ item.label }}</v-tab
+        >
       </v-tabs>
     </Teleport>
 
     <v-tabs-window v-model="tab" class="settings-window">
-      <v-tabs-window-item v-for="item in SETTINGS_TABS" :key="item.value" :value="item.value">
+      <v-tabs-window-item
+        v-for="item in SETTINGS_TABS"
+        :key="item.value"
+        :value="item.value"
+      >
         <component :is="item.component" />
       </v-tabs-window-item>
     </v-tabs-window>

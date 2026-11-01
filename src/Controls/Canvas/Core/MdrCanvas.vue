@@ -1,77 +1,169 @@
 <template>
-  <v-sheet class="canvas-container" color="surface" :ref="setCanvasContainerRef" :style="containerStyle" @click="handleCanvasClick"
-    @mousedown="onCanvasMouseDown" @mousemove="onCanvasMousemove" @focusin="handleCanvasFocusin">
+  <v-sheet
+    class="canvas-container"
+    color="surface"
+    :ref="setCanvasContainerRef"
+    :style="containerStyle"
+    @click="handleCanvasClick"
+    @mousedown="onCanvasMouseDown"
+    @mousemove="onCanvasMousemove"
+    @focusin="handleCanvasFocusin"
+  >
     <!-- background-position 平移会每帧重绘整容器，所以独立成层用 transform 合成移动 -->
     <div class="canvas-dots" :style="dotsStyle" aria-hidden="true" />
     <!-- .canvas 平移后不覆盖整容器，所以事件挂容器级；data-layout-version 仅为订阅 layout 版本号（块已 markRaw） -->
-    <div class="canvas" :class="{ panning: isPanning }" :style="canvasStyle" :data-layout-version="layoutVersion"
-      ref="canvasRef">
+    <div
+      class="canvas"
+      :class="{ panning: isPanning }"
+      :style="canvasStyle"
+      :data-layout-version="layoutVersion"
+      ref="canvasRef"
+    >
       <!-- SVG 在非整数坐标下光栅化易断续，所以用 HTML 色条渲染 -->
       <div class="connection-layer" aria-hidden="true">
-        <div v-for="line in linkedConnections" :key="line.key" class="connection-segment"
-          :style="connectionSegmentStyle(line)" />
+        <div
+          v-for="line in linkedConnections"
+          :key="line.key"
+          class="connection-segment"
+          :style="connectionSegmentStyle(line)"
+        />
       </div>
       <!-- 虚拟化切换必须换 key：自带壳的块只有整体重建才会重新 mount 内部编辑器 -->
-      <component v-for="item in state.items"
+      <component
+        v-for="item in state.items"
         :key="`${item.uuid}-${mobileMode ? 'm' : 'd'}-${isVirtualized(item.uuid) ? 'v' : 'a'}`"
-        :is="blockHostOf(item)" :ref="componentRefOf(item)" v-bind="blockDefinitionPropsOf(item)" :config="item.config"
-        :virtualized="isVirtualized(item.uuid)" :snapshot="virtualSnapshots[item.uuid] ?? ''"
-        :base="blockBasePropsOf(item)" @resizestart="resizeCallbacksOf(item).start"
-        @resizing="resizeCallbacksOf(item).resizing" @resizestop="resizeCallbacksOf(item).resizestop"
-        @dragstart="onFloatingHandleDown(item, $event)" />
+        :is="blockHostOf(item)"
+        :ref="componentRefOf(item)"
+        v-bind="blockDefinitionPropsOf(item)"
+        :config="item.config"
+        :virtualized="isVirtualized(item.uuid)"
+        :snapshot="virtualSnapshots[item.uuid] ?? ''"
+        :base="blockBasePropsOf(item)"
+        @resizestart="resizeCallbacksOf(item).start"
+        @resizing="resizeCallbacksOf(item).resizing"
+        @resizestop="resizeCallbacksOf(item).resizestop"
+        @dragstart="onFloatingHandleDown(item, $event)"
+      />
 
       <v-fade-transition :duration="120">
-        <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle"></div>
+        <div
+          v-if="selectionBox"
+          class="selection-box"
+          :style="selectionBoxStyle"
+        ></div>
       </v-fade-transition>
 
       <!-- 描边需在拖拽栏之上保持连贯，所以用独立高层 overlay 渲染（data-uuid 供拖拽期命令式跟随） -->
       <template v-for="item in outlineRingItems" :key="`outline-${item.uuid}`">
         <v-fade-transition :duration="120">
-          <div class="selected-outline" :data-uuid="item.uuid" :style="selectedOutlineStyle(item)" />
+          <div
+            class="selected-outline"
+            :data-uuid="item.uuid"
+            :style="selectedOutlineStyle(item)"
+          />
         </v-fade-transition>
       </template>
 
       <!-- 多块贴合时各自外扩 2px 会在接触边叠成 4px 粗线，所以改为并集轮廓：外扩矩形盖白、块矩形挖黑 -->
       <!-- 并集是一整层画不出归属块，若取 outline 会盖住多选时悬停出的拖拽栏，所以降到拖拽栏下一层 -->
       <v-fade-transition :duration="120">
-        <svg v-if="outlineBands.length" class="selected-outline-union" :style="{ zIndex: Z_LAYER.dragHandle - 1 }" aria-hidden="true">
+        <svg
+          v-if="outlineBands.length"
+          class="selected-outline-union"
+          :style="{ zIndex: Z_LAYER.dragHandle - 1 }"
+          aria-hidden="true"
+        >
           <defs>
-            <mask :id="outlineMaskId" maskUnits="userSpaceOnUse" :x="outlineBounds.x" :y="outlineBounds.y"
-              :width="outlineBounds.w" :height="outlineBounds.h">
-              <rect v-for="band in outlineBands" :key="`outer-${band.uuid}`" class="outline-band-outer"
-                :data-uuid="band.uuid" :x="band.outer.x" :y="band.outer.y" :width="band.outer.w" :height="band.outer.h"
-                :rx="OUTLINE_RADIUS" fill="#fff" />
-              <rect v-for="band in outlineBands" :key="`inner-${band.uuid}`" class="outline-band-inner"
-                :data-uuid="band.uuid" :x="band.inner.x" :y="band.inner.y" :width="band.inner.w" :height="band.inner.h"
-                :rx="ROUNDED" fill="#000" />
+            <mask
+              :id="outlineMaskId"
+              maskUnits="userSpaceOnUse"
+              :x="outlineBounds.x"
+              :y="outlineBounds.y"
+              :width="outlineBounds.w"
+              :height="outlineBounds.h"
+            >
+              <rect
+                v-for="band in outlineBands"
+                :key="`outer-${band.uuid}`"
+                class="outline-band-outer"
+                :data-uuid="band.uuid"
+                :x="band.outer.x"
+                :y="band.outer.y"
+                :width="band.outer.w"
+                :height="band.outer.h"
+                :rx="OUTLINE_RADIUS"
+                fill="#fff"
+              />
+              <rect
+                v-for="band in outlineBands"
+                :key="`inner-${band.uuid}`"
+                class="outline-band-inner"
+                :data-uuid="band.uuid"
+                :x="band.inner.x"
+                :y="band.inner.y"
+                :width="band.inner.w"
+                :height="band.inner.h"
+                :rx="ROUNDED"
+                fill="#000"
+              />
             </mask>
           </defs>
-          <rect class="selected-outline-union-fill" :x="outlineBounds.x" :y="outlineBounds.y" :width="outlineBounds.w"
-            :height="outlineBounds.h" :mask="`url(#${outlineMaskId})`" />
+          <rect
+            class="selected-outline-union-fill"
+            :x="outlineBounds.x"
+            :y="outlineBounds.y"
+            :width="outlineBounds.w"
+            :height="outlineBounds.h"
+            :mask="`url(#${outlineMaskId})`"
+          />
         </svg>
       </v-fade-transition>
 
-      <div v-if="richTextDropTargetId" class="rich-text-drop-target"
-        :style="richTextDropTargetStyle" aria-hidden="true" />
+      <div
+        v-if="richTextDropTargetId"
+        class="rich-text-drop-target"
+        :style="richTextDropTargetStyle"
+        aria-hidden="true"
+      />
 
       <!-- 落点线要随画布 zoom/pan 变换，所以用 content 坐标定位在 .canvas 内 -->
-      <div v-if="richTextDrop" class="rich-text-drop-line" :style="richTextDropLineStyle" aria-hidden="true" />
+      <div
+        v-if="richTextDrop"
+        class="rich-text-drop-line"
+        :style="richTextDropLineStyle"
+        aria-hidden="true"
+      />
 
       <template v-for="p in paperclipCandidates" :key="`clip-${p.a}-${p.b}`">
-        <div class="snap-paperclip" v-show="nearClipKey === p.key" :class="{ linked: p.linked }"
+        <div
+          class="snap-paperclip"
+          v-show="nearClipKey === p.key"
+          :class="{ linked: p.linked }"
           :style="{ left: `${roundToPx(p.x)}px`, top: `${roundToPx(p.y)}px` }"
           :title="p.linked ? '点击分离' : '点击粘贴'"
-          @mousedown.stop @click.stop="toggleLink(p.a, p.b)">
+          @mousedown.stop
+          @click.stop="toggleLink(p.a, p.b)"
+        >
           <v-icon size="16" :icon="mdiPaperclip" />
         </div>
       </template>
 
-      <div v-if="addPreviewPos && addPreviewKey && previewVisible" class="add-preview" :style="addPreviewStyle">
-        <span class="add-preview-label">{{ componentLabelOf(addPreviewKey) }}</span>
+      <div
+        v-if="addPreviewPos && addPreviewKey && previewVisible"
+        class="add-preview"
+        :style="addPreviewStyle"
+      >
+        <span class="add-preview-label">{{
+          componentLabelOf(addPreviewKey)
+        }}</span>
       </div>
     </div>
     <!-- 箭头用屏幕坐标、不随画布变换，所以定位在容器层 -->
-    <div v-if="addPreviewPos && addPreviewKey && !previewVisible" class="add-preview-arrow" :style="previewArrowStyle">
+    <div
+      v-if="addPreviewPos && addPreviewKey && !previewVisible"
+      class="add-preview-arrow"
+      :style="previewArrowStyle"
+    >
       <v-icon :icon="mdiArrowUp" size="16" />
     </div>
   </v-sheet>
@@ -85,13 +177,26 @@ export type {
   CodeBlockConfig,
   ImageBlockConfig,
   WidgetConfig,
-} from '../Registry/canvasComponents.ts'
+} from "../Registry/canvasComponents.ts";
 </script>
 
 <script setup lang="ts">
-import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, watch, markRaw, useId, type Component, type CSSProperties } from 'vue'
+import {
+  reactive,
+  ref,
+  shallowRef,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  computed,
+  watch,
+  markRaw,
+  useId,
+  type Component,
+  type CSSProperties,
+} from "vue";
 
-import { mdiPaperclip, mdiArrowUp } from '@mdi/js'
+import { mdiPaperclip, mdiArrowUp } from "@mdi/js";
 import {
   CANVAS_COMPONENTS,
   DEFAULT_COMPONENT_KEY,
@@ -104,10 +209,10 @@ import {
   type ComponentController,
   type Rect,
   type WidgetConfig,
-} from '../Registry/canvasComponents.ts'
-import { blockDefinitionOf, embeddedBlockOf } from '../Sdk/blockRegistry.ts'
-import type { AnyBlockDefinition, BlockEnv } from '../Sdk/block.types.ts'
-import PluginBlockHost from '../Sdk/PluginBlockHost.vue'
+} from "../Registry/canvasComponents.ts";
+import { blockDefinitionOf, embeddedBlockOf } from "../Sdk/blockRegistry.ts";
+import type { AnyBlockDefinition, BlockEnv } from "../Sdk/block.types.ts";
+import PluginBlockHost from "../Sdk/PluginBlockHost.vue";
 import {
   handleBarStyleOf,
   sideSettingsStyleOf,
@@ -117,144 +222,183 @@ import {
   OUTLINE_PX,
   type EdgeMask,
   type HandlePlacement,
-} from './blockFloatGeometry.ts'
-import type { BlockInteractionHandlers, BlockSize, CanvasViewData } from './canvasComponentControllers.ts'
-import type { MdrCanvasComponentShellProps } from './MdrCanvasComponentBase.types.ts'
-import type { ResizeConstraints } from '../Registry/resizeConstraints.ts'
-import { Z_LAYER } from './zIndex.ts'
-import { isTauri } from '@tauri-apps/api/core'
-import { error as logError } from '@tauri-apps/plugin-log'
-import { roundToVisual, contentToScreen, screenToContent, contentToVisual, type CanvasTransform, type Point, type ViewportOrigin } from '../../../utils/canvasCoords.ts'
-import { generateBlockUuid } from '../../../utils/blockUuid.ts'
+} from "./blockFloatGeometry.ts";
+import type {
+  BlockInteractionHandlers,
+  BlockSize,
+  CanvasViewData,
+} from "./canvasComponentControllers.ts";
+import type { MdrCanvasComponentShellProps } from "./MdrCanvasComponentBase.types.ts";
+import type { ResizeConstraints } from "../Registry/resizeConstraints.ts";
+import { Z_LAYER } from "./zIndex.ts";
+import { isTauri } from "@tauri-apps/api/core";
+import { error as logError } from "@tauri-apps/plugin-log";
+import {
+  roundToVisual,
+  contentToScreen,
+  screenToContent,
+  contentToVisual,
+  type CanvasTransform,
+  type Point,
+  type ViewportOrigin,
+} from "../../../utils/canvasCoords.ts";
+import { generateBlockUuid } from "../../../utils/blockUuid.ts";
 import type {
   ClipboardBlock,
   ClipboardEntry,
   ClipboardSnapshot,
   ClipboardSource,
-} from '../../../utils/blockClipboard.ts'
-import { copyComponentFiles } from '../../../utils/componentDataStore.ts'
-import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
-import { getCurrentNote } from '../../../utils/noteContext.ts'
-import { getVisibleBlockRect, isFullyVisibleInCanvas, invalidateCanvasScaleCache } from '../Components/RichEditor/extensions/blockHandleUtils.ts'
+} from "../../../utils/blockClipboard.ts";
+import { copyComponentFiles } from "../../../utils/componentDataStore.ts";
+import { getErrorMessage } from "../../../utils/getErrorMessage.ts";
+import { getCurrentNote } from "../../../utils/noteContext.ts";
+import {
+  getVisibleBlockRect,
+  isFullyVisibleInCanvas,
+  invalidateCanvasScaleCache,
+} from "../Components/RichEditor/extensions/blockHandleUtils.ts";
 
-import { useDisplay } from 'vuetify'
+import { useDisplay } from "vuetify";
 
 // #region 显示模式
-const { xs } = useDisplay()
-const isMobile = computed(() => xs.value)
+const { xs } = useDisplay();
+const isMobile = computed(() => xs.value);
 
 // 要支持三态调试，所以 null 表示不强制、走真实断点
-const forceMobile = ref<boolean | null>(null)
-const mobileMode = computed(() => (forceMobile.value === null ? isMobile.value : forceMobile.value))
+const forceMobile = ref<boolean | null>(null);
+const mobileMode = computed(() =>
+  forceMobile.value === null ? isMobile.value : forceMobile.value,
+);
 
 const nextForceMobile = (): boolean | null => {
-  if (forceMobile.value === null) return true
-  if (forceMobile.value === true) return false
-  return null
-}
+  if (forceMobile.value === null) return true;
+  if (forceMobile.value === true) return false;
+  return null;
+};
 
-const isEditMode = ref(true)
+const isEditMode = ref(true);
 // #endregion 显示模式
 
 // #region 画布状态与 z 层
 const state = reactive({
   items: [] as CanvasItem[],
   selectedIds: new Set<string>(),
-})
+});
 
 // 块对象已 markRaw（拖拽逐帧写 layout 不再触发全表 diff），所以纯几何变更须经版本号显式刷新
-const layoutVersion = ref(0)
-const markLayoutDirty = () => { layoutVersion.value++ }
+const layoutVersion = ref(0);
+const markLayoutDirty = () => {
+  layoutVersion.value++;
+};
 
 // 叠加层 z 固定（见 zIndex.ts），所以 zCounter 达阈值时按当前顺序重排为 1..N，防普通块盖住叠加层
-const zMap = reactive<Record<string, number>>({})
-let zCounter = 0
-const Z_LIMIT = Z_LAYER.itemZLimit
-const itemZ = (id: string): number => zMap[id] ?? 0
+const zMap = reactive<Record<string, number>>({});
+let zCounter = 0;
+const Z_LIMIT = Z_LAYER.itemZLimit;
+const itemZ = (id: string): number => zMap[id] ?? 0;
 const normalizeZMap = () => {
-  const ids = Object.keys(zMap).sort((a, b) => zMap[a] - zMap[b])
-  ids.forEach((id, i) => { zMap[id] = i + 1 })
-  zCounter = ids.length
-}
+  const ids = Object.keys(zMap).sort((a, b) => zMap[a] - zMap[b]);
+  ids.forEach((id, i) => {
+    zMap[id] = i + 1;
+  });
+  zCounter = ids.length;
+};
 const bringToTop = (id: string) => {
-  if (zMap[id] === zCounter && zCounter > 0) return
-  zMap[id] = ++zCounter
-  if (zCounter >= Z_LIMIT) normalizeZMap()
-}
+  if (zMap[id] === zCounter && zCounter > 0) return;
+  zMap[id] = ++zCounter;
+  if (zCounter >= Z_LIMIT) normalizeZMap();
+};
 
 // 邻块会盖住块边缘内侧的缩放手柄，所以选中块 z 取 Z_LAYER.selectedBlock 提层
-const SELECTED_Z_BASE = Z_LAYER.selectedBlock
+const SELECTED_Z_BASE = Z_LAYER.selectedBlock;
 const blockZ = (id: string): number => {
-  const isSelected = isEditMode.value && state.selectedIds.has(id)
-  const isDragging = customDrag.active && customDrag.draggingUuids.has(id)
-  const base = isSelected ? SELECTED_Z_BASE : 0
-  return Math.max(itemZ(id), isDragging ? Z_LAYER.dragHandle : base)
-}
+  const isSelected = isEditMode.value && state.selectedIds.has(id);
+  const isDragging = customDrag.active && customDrag.draggingUuids.has(id);
+  const base = isSelected ? SELECTED_Z_BASE : 0;
+  return Math.max(itemZ(id), isDragging ? Z_LAYER.dragHandle : base);
+};
 
-const isActive = (id: string): boolean => isEditMode.value && state.selectedIds.has(id)
+const isActive = (id: string): boolean =>
+  isEditMode.value && state.selectedIds.has(id);
 
-const componentRefs = ref<Record<string, ComponentController | undefined>>({})
-const canvasRef = ref<HTMLElement | null>(null)
-const canvasContainerRef = ref<HTMLElement | null>(null)
+const componentRefs = ref<Record<string, ComponentController | undefined>>({});
+const canvasRef = ref<HTMLElement | null>(null);
+const canvasContainerRef = ref<HTMLElement | null>(null);
 
 // Vuetify 组件 ref 是实例而非 DOM，所以经 $el 取根元素
 const setCanvasContainerRef = (el: unknown) => {
-  canvasContainerRef.value = (el as { $el?: HTMLElement } | null)?.$el ?? (el as HTMLElement | null)
-}
-const canvasWidth = ref(0)
+  canvasContainerRef.value =
+    (el as { $el?: HTMLElement } | null)?.$el ?? (el as HTMLElement | null);
+};
+const canvasWidth = ref(0);
 // 每帧读取容器矩形会触发 reflow，所以缓存并在挂载/resize 时刷新
-const viewRect = ref<{ left: number; top: number; right: number; bottom: number } | null>(null)
+const viewRect = ref<{
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} | null>(null);
 const refreshViewRect = () => {
-  const cr = canvasContainerRef.value?.getBoundingClientRect()
-  viewRect.value = cr ? { left: cr.left, top: cr.top, right: cr.right, bottom: cr.bottom } : null
-}
+  const cr = canvasContainerRef.value?.getBoundingClientRect();
+  viewRect.value = cr
+    ? { left: cr.left, top: cr.top, right: cr.right, bottom: cr.bottom }
+    : null;
+};
 // #endregion 画布状态与 z 层
 
 // 平移无界，所以点阵背景固定在视口容器上
 // #region 平移与原点重定位
-const pan = reactive({ x: 0, y: 0 })
-const isPanning = ref(false)
+const pan = reactive({ x: 0, y: 0 });
+const isPanning = ref(false);
 
 // 坐标无限增长会溢出，所以过大时把块坐标整体并入 origin 重定位（屏幕位置不变）
-const origin = reactive({ x: 0, y: 0 })
+const origin = reactive({ x: 0, y: 0 });
 
 // 换算需统一的 zoom/origin/pan，所以构造一次性快照
 const canvasTransform = (): CanvasTransform => ({
   zoom: zoom.value,
   origin: { x: origin.x, y: origin.y },
   pan: { x: pan.x, y: pan.y },
-})
+});
 
 const rebaseOrigin = (offset: { x: number; y: number }) => {
-  const dx = Math.round(offset.x) || 0
-  const dy = Math.round(offset.y) || 0
-  if (!dx && !dy) return
+  const dx = Math.round(offset.x) || 0;
+  const dy = Math.round(offset.y) || 0;
+  if (!dx && !dy) return;
   // 移动端锁水平，所以仅竖直重定位且两端同步，保证切换模式后位置一致
-  const effDx = mobileMode.value ? 0 : dx
+  const effDx = mobileMode.value ? 0 : dx;
   state.items.forEach((item) => {
-    item.layout.desktop.x -= effDx
-    item.layout.desktop.y -= dy
-    item.layout.mobile.y -= dy
-  })
-  origin.x += effDx
-  origin.y += dy
-}
+    item.layout.desktop.x -= effDx;
+    item.layout.desktop.y -= dy;
+    item.layout.mobile.y -= dy;
+  });
+  origin.x += effDx;
+  origin.y += dy;
+};
 
-const ORIGIN_REBASE_THRESHOLD = 1_000_000
+const ORIGIN_REBASE_THRESHOLD = 1_000_000;
 const maybeRebaseOrigin = () => {
-  if (state.items.length === 0) return
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  if (state.items.length === 0) return;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   state.items.forEach((it) => {
-    const l = it.layout.desktop
-    if (l.x < minX) minX = l.x
-    if (l.y < minY) minY = l.y
-    if (l.x > maxX) maxX = l.x
-    if (l.y > maxY) maxY = l.y
-  })
-  const maxAbs = Math.max(Math.abs(minX), Math.abs(maxX), Math.abs(minY), Math.abs(maxY))
-  if (maxAbs <= ORIGIN_REBASE_THRESHOLD) return
-  rebaseOrigin({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 })
-}
+    const l = it.layout.desktop;
+    if (l.x < minX) minX = l.x;
+    if (l.y < minY) minY = l.y;
+    if (l.x > maxX) maxX = l.x;
+    if (l.y > maxY) maxY = l.y;
+  });
+  const maxAbs = Math.max(
+    Math.abs(minX),
+    Math.abs(maxX),
+    Math.abs(minY),
+    Math.abs(maxY),
+  );
+  if (maxAbs <= ORIGIN_REBASE_THRESHOLD) return;
+  rebaseOrigin({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
+};
 
 const panSession = reactive({
   active: false,
@@ -262,61 +406,66 @@ const panSession = reactive({
   startClientY: 0,
   startPanX: 0,
   startPanY: 0,
-})
+});
 // #endregion 平移与原点重定位
 
 // zoom 供 canvas 变换与各交互换算共用（交互坐标按 /zoom 换算）
 // #region 缩放与画布变换
-const zoom = ref(1)
+const zoom = ref(1);
 // zoom 下几何值需对齐视觉像素，所以避免边框/浮层落在半像素
-const roundToPx = (v: number) => roundToVisual(zoom.value, v)
-const visualY = (v: number) => contentToVisual(canvasTransform(), 0, v).y
+const roundToPx = (v: number) => roundToVisual(zoom.value, v);
+const visualY = (v: number) => contentToVisual(canvasTransform(), 0, v).y;
 
 // .canvas 以左上角为缩放锚点会让中心内容跑偏，所以以容器中心反解补偿 pan
-let zoomAnchorPrev = 1
+let zoomAnchorPrev = 1;
 watch(zoom, (z2) => {
-  const z1 = zoomAnchorPrev
-  zoomAnchorPrev = z2
-  if (z1 === z2) return
-  const cont = canvasContainerRef.value
-  if (!cont) return
-  const w = cont.clientWidth
-  const h = cont.clientHeight
-  if (!mobileMode.value) pan.x = Math.round(pan.x + (w / 2 - (pan.x + origin.x)) * (1 - z2 / z1))
-  pan.y = Math.round(pan.y + (h / 2 - (pan.y + origin.y)) * (1 - z2 / z1))
-})
+  const z1 = zoomAnchorPrev;
+  zoomAnchorPrev = z2;
+  if (z1 === z2) return;
+  const cont = canvasContainerRef.value;
+  if (!cont) return;
+  const w = cont.clientWidth;
+  const h = cont.clientHeight;
+  if (!mobileMode.value)
+    pan.x = Math.round(pan.x + (w / 2 - (pan.x + origin.x)) * (1 - z2 / z1));
+  pan.y = Math.round(pan.y + (h / 2 - (pan.y + origin.y)) * (1 - z2 / z1));
+});
 
 // block-handle 弹层为 fixed 视口定位、需随画布重算，所以 pan/zoom 变化时派发事件（post flush 等变换落到 DOM）
 watch(
   () => [pan.x, pan.y, zoom.value],
   () => {
     // 监听者会立即反查画布缩放系数，须在派发前失效其缓存（否则拿到上一帧的系数）
-    invalidateCanvasScaleCache()
+    invalidateCanvasScaleCache();
     // pan 纯平移不影响高度，所以仅 zoom 变化需重测
-    window.dispatchEvent(new CustomEvent('Mindrizzle:canvas-transform', { detail: { zoom: zoom.value } }))
+    window.dispatchEvent(
+      new CustomEvent("Mindrizzle:canvas-transform", {
+        detail: { zoom: zoom.value },
+      }),
+    );
     // zoom 变化会让子组件用冻结的 prop 重写 transform，所以拖拽中须在渲染落定后补写命令式位置
-    if (customDrag.active) syncDragDom()
+    if (customDrag.active) syncDragDom();
     // 可见集随平移/缩放变化，所以此处同步重算（延到 rAF 会让快照多留一帧）
-    reconcileVirtualBlocks()
+    reconcileVirtualBlocks();
   },
-  { flush: 'post' },
-)
+  { flush: "post" },
+);
 
 // zoom 会同步放大 translate，所以平移量除以 zoom；屏幕位置 = content*zoom + pan + origin
 const canvasStyle = computed<CSSProperties>(() => ({
   zoom: zoom.value,
   transform: `translate(${Math.round((pan.x + origin.x) / zoom.value)}px, ${Math.round((pan.y + origin.y) / zoom.value)}px)`,
-  transformOrigin: '0 0',
-}))
+  transformOrigin: "0 0",
+}));
 // #endregion 缩放与画布变换
 
 // 点阵需随 pan 平移且附着内容网格，所以周期取 tile*zoom，按 (pan+origin+extend) 对周期取余对齐原点
 // #region 点阵背景与容器样式
-const DOTS_TILE = 24
+const DOTS_TILE = 24;
 const dotsStyle = computed<CSSProperties>(() => {
-  const period = DOTS_TILE * zoom.value
-  const extend = period
-  const mod = (v: number) => ((v % period) + period) % period
+  const period = DOTS_TILE * zoom.value;
+  const extend = period;
+  const mod = (v: number) => ((v % period) + period) % period;
   return {
     top: `${-extend}px`,
     left: `${-extend}px`,
@@ -324,238 +473,275 @@ const dotsStyle = computed<CSSProperties>(() => {
     bottom: `${-extend}px`,
     backgroundSize: `${period}px ${period}px`,
     transform: `translate3d(${mod(pan.x + origin.x + extend)}px, ${mod(pan.y + origin.y + extend)}px, 0)`,
-  }
-})
+  };
+});
 
 const containerStyle = computed<CSSProperties>(() => ({
   // scoped CSS 的 min-height:0 在 v-sheet 上未生效，所以 inline 强制允许收缩（否则溢出处竖向滚动条）
-  minHeight: '0',
-  '--canvas-zoom': zoom.value,
-}))
+  minHeight: "0",
+  "--canvas-zoom": zoom.value,
+}));
 // #endregion 点阵背景与容器样式
 
 // 块被拖到视口边缘时按距边缘距离驱动每帧自动平移
 // #region 自动平移
-const AUTOPAN_EDGE = 32
+const AUTOPAN_EDGE = 32;
 // 每帧 8px 易被感知为突然滚动，所以降为 6px
-const AUTOPAN_MAX = 6
-const autoPan = reactive({ active: false })
-const lastMouse = { x: 0, y: 0 }
+const AUTOPAN_MAX = 6;
+const autoPan = reactive({ active: false });
+const lastMouse = { x: 0, y: 0 };
 // 箭头需按方向角定位，所以用响应式鼠标屏幕坐标（lastMouse 仅供 autoPan）
-const mouseScreen = ref({ x: -9999, y: -9999 })
+const mouseScreen = ref({ x: -9999, y: -9999 });
 
 const updateMousePos = (e: MouseEvent) => {
-  const target = e.target as HTMLElement
-  const isCanvasTarget = target.closest?.('.canvas-container') === canvasContainerRef.value
-  const hasActivePointerSession = selectionState.active || customDrag.active || !!resizeSession || panSession.active
-  if (!isCanvasTarget && !hasActivePointerSession) return
-  lastMouse.x = e.clientX
-  lastMouse.y = e.clientY
-  mouseScreen.value = { x: e.clientX, y: e.clientY }
+  const target = e.target as HTMLElement;
+  const isCanvasTarget =
+    target.closest?.(".canvas-container") === canvasContainerRef.value;
+  const hasActivePointerSession =
+    selectionState.active ||
+    customDrag.active ||
+    !!resizeSession ||
+    panSession.active;
+  if (!isCanvasTarget && !hasActivePointerSession) return;
+  lastMouse.x = e.clientX;
+  lastMouse.y = e.clientY;
+  mouseScreen.value = { x: e.clientX, y: e.clientY };
   // 交互中指针不会落在块间连接点，所以清空曲别针避免干扰拖拽
   if (hasActivePointerSession) {
-    if (nearClipKey.value) nearClipKey.value = null
-    return
+    if (nearClipKey.value) nearClipKey.value = null;
+    return;
   }
-  updateNearClip(e.clientX, e.clientY)
-}
+  updateNearClip(e.clientX, e.clientY);
+};
 
 // 往调小方向滚会让块达钳制后偏离鼠标，所以按被拖边过滤；该轴已钳制则整轴禁滚
-const restrictResizeAutoPan = (vx: number, vy: number): { vx: number; vy: number } => {
-  const rs = resizeSession
-  if (!rs) return { vx, vy }
-  const item = state.items.find((it) => it.uuid === rs.uuid)
-  if (!item) return { vx, vy }
-  const handle = rs.handle
-  const c = constraintsOf(item)
-  const minW = (c.minWidth ?? 0) + 8, maxW = c.maxWidth ?? null
-  const minH = (c.minHeight ?? 0) + 8, maxH = c.maxHeight ?? null
+const restrictResizeAutoPan = (
+  vx: number,
+  vy: number,
+): { vx: number; vy: number } => {
+  const rs = resizeSession;
+  if (!rs) return { vx, vy };
+  const item = state.items.find((it) => it.uuid === rs.uuid);
+  if (!item) return { vx, vy };
+  const handle = rs.handle;
+  const c = constraintsOf(item);
+  const minW = (c.minWidth ?? 0) + 8,
+    maxW = c.maxWidth ?? null;
+  const minH = (c.minHeight ?? 0) + 8,
+    maxH = c.maxHeight ?? null;
   // 组件已按 min/max 钳制 lastBase，所以带 0.5 容差防浮点抖动
-  const wClamped = rs.lastBase.w <= minW + 0.5 || (maxW != null && rs.lastBase.w >= maxW - 0.5)
-  const hClamped = rs.lastBase.h <= minH + 0.5 || (maxH != null && rs.lastBase.h >= maxH - 0.5)
+  const wClamped =
+    rs.lastBase.w <= minW + 0.5 ||
+    (maxW != null && rs.lastBase.w >= maxW - 0.5);
+  const hClamped =
+    rs.lastBase.h <= minH + 0.5 ||
+    (maxH != null && rs.lastBase.h >= maxH - 0.5);
   // 对角线手柄含两方向，所以水平按 r/l、垂直按 b/t 分别处理
   if (vx) {
-    if (handle.includes('r') && (vx > 0 || wClamped)) vx = 0
-    else if (handle.includes('l') && (vx < 0 || wClamped)) vx = 0
+    if (handle.includes("r") && (vx > 0 || wClamped)) vx = 0;
+    else if (handle.includes("l") && (vx < 0 || wClamped)) vx = 0;
   }
   if (vy) {
-    if (handle.includes('b') && (vy > 0 || hClamped)) vy = 0
-    else if (handle.includes('t') && (vy < 0 || hClamped)) vy = 0
+    if (handle.includes("b") && (vy > 0 || hClamped)) vy = 0;
+    else if (handle.includes("t") && (vy < 0 || hClamped)) vy = 0;
   }
-  return { vx, vy }
-}
+  return { vx, vy };
+};
 
 // 提取鼠标距视口边缘的速度，供 tick 滚动与 resize 联结传播判定复用
 const autoPanVelocity = (): { vx: number; vy: number } => {
   // 每帧调用会强制 reflow，所以用缓存的容器矩形
-  const r = viewRect.value
-  if (!r) return { vx: 0, vy: 0 }
-  let vx = 0
-  let vy = 0
-  if (lastMouse.x < r.left + AUTOPAN_EDGE) vx = Math.min(r.left + AUTOPAN_EDGE - lastMouse.x, AUTOPAN_MAX)
-  else if (lastMouse.x > r.right - AUTOPAN_EDGE) vx = -Math.min(lastMouse.x - (r.right - AUTOPAN_EDGE), AUTOPAN_MAX)
-  if (lastMouse.y < r.top + AUTOPAN_EDGE) vy = Math.min(r.top + AUTOPAN_EDGE - lastMouse.y, AUTOPAN_MAX)
-  else if (lastMouse.y > r.bottom - AUTOPAN_EDGE) vy = -Math.min(lastMouse.y - (r.bottom - AUTOPAN_EDGE), AUTOPAN_MAX)
-  return { vx, vy }
-}
+  const r = viewRect.value;
+  if (!r) return { vx: 0, vy: 0 };
+  let vx = 0;
+  let vy = 0;
+  if (lastMouse.x < r.left + AUTOPAN_EDGE)
+    vx = Math.min(r.left + AUTOPAN_EDGE - lastMouse.x, AUTOPAN_MAX);
+  else if (lastMouse.x > r.right - AUTOPAN_EDGE)
+    vx = -Math.min(lastMouse.x - (r.right - AUTOPAN_EDGE), AUTOPAN_MAX);
+  if (lastMouse.y < r.top + AUTOPAN_EDGE)
+    vy = Math.min(r.top + AUTOPAN_EDGE - lastMouse.y, AUTOPAN_MAX);
+  else if (lastMouse.y > r.bottom - AUTOPAN_EDGE)
+    vy = -Math.min(lastMouse.y - (r.bottom - AUTOPAN_EDGE), AUTOPAN_MAX);
+  return { vx, vy };
+};
 
 // resize 时按被拖方向限制滚动速度
 const restrictedPanVelocity = () => {
-  const { vx, vy } = autoPanVelocity()
-  return restrictResizeAutoPan(vx, vy)
-}
+  const { vx, vy } = autoPanVelocity();
+  return restrictResizeAutoPan(vx, vy);
+};
 
 // zoom≠1 时 pan 与块补偿取整无法抵消会长期漂移，所以用浮点残差累加器跨整补偿
-const panCompAcc = reactive({ x: 0, y: 0 })
+const panCompAcc = reactive({ x: 0, y: 0 });
 
 const autoPanTick = (frame: number) => {
-  if (!autoPan.active) return
-  const targetId = richTextDropTargetId.value
-  const target = targetId ? richTextTargetForFrame(targetId, frame) : null
-  const viewport = viewRect.value
-  const pointer = target && viewport ? screenToContent(canvasTransform(), viewport, lastMouse.x, lastMouse.y) : null
+  if (!autoPan.active) return;
+  const targetId = richTextDropTargetId.value;
+  const target = targetId ? richTextTargetForFrame(targetId, frame) : null;
+  const viewport = viewRect.value;
+  const pointer =
+    target && viewport
+      ? screenToContent(canvasTransform(), viewport, lastMouse.x, lastMouse.y)
+      : null;
   // 块完全可见时块内滚动与画布平移会互相拉扯，所以只在块未完全显示时平移画布（commit 767ea68 规则）
-  const shouldPrioritizeRichText = !!target && !!pointer &&
-    isTargetVisibleForFrame(target.pmEl, frame) && isPointerInsideRichText(target, pointer)
-  const { vx: rx, vy: ry } = restrictedPanVelocity()
+  const shouldPrioritizeRichText =
+    !!target &&
+    !!pointer &&
+    isTargetVisibleForFrame(target.pmEl, frame) &&
+    isPointerInsideRichText(target, pointer);
+  const { vx: rx, vy: ry } = restrictedPanVelocity();
   if (!shouldPrioritizeRichText && (rx !== 0 || ry !== 0)) {
     // pan 是外部像素平移，按视口像素直接累加
-    const sx = mobileMode.value ? 0 : Math.round(rx)
-    const sy = Math.round(ry)
-    if (!mobileMode.value) pan.x += sx
-    pan.y += sy
+    const sx = mobileMode.value ? 0 : Math.round(rx);
+    const sy = Math.round(ry);
+    if (!mobileMode.value) pan.x += sx;
+    pan.y += sy;
     // 块屏幕位置 = 块坐标*z + pan，所以需补偿被拖块坐标（移动端锁水平只补偿竖向）
-    panCompAcc.x += mobileMode.value ? 0 : -sx / zoom.value
-    panCompAcc.y += -sy / zoom.value
-    const compX = Math.round(panCompAcc.x)
-    const compY = Math.round(panCompAcc.y)
-    panCompAcc.x -= compX
-    panCompAcc.y -= compY
+    panCompAcc.x += mobileMode.value ? 0 : -sx / zoom.value;
+    panCompAcc.y += -sy / zoom.value;
+    const compX = Math.round(panCompAcc.x);
+    const compY = Math.round(panCompAcc.y);
+    panCompAcc.x -= compX;
+    panCompAcc.y -= compY;
     // 框选等场景无被拖块，所以仅 customDrag.active 时补偿，避免残留块被误移动
     if (customDrag.active) {
       customDragItems.forEach((dragTarget) => {
-        const layout = layoutOf(dragTarget)
-        if (!mobileMode.value) layout.x += compX
-        layout.y += compY
-      })
-      richTextDropTargetId.value = findRichTextDropTarget()
+        const layout = layoutOf(dragTarget);
+        if (!mobileMode.value) layout.x += compX;
+        layout.y += compY;
+      });
+      richTextDropTargetId.value = findRichTextDropTarget();
       // 鼠标可能停住、applyCustomDrag 不跑，所以补偿后必须在此同步 DOM
-      flushDragLayout()
+      flushDragLayout();
     }
     // resize 时被拖块坐标受组件控制，所以按基准矩形 + 相对起始 pan 位移重算，使手柄跟随鼠标
-    compensateResizeAutoPan()
+    compensateResizeAutoPan();
     // 框选时无 mousemove 驱动，所以用最近鼠标位置每帧刷新选框
-    if (selectionState.active) updateSelectionAt(lastMouse.x, lastMouse.y)
+    if (selectionState.active) updateSelectionAt(lastMouse.x, lastMouse.y);
   }
-  if (customDrag.active) updateRichTextDrop(frame)
-  requestAnimationFrame(autoPanTick)
-}
+  if (customDrag.active) updateRichTextDrop(frame);
+  requestAnimationFrame(autoPanTick);
+};
 
 const startAutoPan = () => {
-  if (autoPan.active) return
-  autoPan.active = true
-  requestAnimationFrame(autoPanTick)
-}
+  if (autoPan.active) return;
+  autoPan.active = true;
+  requestAnimationFrame(autoPanTick);
+};
 
 const stopAutoPan = () => {
-  autoPan.active = false
-  panCompAcc.x = 0
-  panCompAcc.y = 0
-}
+  autoPan.active = false;
+  panCompAcc.x = 0;
+  panCompAcc.y = 0;
+};
 // #endregion 自动平移
 
 // #region 手动平移（右键拖拽）
 const startPan = (e: MouseEvent) => {
   // 任意位置右键都要能平移，所以不依赖 Vue 的 .right 修饰符
-  if (e.button !== 2) return
-  e.preventDefault()
-  panSession.active = true
-  panSession.startClientX = e.clientX
-  panSession.startClientY = e.clientY
-  panSession.startPanX = pan.x
-  panSession.startPanY = pan.y
-  isPanning.value = true
-}
+  if (e.button !== 2) return;
+  e.preventDefault();
+  panSession.active = true;
+  panSession.startClientX = e.clientX;
+  panSession.startClientY = e.clientY;
+  panSession.startPanX = pan.x;
+  panSession.startPanY = pan.y;
+  isPanning.value = true;
+};
 
 // mousedown 捕获阶段读 e.buttons 不可靠，所以单独跟踪左键按下
-let leftButtonDown = false
+let leftButtonDown = false;
 const trackLeftButtonDown = (e: MouseEvent) => {
-  if (e.button === 0) leftButtonDown = true
-}
+  if (e.button === 0) leftButtonDown = true;
+};
 const trackLeftButtonUp = () => {
-  leftButtonDown = false
-}
+  leftButtonDown = false;
+};
 
 // 容器监听会随重挂载失效且编辑器会拦截右键，所以在 window 捕获阶段统一处理
 const onGlobalMouseDownCapture = (e: MouseEvent) => {
-  if (e.button !== 2) return
-  if (!(e.target as HTMLElement).closest?.('.canvas-container')) return
-  if (customDrag.active || resizeSession || selectionState.active || leftButtonDown) {
-    e.preventDefault()
-    e.stopPropagation()
-    return
+  if (e.button !== 2) return;
+  if (!(e.target as HTMLElement).closest?.(".canvas-container")) return;
+  if (
+    customDrag.active ||
+    resizeSession ||
+    selectionState.active ||
+    leftButtonDown
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
   }
-  startPan(e)
-  e.stopPropagation()
-}
+  startPan(e);
+  e.stopPropagation();
+};
 
 // ProseMirror 会 stopPropagation 拦截右键，所以在捕获阶段拦截
 const handleCanvasMouseDownCapture = (e: MouseEvent) => {
-  if (e.button !== 2) return
+  if (e.button !== 2) return;
   // 左键会话进行中按右键会干扰操作，所以忽略右键
-  if (customDrag.active || resizeSession || selectionState.active || leftButtonDown) return
-  startPan(e)
-  e.stopPropagation()
-}
+  if (
+    customDrag.active ||
+    resizeSession ||
+    selectionState.active ||
+    leftButtonDown
+  )
+    return;
+  startPan(e);
+  e.stopPropagation();
+};
 
 // 逐事件处理会堆积无效更新（触发逐编辑器重算），所以用 rAF 合并到每帧一次
-let panRafId = 0
-let panTargetX = 0
-let panTargetY = 0
+let panRafId = 0;
+let panTargetX = 0;
+let panTargetY = 0;
 const updatePan = (e: MouseEvent) => {
-  if (!panSession.active) return
+  if (!panSession.active) return;
   // .canvas 的 translate 不受 scale 影响，所以 pan 按视口像素直接累加
-  panTargetX = panSession.startPanX + (e.clientX - panSession.startClientX)
-  panTargetY = panSession.startPanY + (e.clientY - panSession.startClientY)
-  if (panRafId) return
-  panRafId = requestAnimationFrame(applyPan)
-}
+  panTargetX = panSession.startPanX + (e.clientX - panSession.startClientX);
+  panTargetY = panSession.startPanY + (e.clientY - panSession.startClientY);
+  if (panRafId) return;
+  panRafId = requestAnimationFrame(applyPan);
+};
 const applyPan = () => {
-  panRafId = 0
-  if (!panSession.active) return
+  panRafId = 0;
+  if (!panSession.active) return;
   // 亚像素平移会致界面模糊，所以取整；移动端锁水平
-  pan.x = mobileMode.value ? 0 : Math.round(panTargetX)
-  pan.y = Math.round(panTargetY)
-}
+  pan.x = mobileMode.value ? 0 : Math.round(panTargetX);
+  pan.y = Math.round(panTargetY);
+};
 
 const stopPan = () => {
   if (panRafId) {
-    cancelAnimationFrame(panRafId)
-    panRafId = 0
+    cancelAnimationFrame(panRafId);
+    panRafId = 0;
   }
-  if (!panSession.active) return
-  panSession.active = false
-  isPanning.value = false
-  maybeRebaseOrigin()
-}
+  if (!panSession.active) return;
+  panSession.active = false;
+  isPanning.value = false;
+  maybeRebaseOrigin();
+};
 
 // 右键拖拽会弹原生菜单，所以窗口级禁用
-const preventContextMenu = (e: Event) => e.preventDefault()
+const preventContextMenu = (e: Event) => e.preventDefault();
 
 // block-handle 拖段落时需画布自平移，所以监听 useBlockDrag 派发的事件
 const onCanvasPanEvent = (e: Event) => {
-  const detail = (e as CustomEvent<{ dx?: number; dy?: number }>).detail
-  if (!detail) return
-  const dx = Number(detail.dx) || 0
-  const dy = Number(detail.dy) || 0
-  if (dx === 0 && dy === 0) return
-  if (!mobileMode.value) pan.x += Math.round(dx)
-  pan.y += Math.round(dy)
-}
+  const detail = (e as CustomEvent<{ dx?: number; dy?: number }>).detail;
+  if (!detail) return;
+  const dx = Number(detail.dx) || 0;
+  const dy = Number(detail.dy) || 0;
+  if (dx === 0 && dy === 0) return;
+  if (!mobileMode.value) pan.x += Math.round(dx);
+  pan.y += Math.round(dy);
+};
 // #endregion 手动平移（右键拖拽）
 
 // #region 框选状态
-const selectionBox = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+const selectionBox = ref<{ x: number; y: number; w: number; h: number } | null>(
+  null,
+);
 const selectionState = reactive({
   active: false,
   startX: 0,
@@ -564,34 +750,34 @@ const selectionState = reactive({
   currentY: 0,
   extend: false,
   justFinishedSelection: false,
-})
+});
 
 const selectionBoxStyle = computed(() => {
-  if (!selectionBox.value) return {}
-  const { x, y, w, h } = selectionBox.value
+  if (!selectionBox.value) return {};
+  const { x, y, w, h } = selectionBox.value;
   return {
     left: `${roundToPx(x)}px`,
     top: `${roundToPx(y)}px`,
     width: `${roundToPx(w)}px`,
     height: `${roundToPx(h)}px`,
-  }
-})
+  };
+});
 // #endregion 框选状态
 
-const componentRefHandlers = new WeakMap<CanvasItem, (el: unknown) => void>()
+const componentRefHandlers = new WeakMap<CanvasItem, (el: unknown) => void>();
 
 const componentRefOf = (item: CanvasItem) => {
-  const cached = componentRefHandlers.get(item)
-  if (cached) return cached
-  const handler = (el: unknown) => setComponentRef(item.uuid, el)
-  componentRefHandlers.set(item, handler)
-  return handler
-}
+  const cached = componentRefHandlers.get(item);
+  if (cached) return cached;
+  const handler = (el: unknown) => setComponentRef(item.uuid, el);
+  componentRefHandlers.set(item, handler);
+  return handler;
+};
 
 // 块组件只收通用壳层属性，块类型相关映射由组件内部自行处理
 const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
-  const layout = layoutOf(item)
-  const c = constraintsOf(item)
+  const layout = layoutOf(item);
+  const c = constraintsOf(item);
   return {
     uuid: item.uuid,
     x: layout.x,
@@ -617,175 +803,204 @@ const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
     readOnly: !isEditMode.value,
     draggable: isEditMode.value,
     handlers: interactionHandlersOf(item),
-  }
-}
+  };
+};
 
 const writeItemConfig = (item: CanvasItem, patch: Partial<WidgetConfig>) => {
-  item.config = { ...item.config, ...patch } as WidgetConfig
-}
+  item.config = { ...item.config, ...patch } as WidgetConfig;
+};
 
 // config 已非响应式，而手柄集合、子组件 props 与联结判定都依赖它，所以结构性变更须显式刷新
 const updateItemConfig = (item: CanvasItem, patch: Partial<WidgetConfig>) => {
-  writeItemConfig(item, patch)
-  markLayoutDirty()
-}
+  writeItemConfig(item, patch);
+  markLayoutDirty();
+};
 
 const setComponentRef = (id: string, el: any) => {
-  if (el) componentRefs.value[id] = el
-  else delete componentRefs.value[id]
-}
+  if (el) componentRefs.value[id] = el;
+  else delete componentRefs.value[id];
+};
 
 // 壳层由宿主统一提供，插件块只声明内容与设置；历史块自带壳，按原样挂载
-const EMPTY_COMPONENT_PROPS = {}
-const definitionPropsCache = new WeakMap<CanvasItem, { definition: AnyBlockDefinition }>()
+const EMPTY_COMPONENT_PROPS = {};
+const definitionPropsCache = new WeakMap<
+  CanvasItem,
+  { definition: AnyBlockDefinition }
+>();
 
 const blockHostOf = (item: CanvasItem): Component => {
-  const definition = blockDefinitionOf(item.component)
-  return definition?.kind === 'raw' ? definition.rawComponent ?? PluginBlockHost : PluginBlockHost
-}
+  const definition = blockDefinitionOf(item.component);
+  return definition?.kind === "raw"
+    ? (definition.rawComponent ?? PluginBlockHost)
+    : PluginBlockHost;
+};
 
 // 每次渲染新建对象会让宿主 props 逐帧变化，所以按块缓存
 const blockDefinitionPropsOf = (item: CanvasItem) => {
-  const definition = blockDefinitionOf(item.component)
-  if (!definition || definition.kind === 'raw') return EMPTY_COMPONENT_PROPS
-  const cached = definitionPropsCache.get(item)
-  if (cached && cached.definition === definition) return cached
-  const props = { definition }
-  definitionPropsCache.set(item, props)
-  return props
-}
+  const definition = blockDefinitionOf(item.component);
+  if (!definition || definition.kind === "raw") return EMPTY_COMPONENT_PROPS;
+  const cached = definitionPropsCache.get(item);
+  if (cached && cached.definition === definition) return cached;
+  const props = { definition };
+  definitionPropsCache.set(item, props);
+  return props;
+};
 
-const blockEnvOf = (): BlockEnv => ({ isCompact: mobileMode.value, isReadOnly: !isEditMode.value })
+const blockEnvOf = (): BlockEnv => ({
+  isCompact: mobileMode.value,
+  isReadOnly: !isEditMode.value,
+});
 
-const layoutOf = (item: CanvasItem): Rect => (mobileMode.value ? item.layout.mobile : item.layout.desktop)
+const layoutOf = (item: CanvasItem): Rect =>
+  mobileMode.value ? item.layout.mobile : item.layout.desktop;
 // #endregion 组件数据读写
 
 // 接触段要融合、露出段保留边框，所以为每块生成接触段同色遮罩（块内相对坐标）
 // #region 贴合遮罩与圆角
-const EDGE_TOL = 1
+const EDGE_TOL = 1;
 // 逐帧重算 O(N²) 成本高，所以改为显式缓存：交互期间冻结、收尾按最终布局刷新
 const computeEdgeMasks = (): Record<string, EdgeMask[]> => {
-  const map: Record<string, EdgeMask[]> = {}
-  const items = state.items
-  items.forEach((it) => { map[it.uuid] = [] })
+  const map: Record<string, EdgeMask[]> = {};
+  const items = state.items;
+  items.forEach((it) => {
+    map[it.uuid] = [];
+  });
   for (const a of items) {
-    const ra = layoutOf(a)
+    const ra = layoutOf(a);
     for (const b of items) {
-      if (a.uuid === b.uuid) continue
-      const rb = layoutOf(b)
-      const yOverlap = Math.max(ra.y, rb.y) < Math.min(ra.y + ra.h, rb.y + rb.h)
-      const xOverlap = Math.max(ra.x, rb.x) < Math.min(ra.x + ra.w, rb.x + rb.w)
+      if (a.uuid === b.uuid) continue;
+      const rb = layoutOf(b);
+      const yOverlap =
+        Math.max(ra.y, rb.y) < Math.min(ra.y + ra.h, rb.y + rb.h);
+      const xOverlap =
+        Math.max(ra.x, rb.x) < Math.min(ra.x + ra.w, rb.x + rb.w);
       if (yOverlap && Math.abs(rb.x + rb.w - ra.x) <= EDGE_TOL) {
-        const y0 = Math.max(ra.y, rb.y)
-        const len = Math.min(ra.y + ra.h, rb.y + rb.h) - y0
+        const y0 = Math.max(ra.y, rb.y);
+        const len = Math.min(ra.y + ra.h, rb.y + rb.h) - y0;
         if (len > 0) {
-          map[a.uuid].push({ side: 'l', start: y0 - ra.y, len })
-          map[b.uuid].push({ side: 'r', start: y0 - rb.y, len })
+          map[a.uuid].push({ side: "l", start: y0 - ra.y, len });
+          map[b.uuid].push({ side: "r", start: y0 - rb.y, len });
         }
       }
       if (xOverlap && Math.abs(rb.y + rb.h - ra.y) <= EDGE_TOL) {
-        const x0 = Math.max(ra.x, rb.x)
-        const len = Math.min(ra.x + ra.w, rb.x + rb.w) - x0
+        const x0 = Math.max(ra.x, rb.x);
+        const len = Math.min(ra.x + ra.w, rb.x + rb.w) - x0;
         if (len > 0) {
-          map[a.uuid].push({ side: 't', start: x0 - ra.x, len })
-          map[b.uuid].push({ side: 'b', start: x0 - rb.x, len })
+          map[a.uuid].push({ side: "t", start: x0 - ra.x, len });
+          map[b.uuid].push({ side: "b", start: x0 - rb.x, len });
         }
       }
     }
   }
-  return map
-}
-const edgeMasksMap = shallowRef<Record<string, EdgeMask[]>>({})
-const masksOf = (id: string): EdgeMask[] => edgeMasksMap.value[id] ?? []
+  return map;
+};
+const edgeMasksMap = shallowRef<Record<string, EdgeMask[]>>({});
+const masksOf = (id: string): EdgeMask[] => edgeMasksMap.value[id] ?? [];
 
 // 保留圆角会在接触边两端露弧形缺口，所以接触角归零圆角
-const ROUNDED = 4
-const computeCornerHits = (): Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }> => {
-  const map: Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }> = {}
-  const items = state.items
-  items.forEach((it) => { map[it.uuid] = { tl: false, tr: false, bl: false, br: false } })
+const ROUNDED = 4;
+const computeCornerHits = (): Record<
+  string,
+  { tl: boolean; tr: boolean; bl: boolean; br: boolean }
+> => {
+  const map: Record<
+    string,
+    { tl: boolean; tr: boolean; bl: boolean; br: boolean }
+  > = {};
+  const items = state.items;
   items.forEach((it) => {
-    const { w, h } = layoutOf(it)
-    ;(edgeMasksMap.value[it.uuid] ?? []).forEach((m) => {
-      const endHit = m.start + m.len
-      if (m.side === 'l') {
-        if (m.start <= EDGE_TOL) map[it.uuid].tl = true
-        if (endHit >= h - EDGE_TOL) map[it.uuid].bl = true
-      } else if (m.side === 'r') {
-        if (m.start <= EDGE_TOL) map[it.uuid].tr = true
-        if (endHit >= h - EDGE_TOL) map[it.uuid].br = true
-      } else if (m.side === 't') {
-        if (m.start <= EDGE_TOL) map[it.uuid].tl = true
-        if (endHit >= w - EDGE_TOL) map[it.uuid].tr = true
+    map[it.uuid] = { tl: false, tr: false, bl: false, br: false };
+  });
+  items.forEach((it) => {
+    const { w, h } = layoutOf(it);
+    (edgeMasksMap.value[it.uuid] ?? []).forEach((m) => {
+      const endHit = m.start + m.len;
+      if (m.side === "l") {
+        if (m.start <= EDGE_TOL) map[it.uuid].tl = true;
+        if (endHit >= h - EDGE_TOL) map[it.uuid].bl = true;
+      } else if (m.side === "r") {
+        if (m.start <= EDGE_TOL) map[it.uuid].tr = true;
+        if (endHit >= h - EDGE_TOL) map[it.uuid].br = true;
+      } else if (m.side === "t") {
+        if (m.start <= EDGE_TOL) map[it.uuid].tl = true;
+        if (endHit >= w - EDGE_TOL) map[it.uuid].tr = true;
       } else {
-        if (m.start <= EDGE_TOL) map[it.uuid].bl = true
-        if (endHit >= w - EDGE_TOL) map[it.uuid].br = true
+        if (m.start <= EDGE_TOL) map[it.uuid].bl = true;
+        if (endHit >= w - EDGE_TOL) map[it.uuid].br = true;
       }
-    })
-  })
-  return map
-}
-const cornerHitsMap = shallowRef<Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }>>({})
+    });
+  });
+  return map;
+};
+const cornerHitsMap = shallowRef<
+  Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }>
+>({});
 const cornerStyleOf = (id: string): CSSProperties => {
-  const c = cornerHitsMap.value[id]
-  if (!c) return {}
-  const r = (hit: boolean) => (hit ? 0 : ROUNDED)
-  const radius = `${r(c.tl)}px ${r(c.tr)}px ${r(c.br)}px ${r(c.bl)}px`
-  if (radius === `${ROUNDED}px ${ROUNDED}px ${ROUNDED}px ${ROUNDED}px`) return {}
-  return { borderRadius: radius }
-}
+  const c = cornerHitsMap.value[id];
+  if (!c) return {};
+  const r = (hit: boolean) => (hit ? 0 : ROUNDED);
+  const radius = `${r(c.tl)}px ${r(c.tr)}px ${r(c.br)}px ${r(c.bl)}px`;
+  if (radius === `${ROUNDED}px ${ROUNDED}px ${ROUNDED}px ${ROUNDED}px`)
+    return {};
+  return { borderRadius: radius };
+};
 
 // 遮罩/圆角/曲别针候选均由 layout 推导且含 O(N²) 计算，所以只在增删块/布局落定/交互收尾时调用
 const recomputeMasks = () => {
-  edgeMasksMap.value = computeEdgeMasks()
-  cornerHitsMap.value = computeCornerHits()
-  paperclipCandidates.value = computePaperclipCandidates()
-}
+  edgeMasksMap.value = computeEdgeMasks();
+  cornerHitsMap.value = computeCornerHits();
+  paperclipCandidates.value = computePaperclipCandidates();
+};
 
 // autoHeight 逐字符改高、O(N²) 刷新会卡输入，所以高频路径合并到每帧一次
-let geometryRafId = 0
+let geometryRafId = 0;
 const scheduleGeometryRefresh = () => {
-  if (geometryRafId) return
+  if (geometryRafId) return;
   geometryRafId = requestAnimationFrame(() => {
-    geometryRafId = 0
-    recomputeMasks()
-  })
-}
+    geometryRafId = 0;
+    recomputeMasks();
+  });
+};
 // #endregion 贴合遮罩与圆角
 
 // 块贴近视口顶部时上方放不下手柄，所以按块视觉位置决定放上/下方
 // #region 手柄与描边样式
 const handlePlacementOf = (item: CanvasItem): HandlePlacement =>
-  visualY(layoutOf(item).y) < Math.round(HANDLE_HEIGHT * zoom.value) ? 'bottom' : 'top'
+  visualY(layoutOf(item).y) < Math.round(HANDLE_HEIGHT * zoom.value)
+    ? "bottom"
+    : "top";
 
 // 拖拽中块位置持续变化会让上方空间翻转、手柄与块分离，所以拖拽期锁定放置
 const placementOf = (item: CanvasItem): HandlePlacement => {
   if (customDrag.active && customDrag.sourceUuid === item.uuid) {
-    return customDrag.placementLocked ? 'bottom' : 'top'
+    return customDrag.placementLocked ? "bottom" : "top";
   }
-  return handlePlacementOf(item)
-}
+  return handlePlacementOf(item);
+};
 
 // 描边环相对块边缘外扩 2px
 const selectedOutlineStyle = (item: CanvasItem): CSSProperties => {
-  const l = layoutOf(item)
+  const l = layoutOf(item);
   // 归属块拖拽栏需盖住别的块高亮又不遮断自己，所以其描边环用 outline（1002）
-  const zIndex = outlineOwnerId.value === item.uuid ? Z_LAYER.outline : Z_LAYER.dragHandle - 1
+  const zIndex =
+    outlineOwnerId.value === item.uuid
+      ? Z_LAYER.outline
+      : Z_LAYER.dragHandle - 1;
   return {
     left: `${roundToPx(l.x) - roundToPx(OUTLINE_PX)}px`,
     top: `${roundToPx(l.y) - roundToPx(OUTLINE_PX)}px`,
     width: `${roundToPx(l.w) + roundToPx(OUTLINE_PX * 2)}px`,
     height: `${roundToPx(l.h) + roundToPx(OUTLINE_PX * 2)}px`,
     zIndex,
-  }
-}
+  };
+};
 // #endregion 手柄与描边样式
 
 // #region 自定义拖拽与联结
 const getSelectedUuids = (item: CanvasItem) =>
   state.selectedIds.has(item.uuid) && state.selectedIds.size > 1
     ? Array.from(state.selectedIds)
-    : [item.uuid]
+    : [item.uuid];
 
 // 块世界坐标 = 初始 + 鼠标位移 - (pan - panStart)，无需改 VDR 内部
 const customDrag = reactive({
@@ -798,459 +1013,556 @@ const customDrag = reactive({
   sourceUuid: null as string | null,
   // 被拖块会盖住落点处的编辑器，所以拖拽中让其命中穿透
   draggingUuids: new Set<string>(),
-})
-const richTextDropTargetId = ref<string | null>(null)
+});
+const richTextDropTargetId = ref<string | null>(null);
 // 拖入富文本块的落点线与插入位置，随块内滚动每帧重算
 interface RichTextDrop {
-  id: string
-  pos: number
-  left: number
-  right: number
-  y: number
+  id: string;
+  pos: number;
+  left: number;
+  right: number;
+  y: number;
 }
-const richTextDrop = ref<RichTextDrop | null>(null)
+const richTextDrop = ref<RichTextDrop | null>(null);
 // 逐帧赋新对象会让整棵画布重渲染，所以 content 坐标全等时不写（画布 pan 不影响该坐标系下的落点）
 const setRichTextDrop = (next: RichTextDrop | null) => {
-  const current = richTextDrop.value
-  if (current === next) return
-  if (current && next && current.id === next.id && current.pos === next.pos
-    && current.left === next.left && current.right === next.right && current.y === next.y) return
-  richTextDrop.value = next
-}
+  const current = richTextDrop.value;
+  if (current === next) return;
+  if (
+    current &&
+    next &&
+    current.id === next.id &&
+    current.pos === next.pos &&
+    current.left === next.left &&
+    current.right === next.right &&
+    current.y === next.y
+  )
+    return;
+  richTextDrop.value = next;
+};
 const richTextDropLineStyle = computed<CSSProperties>(() => {
-  const drop = richTextDrop.value
-  if (!drop) return { display: 'none' }
+  const drop = richTextDrop.value;
+  if (!drop) return { display: "none" };
   return {
     left: `${roundToPx(drop.left)}px`,
     width: `${Math.max(2 / zoom.value, roundToPx(drop.right - drop.left))}px`,
     transform: `translateY(${roundToPx(drop.y)}px)`,
-  }
-})
+  };
+});
 const richTextDropTargetStyle = computed<CSSProperties>(() => {
-  const id = richTextDropTargetId.value
-  const item = id ? state.items.find((target) => target.uuid === id) : null
-  if (!item) return { display: 'none' }
-  const layout = layoutOf(item)
+  const id = richTextDropTargetId.value;
+  const item = id ? state.items.find((target) => target.uuid === id) : null;
+  if (!item) return { display: "none" };
+  const layout = layoutOf(item);
   return {
     left: `${roundToPx(layout.x) - 4}px`,
     top: `${roundToPx(layout.y) - 4}px`,
     width: `${roundToPx(layout.w) + 8}px`,
     height: `${roundToPx(layout.h) + 8}px`,
-  }
-})
-let customDragGroup: Record<string, { x: number; y: number }> = {}
+  };
+});
+let customDragGroup: Record<string, { x: number; y: number }> = {};
 // 逐帧遍历 state.items 会随块数卡顿，所以会话开始时缓存被拖块引用
-let customDragItems = new Map<string, CanvasItem>()
+let customDragItems = new Map<string, CanvasItem>();
 // 曲别针粘贴的块对（key 为两 id 排序后 join），拖动一个时另一块跟着动
-const linkedPairs = ref<Set<string>>(new Set())
-const pairKey = (a: string, b: string) => [a, b].sort().join('|')
+const linkedPairs = ref<Set<string>>(new Set());
+const pairKey = (a: string, b: string) => [a, b].sort().join("|");
 const linkedNeighborMap = computed(() => {
-  const neighbors = new Map<string, string[]>()
+  const neighbors = new Map<string, string[]>();
   linkedPairs.value.forEach((key) => {
-    const [firstId, secondId] = key.split('|')
-    const firstNeighbors = neighbors.get(firstId) ?? []
-    const secondNeighbors = neighbors.get(secondId) ?? []
-    firstNeighbors.push(secondId)
-    secondNeighbors.push(firstId)
-    neighbors.set(firstId, firstNeighbors)
-    neighbors.set(secondId, secondNeighbors)
-  })
-  return neighbors
-})
+    const [firstId, secondId] = key.split("|");
+    const firstNeighbors = neighbors.get(firstId) ?? [];
+    const secondNeighbors = neighbors.get(secondId) ?? [];
+    firstNeighbors.push(secondId);
+    secondNeighbors.push(firstId);
+    neighbors.set(firstId, firstNeighbors);
+    neighbors.set(secondId, secondNeighbors);
+  });
+  return neighbors;
+});
 interface ConnectionPoint {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
 interface LinkedConnection {
-  key: string
-  start: ConnectionPoint
-  end: ConnectionPoint
+  key: string;
+  start: ConnectionPoint;
+  end: ConnectionPoint;
 }
 
 const roundConnectionPoint = (point: ConnectionPoint): ConnectionPoint => ({
   x: roundToVisual(zoom.value, point.x),
   y: roundToVisual(zoom.value, point.y),
-})
+});
 
-const connectionPoints = (a: Rect, b: Rect): { start: ConnectionPoint; end: ConnectionPoint } => {
-  const verticalGap = b.x - (a.x + a.w)
-  const reverseVerticalGap = a.x - (b.x + b.w)
-  const verticalOverlap = (Math.max(a.y, b.y) + Math.min(a.y + a.h, b.y + b.h)) / 2
-  if (Math.abs(verticalGap) <= SNAP_TOLERANCE || Math.abs(reverseVerticalGap) <= SNAP_TOLERANCE) {
-    const aOnLeft = Math.abs(verticalGap) <= SNAP_TOLERANCE
-    const aX = aOnLeft ? a.x + a.w : a.x
-    const bX = aOnLeft ? b.x : b.x + b.w
-    return { start: { x: aX, y: verticalOverlap }, end: { x: bX, y: verticalOverlap } }
+const connectionPoints = (
+  a: Rect,
+  b: Rect,
+): { start: ConnectionPoint; end: ConnectionPoint } => {
+  const verticalGap = b.x - (a.x + a.w);
+  const reverseVerticalGap = a.x - (b.x + b.w);
+  const verticalOverlap =
+    (Math.max(a.y, b.y) + Math.min(a.y + a.h, b.y + b.h)) / 2;
+  if (
+    Math.abs(verticalGap) <= SNAP_TOLERANCE ||
+    Math.abs(reverseVerticalGap) <= SNAP_TOLERANCE
+  ) {
+    const aOnLeft = Math.abs(verticalGap) <= SNAP_TOLERANCE;
+    const aX = aOnLeft ? a.x + a.w : a.x;
+    const bX = aOnLeft ? b.x : b.x + b.w;
+    return {
+      start: { x: aX, y: verticalOverlap },
+      end: { x: bX, y: verticalOverlap },
+    };
   }
-  const horizontalGap = b.y - (a.y + a.h)
-  const reverseHorizontalGap = a.y - (b.y + b.h)
-  const horizontalOverlap = (Math.max(a.x, b.x) + Math.min(a.x + a.w, b.x + b.w)) / 2
-  if (Math.abs(horizontalGap) <= SNAP_TOLERANCE || Math.abs(reverseHorizontalGap) <= SNAP_TOLERANCE) {
-    const aOnTop = Math.abs(horizontalGap) <= SNAP_TOLERANCE
-    const aY = aOnTop ? a.y + a.h : a.y
-    const bY = aOnTop ? b.y : b.y + b.h
-    return { start: { x: horizontalOverlap, y: aY }, end: { x: horizontalOverlap, y: bY } }
+  const horizontalGap = b.y - (a.y + a.h);
+  const reverseHorizontalGap = a.y - (b.y + b.h);
+  const horizontalOverlap =
+    (Math.max(a.x, b.x) + Math.min(a.x + a.w, b.x + b.w)) / 2;
+  if (
+    Math.abs(horizontalGap) <= SNAP_TOLERANCE ||
+    Math.abs(reverseHorizontalGap) <= SNAP_TOLERANCE
+  ) {
+    const aOnTop = Math.abs(horizontalGap) <= SNAP_TOLERANCE;
+    const aY = aOnTop ? a.y + a.h : a.y;
+    const bY = aOnTop ? b.y : b.y + b.h;
+    return {
+      start: { x: horizontalOverlap, y: aY },
+      end: { x: horizontalOverlap, y: bY },
+    };
   }
   return {
     start: { x: a.x + a.w / 2, y: a.y + a.h / 2 },
     end: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
-  }
-}
+  };
+};
 
 // 同轴相邻的线分别渲染会在接口处断点，所以合并为一条连续线
 interface ConnSegment {
-  horizontal: boolean
-  axis: number
-  from: number
-  to: number
+  horizontal: boolean;
+  axis: number;
+  from: number;
+  to: number;
 }
 
 const mergeConnSegments = (segments: ConnSegment[]): LinkedConnection[] => {
-  const groups = new Map<string, ConnSegment[]>()
+  const groups = new Map<string, ConnSegment[]>();
   segments.forEach((seg) => {
-    const groupKey = `${seg.horizontal ? 'h' : 'v'}:${seg.axis}`
-    const group = groups.get(groupKey)
-    if (group) group.push(seg)
-    else groups.set(groupKey, [seg])
-  })
-  const merged: LinkedConnection[] = []
+    const groupKey = `${seg.horizontal ? "h" : "v"}:${seg.axis}`;
+    const group = groups.get(groupKey);
+    if (group) group.push(seg);
+    else groups.set(groupKey, [seg]);
+  });
+  const merged: LinkedConnection[] = [];
   groups.forEach((group) => {
-    group.sort((a, b) => a.from - b.from)
-    let current = { ...group[0] }
+    group.sort((a, b) => a.from - b.from);
+    let current = { ...group[0] };
     for (let i = 1; i < group.length; i++) {
-      const next = group[i]
+      const next = group[i];
       // 贴合/微缝都算连续，所以间隔小于容差视为同一共享边缘
-      if (next.from - current.to <= SNAP_TOLERANCE) current.to = Math.max(current.to, next.to)
+      if (next.from - current.to <= SNAP_TOLERANCE)
+        current.to = Math.max(current.to, next.to);
       else {
-        merged.push(toConnection(current))
-        current = { ...next }
+        merged.push(toConnection(current));
+        current = { ...next };
       }
     }
-    merged.push(toConnection(current))
-  })
-  return merged
-}
+    merged.push(toConnection(current));
+  });
+  return merged;
+};
 
 const toConnection = (seg: ConnSegment): LinkedConnection => {
-  const key = `${seg.horizontal ? 'h' : 'v'}:${seg.axis}:${seg.from}-${seg.to}`
+  const key = `${seg.horizontal ? "h" : "v"}:${seg.axis}:${seg.from}-${seg.to}`;
   if (seg.horizontal) {
-    return { key, start: { x: seg.from, y: seg.axis }, end: { x: seg.to, y: seg.axis } }
+    return {
+      key,
+      start: { x: seg.from, y: seg.axis },
+      end: { x: seg.to, y: seg.axis },
+    };
   }
-  return { key, start: { x: seg.axis, y: seg.from }, end: { x: seg.axis, y: seg.to } }
-}
+  return {
+    key,
+    start: { x: seg.axis, y: seg.from },
+    end: { x: seg.axis, y: seg.to },
+  };
+};
 
 // layout 已非响应式，所以显式订阅版本号，使块移动后联结线重算
 const linkedConnections = computed<LinkedConnection[]>(() => {
-  void layoutVersion.value
-  const itemMap = new Map(state.items.map((item) => [item.uuid, item]))
-  const segments: ConnSegment[] = []
+  void layoutVersion.value;
+  const itemMap = new Map(state.items.map((item) => [item.uuid, item]));
+  const segments: ConnSegment[] = [];
   linkedPairs.value.forEach((key) => {
-    const [startId, endId] = key.split('|')
-    const startItem = itemMap.get(startId)
-    const endItem = itemMap.get(endId)
-    if (!startItem || !endItem) return
-    const startRect = layoutOf(startItem)
-    const endRect = layoutOf(endItem)
-    if (!isAdjacent(startRect, endRect)) return
-    const points = connectionPoints(startRect, endRect)
-    const start = roundConnectionPoint(points.start)
-    const end = roundConnectionPoint(points.end)
+    const [startId, endId] = key.split("|");
+    const startItem = itemMap.get(startId);
+    const endItem = itemMap.get(endId);
+    if (!startItem || !endItem) return;
+    const startRect = layoutOf(startItem);
+    const endRect = layoutOf(endItem);
+    if (!isAdjacent(startRect, endRect)) return;
+    const points = connectionPoints(startRect, endRect);
+    const start = roundConnectionPoint(points.start);
+    const end = roundConnectionPoint(points.end);
     if (start.y === end.y) {
-      segments.push({ horizontal: true, axis: start.y, from: Math.min(start.x, end.x), to: Math.max(start.x, end.x) })
+      segments.push({
+        horizontal: true,
+        axis: start.y,
+        from: Math.min(start.x, end.x),
+        to: Math.max(start.x, end.x),
+      });
     } else {
-      segments.push({ horizontal: false, axis: start.x, from: Math.min(start.y, end.y), to: Math.max(start.y, end.y) })
+      segments.push({
+        horizontal: false,
+        axis: start.x,
+        from: Math.min(start.y, end.y),
+        to: Math.max(start.y, end.y),
+      });
     }
-  })
-  return mergeConnSegments(segments)
-})
+  });
+  return mergeConnSegments(segments);
+});
 
 // 半像素栅格化会发虚，所以色条起点与长度取整
 const connectionSegmentStyle = (line: LinkedConnection): CSSProperties => {
-  const horizontal = line.start.y === line.end.y
+  const horizontal = line.start.y === line.end.y;
   if (horizontal) {
     return {
       left: `${roundToPx(Math.min(line.start.x, line.end.x))}px`,
       top: `${roundToPx(line.start.y - 1)}px`,
       width: `${roundToPx(Math.abs(line.end.x - line.start.x))}px`,
       height: `${roundToPx(2)}px`,
-    }
+    };
   }
   return {
     left: `${roundToPx(line.start.x - 1)}px`,
     top: `${roundToPx(Math.min(line.start.y, line.end.y))}px`,
     width: `${roundToPx(2)}px`,
     height: `${roundToPx(Math.abs(line.end.y - line.start.y))}px`,
-  }
-}
+  };
+};
 
 const collectLinkedUuids = (rootId: string): Set<string> => {
-  const out = new Set<string>()
-  const queue = [rootId]
+  const out = new Set<string>();
+  const queue = [rootId];
   while (queue.length) {
-    const id = queue.pop()!
-    if (out.has(id)) continue
-    out.add(id)
+    const id = queue.pop()!;
+    if (out.has(id)) continue;
+    out.add(id);
     linkedNeighborMap.value.get(id)?.forEach((neighborId) => {
-      if (!out.has(neighborId)) queue.push(neighborId)
-    })
+      if (!out.has(neighborId)) queue.push(neighborId);
+    });
   }
-  return out
-}
+  return out;
+};
 const toggleLink = (a: string, b: string) => {
-  const key = pairKey(a, b)
-  const next = new Set(linkedPairs.value)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
-  linkedPairs.value = next
-}
+  const key = pairKey(a, b);
+  const next = new Set(linkedPairs.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  linkedPairs.value = next;
+};
 
 // 只加 body 类要等下次 state-change 才收起，所以向所有编辑器派发块外指针事件立即清 hover
 const hideAllBlockHandles = () => {
-  const emptyPoint = { bubbles: true, clientX: -9999, clientY: -9999, pointerId: 1 }
-  document.querySelectorAll<HTMLElement>('.ProseMirror').forEach((dom) => {
-    dom.dispatchEvent(new PointerEvent('pointermove', emptyPoint))
-    dom.dispatchEvent(new PointerEvent('pointerout', emptyPoint))
-  })
-}
+  const emptyPoint = {
+    bubbles: true,
+    clientX: -9999,
+    clientY: -9999,
+    pointerId: 1,
+  };
+  document.querySelectorAll<HTMLElement>(".ProseMirror").forEach((dom) => {
+    dom.dispatchEvent(new PointerEvent("pointermove", emptyPoint));
+    dom.dispatchEvent(new PointerEvent("pointerout", emptyPoint));
+  });
+};
 
 // 拖拽期 layout 不触发渲染，所以块本体与跟随浮层（描边环/拖拽栏/设置栏）必须命令式搬位置
 interface DragDomEntry {
-  wrapper: HTMLElement | null
-  outline: HTMLElement | null
+  wrapper: HTMLElement | null;
+  outline: HTMLElement | null;
 }
-let dragDom = new Map<string, DragDomEntry>()
-let dragHandleEl: HTMLElement | null = null
-let dragSettingsEl: HTMLElement | null = null
+let dragDom = new Map<string, DragDomEntry>();
+let dragHandleEl: HTMLElement | null = null;
+let dragSettingsEl: HTMLElement | null = null;
 interface UnionOutlineDom {
-  mask: SVGMaskElement | null
-  fill: SVGRectElement | null
-  outers: Map<string, SVGRectElement>
-  inners: Map<string, SVGRectElement>
+  mask: SVGMaskElement | null;
+  fill: SVGRectElement | null;
+  outers: Map<string, SVGRectElement>;
+  inners: Map<string, SVGRectElement>;
 }
-let unionOutlineDom: UnionOutlineDom | null = null
+let unionOutlineDom: UnionOutlineDom | null = null;
 // 联结线等由 layout 推导的浮层只走响应式路径，所以存在链接时退回逐帧重渲染
-let dragNeedsRender = false
+let dragNeedsRender = false;
 
-const applyElStyle = (el: HTMLElement, style: CSSProperties) => { Object.assign(el.style, style) }
+const applyElStyle = (el: HTMLElement, style: CSSProperties) => {
+  Object.assign(el.style, style);
+};
 
 // 圆整规则要与 ResizeBox.boxStyle 一致，否则松手瞬间会跳位
-const translateOf = (layout: Rect) => `translate(${roundToPx(layout.x)}px, ${roundToPx(layout.y)}px)`
+const translateOf = (layout: Rect) =>
+  `translate(${roundToPx(layout.x)}px, ${roundToPx(layout.y)}px)`;
 
 const indexByUuid = (root: HTMLElement, selector: string) => {
-  const map = new Map<string, HTMLElement>()
+  const map = new Map<string, HTMLElement>();
   root.querySelectorAll<HTMLElement>(selector).forEach((el) => {
-    const uuid = el.dataset.uuid
-    if (uuid) map.set(uuid, el)
-  })
-  return map
-}
+    const uuid = el.dataset.uuid;
+    if (uuid) map.set(uuid, el);
+  });
+  return map;
+};
 
 const indexBands = (root: Element, selector: string) => {
-  const map = new Map<string, SVGRectElement>()
+  const map = new Map<string, SVGRectElement>();
   root.querySelectorAll<SVGRectElement>(selector).forEach((el) => {
-    const uuid = el.dataset.uuid
-    if (uuid) map.set(uuid, el)
-  })
-  return map
-}
+    const uuid = el.dataset.uuid;
+    if (uuid) map.set(uuid, el);
+  });
+  return map;
+};
 
 const cacheUnionOutlineDom = (canvas: HTMLElement) => {
-  const svg = canvas.querySelector<SVGSVGElement>('.selected-outline-union')
-  if (!svg) return null
+  const svg = canvas.querySelector<SVGSVGElement>(".selected-outline-union");
+  if (!svg) return null;
   return {
-    mask: svg.querySelector('mask'),
-    fill: svg.querySelector<SVGRectElement>('.selected-outline-union-fill'),
-    outers: indexBands(svg, '.outline-band-outer'),
-    inners: indexBands(svg, '.outline-band-inner'),
-  }
-}
+    mask: svg.querySelector("mask"),
+    fill: svg.querySelector<SVGRectElement>(".selected-outline-union-fill"),
+    outers: indexBands(svg, ".outline-band-outer"),
+    inners: indexBands(svg, ".outline-band-inner"),
+  };
+};
 
 const cacheDragDom = () => {
-  const canvas = canvasRef.value
-  dragDom = new Map()
-  dragHandleEl = null
-  dragSettingsEl = null
-  unionOutlineDom = null
-  if (!canvas) return
-  const wrappers = indexByUuid(canvas, '.drag-wrapper')
-  const outlines = indexByUuid(canvas, '.selected-outline')
-  const sourceId = customDrag.sourceUuid
+  const canvas = canvasRef.value;
+  dragDom = new Map();
+  dragHandleEl = null;
+  dragSettingsEl = null;
+  unionOutlineDom = null;
+  if (!canvas) return;
+  const wrappers = indexByUuid(canvas, ".drag-wrapper");
+  const outlines = indexByUuid(canvas, ".selected-outline");
+  const sourceId = customDrag.sourceUuid;
   customDragItems.forEach((_, id) => {
-    dragDom.set(id, { wrapper: wrappers.get(id) ?? null, outline: outlines.get(id) ?? null })
-  })
-  dragHandleEl = sourceId ? indexByUuid(canvas, '.floating-handle').get(sourceId) ?? null : null
-  dragSettingsEl = sourceId ? indexByUuid(canvas, '.side-settings').get(sourceId) ?? null : null
-  unionOutlineDom = cacheUnionOutlineDom(canvas)
-}
+    dragDom.set(id, {
+      wrapper: wrappers.get(id) ?? null,
+      outline: outlines.get(id) ?? null,
+    });
+  });
+  dragHandleEl = sourceId
+    ? (indexByUuid(canvas, ".floating-handle").get(sourceId) ?? null)
+    : null;
+  dragSettingsEl = sourceId
+    ? (indexByUuid(canvas, ".side-settings").get(sourceId) ?? null)
+    : null;
+  unionOutlineDom = cacheUnionOutlineDom(canvas);
+};
 
 const setRectAttrs = (el: Element | null, rect: Rect) => {
-  if (!el) return
-  el.setAttribute('x', String(rect.x))
-  el.setAttribute('y', String(rect.y))
-  el.setAttribute('width', String(rect.w))
-  el.setAttribute('height', String(rect.h))
-}
+  if (!el) return;
+  el.setAttribute("x", String(rect.x));
+  el.setAttribute("y", String(rect.y));
+  el.setAttribute("width", String(rect.w));
+  el.setAttribute("height", String(rect.h));
+};
 
 // 多选轮廓的遮罩同属 layout 派生，拖拽期需与块同步平移，否则轮廓会被旧的遮罩边界裁掉
 const syncUnionOutlineDom = () => {
-  if (!unionOutlineDom) return
-  const bands: OutlineBand[] = []
+  if (!unionOutlineDom) return;
+  const bands: OutlineBand[] = [];
   unionOutlineDom.outers.forEach((el, uuid) => {
-    const item = customDragItems.get(uuid)
-    if (!item) return
-    const band = outlineBandOf(item)
-    setRectAttrs(el, band.outer)
-    setRectAttrs(unionOutlineDom?.inners.get(uuid) ?? null, band.inner)
-    bands.push(band)
-  })
-  if (!bands.length) return
-  setRectAttrs(unionOutlineDom.mask, outlineBoundsOf(bands))
-  setRectAttrs(unionOutlineDom.fill, outlineBoundsOf(bands))
-}
+    const item = customDragItems.get(uuid);
+    if (!item) return;
+    const band = outlineBandOf(item);
+    setRectAttrs(el, band.outer);
+    setRectAttrs(unionOutlineDom?.inners.get(uuid) ?? null, band.inner);
+    bands.push(band);
+  });
+  if (!bands.length) return;
+  setRectAttrs(unionOutlineDom.mask, outlineBoundsOf(bands));
+  setRectAttrs(unionOutlineDom.fill, outlineBoundsOf(bands));
+};
 
 const syncDragDom = () => {
   customDragItems.forEach((item, id) => {
-    const dom = dragDom.get(id)
-    if (!dom) return
-    if (dom.wrapper) dom.wrapper.style.transform = translateOf(layoutOf(item))
-    if (dom.outline) applyElStyle(dom.outline, selectedOutlineStyle(item))
-  })
-  const source = customDrag.sourceUuid ? customDragItems.get(customDrag.sourceUuid) : null
-  if (!source) return
+    const dom = dragDom.get(id);
+    if (!dom) return;
+    if (dom.wrapper) dom.wrapper.style.transform = translateOf(layoutOf(item));
+    if (dom.outline) applyElStyle(dom.outline, selectedOutlineStyle(item));
+  });
+  const source = customDrag.sourceUuid
+    ? customDragItems.get(customDrag.sourceUuid)
+    : null;
+  if (!source) return;
   // zoom 变化会让子组件用冻结的 prop 重写 transform，所以拖拽中按最新 layout 补写浮层位置
-  const geometry = { layout: layoutOf(source), placement: placementOf(source), round: roundToPx }
-  if (dragHandleEl) applyElStyle(dragHandleEl, handleBarStyleOf(geometry))
-  if (dragSettingsEl) applyElStyle(dragSettingsEl, sideSettingsStyleOf(geometry))
-  syncUnionOutlineDom()
-}
+  const geometry = {
+    layout: layoutOf(source),
+    placement: placementOf(source),
+    round: roundToPx,
+  };
+  if (dragHandleEl) applyElStyle(dragHandleEl, handleBarStyleOf(geometry));
+  if (dragSettingsEl)
+    applyElStyle(dragSettingsEl, sideSettingsStyleOf(geometry));
+  syncUnionOutlineDom();
+};
 
 const clearDragDom = () => {
-  dragDom = new Map()
-  dragHandleEl = null
-  dragSettingsEl = null
-  unionOutlineDom = null
-}
+  dragDom = new Map();
+  dragHandleEl = null;
+  dragSettingsEl = null;
+  unionOutlineDom = null;
+};
 
 // 拖拽中不递增版本号（靠命令式写 DOM），所以 layout 变更后必须显式同步一次
 const flushDragLayout = () => {
-  if (dragNeedsRender) markLayoutDirty()
-  syncDragDom()
-}
+  if (dragNeedsRender) markLayoutDirty();
+  syncDragDom();
+};
 
 const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
-  if (e.button !== 0) return
-  if (!isEditMode.value) return
-  selectForDrag(item.uuid, e)
-  customDrag.active = true
-  customDrag.sourceUuid = item.uuid
-  customDrag.startClientX = e.clientX
-  customDrag.startClientY = e.clientY
+  if (e.button !== 0) return;
+  if (!isEditMode.value) return;
+  selectForDrag(item.uuid, e);
+  customDrag.active = true;
+  customDrag.sourceUuid = item.uuid;
+  customDrag.startClientX = e.clientX;
+  customDrag.startClientY = e.clientY;
   // 落点解析由 rAF 驱动、按下未移动也会读坐标，所以以按下点初始化
-  customDragLastX = e.clientX
-  customDragLastY = e.clientY
-  customDrag.panStartX = pan.x
-  customDrag.panStartY = pan.y
-  customDrag.placementLocked = handlePlacementOf(item) === 'bottom'
-  customDragGroup = {}
-  customDragItems = new Map()
+  customDragLastX = e.clientX;
+  customDragLastY = e.clientY;
+  customDrag.panStartX = pan.x;
+  customDrag.panStartY = pan.y;
+  customDrag.placementLocked = handlePlacementOf(item) === "bottom";
+  customDragGroup = {};
+  customDragItems = new Map();
   getSelectedUuids(item).forEach((id) => {
-    const target = state.items.find((it) => it.uuid === id)
+    const target = state.items.find((it) => it.uuid === id);
     if (target) {
-      customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y }
-      customDragItems.set(id, target)
+      customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y };
+      customDragItems.set(id, target);
     }
-  })
+  });
   // 粘贴的块需随被拖块一起移动，所以把链接可达的块加入拖拽组（仅桌面端）
   if (!mobileMode.value) {
     collectLinkedUuids(item.uuid).forEach((id) => {
-      if (customDragGroup[id]) return
-      const target = state.items.find((it) => it.uuid === id)
+      if (customDragGroup[id]) return;
+      const target = state.items.find((it) => it.uuid === id);
       if (target) {
-        customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y }
-        customDragItems.set(id, target)
+        customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y };
+        customDragItems.set(id, target);
       }
-    })
+    });
   }
   // 编辑器 hover 自解析在 zoom≠1 时会 stopPropagation，所以用捕获阶段监听
-  window.addEventListener('pointermove', onCustomDragMove, true)
-  window.addEventListener('pointerup', onCustomDragUp)
+  window.addEventListener("pointermove", onCustomDragMove, true);
+  window.addEventListener("pointerup", onCustomDragUp);
   // 拖拽期间 layout 不触发重渲染，所以块本体与跟随浮层靠命令式写 DOM，链接线等派生浮层退回逐帧重渲染
-  dragNeedsRender = linkedPairs.value.size > 0
-  cacheDragDom()
-  window.addEventListener('mousemove', onCustomDragMove, true)
-  window.addEventListener('mouseup', onCustomDragUp)
-  customDrag.draggingUuids = new Set(Object.keys(customDragGroup))
-  e.preventDefault()
-  document.body.classList.add('block-handle-dragging')
+  dragNeedsRender = linkedPairs.value.size > 0;
+  cacheDragDom();
+  window.addEventListener("mousemove", onCustomDragMove, true);
+  window.addEventListener("mouseup", onCustomDragUp);
+  customDrag.draggingUuids = new Set(Object.keys(customDragGroup));
+  e.preventDefault();
+  document.body.classList.add("block-handle-dragging");
   // 只加 body 类要等下次 state-change 才收起，所以立即向所有编辑器派发块外指针事件
-  hideAllBlockHandles()
+  hideAllBlockHandles();
   // 拖拽中块可能超出视口出现滚动条，所以临时锁 html/body 滚动
-  document.documentElement.style.overflow = 'hidden'
-  document.body.style.overflow = 'hidden'
-  startAutoPan()
-}
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+  startAutoPan();
+};
 
-let customDragRafId = 0
-let customDragLastX = 0
-let customDragLastY = 0
+let customDragRafId = 0;
+let customDragLastX = 0;
+let customDragLastY = 0;
 
 const onCustomDragMove = (e: MouseEvent) => {
-  if (!customDrag.active) return
+  if (!customDrag.active) return;
   // hideAllBlockHandles 会派发 -9999 伪事件，所以不能当作指针位置
-  if (!e.isTrusted) return
-  customDragLastX = e.clientX
-  customDragLastY = e.clientY
-  if (customDragRafId) return
-  customDragRafId = requestAnimationFrame(applyCustomDrag)
-}
+  if (!e.isTrusted) return;
+  customDragLastX = e.clientX;
+  customDragLastY = e.clientY;
+  if (customDragRafId) return;
+  customDragRafId = requestAnimationFrame(applyCustomDrag);
+};
 
 const findRichTextDropTarget = (): string | null => {
-  const source = state.items.find((item) => item.uuid === customDrag.sourceUuid)
-  const viewport = viewRect.value
-  if (!source || !componentNodeOf(source) || !viewport) return null
-  const sourceLayout = layoutOf(source)
-  const sourceTopLeft = contentToScreen(canvasTransform(), viewport, sourceLayout.x, sourceLayout.y)
+  const source = state.items.find(
+    (item) => item.uuid === customDrag.sourceUuid,
+  );
+  const viewport = viewRect.value;
+  if (!source || !componentNodeOf(source) || !viewport) return null;
+  const sourceLayout = layoutOf(source);
+  const sourceTopLeft = contentToScreen(
+    canvasTransform(),
+    viewport,
+    sourceLayout.x,
+    sourceLayout.y,
+  );
   const sourceBottomRight = contentToScreen(
-    canvasTransform(), viewport, sourceLayout.x + sourceLayout.w, sourceLayout.y + sourceLayout.h,
-  )
+    canvasTransform(),
+    viewport,
+    sourceLayout.x + sourceLayout.w,
+    sourceLayout.y + sourceLayout.h,
+  );
   for (const target of state.items) {
     // 只有声明可接收落点的组件才参与命中（如富文本）
-    if (target.uuid === source.uuid || !componentMetaOf(target.component)?.acceptsDrop) continue
-    const targetLayout = layoutOf(target)
-    const targetTopLeft = contentToScreen(canvasTransform(), viewport, targetLayout.x, targetLayout.y)
-    const targetBottomRight = contentToScreen(
-      canvasTransform(), viewport, targetLayout.x + targetLayout.w, targetLayout.y + targetLayout.h,
+    if (
+      target.uuid === source.uuid ||
+      !componentMetaOf(target.component)?.acceptsDrop
     )
-    const overlapWidth = Math.min(sourceBottomRight.x, targetBottomRight.x) - Math.max(sourceTopLeft.x, targetTopLeft.x)
-    const overlapHeight = Math.min(sourceBottomRight.y, targetBottomRight.y) - Math.max(sourceTopLeft.y, targetTopLeft.y)
-    if (overlapWidth > 0 && overlapHeight > 0) return target.uuid
+      continue;
+    const targetLayout = layoutOf(target);
+    const targetTopLeft = contentToScreen(
+      canvasTransform(),
+      viewport,
+      targetLayout.x,
+      targetLayout.y,
+    );
+    const targetBottomRight = contentToScreen(
+      canvasTransform(),
+      viewport,
+      targetLayout.x + targetLayout.w,
+      targetLayout.y + targetLayout.h,
+    );
+    const overlapWidth =
+      Math.min(sourceBottomRight.x, targetBottomRight.x) -
+      Math.max(sourceTopLeft.x, targetTopLeft.x);
+    const overlapHeight =
+      Math.min(sourceBottomRight.y, targetBottomRight.y) -
+      Math.max(sourceTopLeft.y, targetTopLeft.y);
+    if (overlapWidth > 0 && overlapHeight > 0) return target.uuid;
   }
-  return null
-}
+  return null;
+};
 
 // 块内滚动后落点会变，所以由 rAF 每帧重算；各浏览器 BCR 是否含 zoom 不一致，所以以目标块 DOM 矩形为参照反推 content 坐标
 interface RichTextTarget {
-  id: string
-  resolveDropAtElement: (el: HTMLElement | null, preferBefore: boolean) => number | null
-  scrollContent?: (deltaY: number) => void
-  pmEl: HTMLElement
-  blockRect: DOMRect
-  blockLayout: Rect
-  domScale: number
-  pmRect: DOMRect
-  scrollRect: DOMRect
+  id: string;
+  resolveDropAtElement: (
+    el: HTMLElement | null,
+    preferBefore: boolean,
+  ) => number | null;
+  scrollContent?: (deltaY: number) => void;
+  pmEl: HTMLElement;
+  blockRect: DOMRect;
+  blockLayout: Rect;
+  domScale: number;
+  pmRect: DOMRect;
+  scrollRect: DOMRect;
 }
 
 const richTextTargetOf = (id: string): RichTextTarget | null => {
-  const item = state.items.find((it) => it.uuid === id)
-  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"]`)
-  const scroll = wrapper?.querySelector<HTMLElement>('.editor-scroll') ?? null
-  const pm = wrapper?.querySelector<HTMLElement>('.ProseMirror') ?? null
-  const { resolveDropAtElement, scrollContent } = componentRefs.value[id] ?? {}
-  if (!item || !wrapper || !scroll || !pm || !resolveDropAtElement) return null
-  const blockLayout = layoutOf(item)
-  const blockRect = wrapper.getBoundingClientRect()
+  const item = state.items.find((it) => it.uuid === id);
+  const wrapper = document.querySelector<HTMLElement>(
+    `.drag-wrapper[data-uuid="${id}"]`,
+  );
+  const scroll = wrapper?.querySelector<HTMLElement>(".editor-scroll") ?? null;
+  const pm = wrapper?.querySelector<HTMLElement>(".ProseMirror") ?? null;
+  const { resolveDropAtElement, scrollContent } = componentRefs.value[id] ?? {};
+  if (!item || !wrapper || !scroll || !pm || !resolveDropAtElement) return null;
+  const blockLayout = layoutOf(item);
+  const blockRect = wrapper.getBoundingClientRect();
   return {
     id,
     resolveDropAtElement,
@@ -1259,314 +1571,402 @@ const richTextTargetOf = (id: string): RichTextTarget | null => {
     blockRect,
     blockLayout,
     // 浏览器 BCR 是否含 zoom 不一致，所以用实测比例反推
-    domScale: blockLayout.w > 0 && blockRect.width > 0 ? blockRect.width / blockLayout.w : 1,
+    domScale:
+      blockLayout.w > 0 && blockRect.width > 0
+        ? blockRect.width / blockLayout.w
+        : 1,
     pmRect: pm.getBoundingClientRect(),
     scrollRect: scroll.getBoundingClientRect(),
-  }
-}
+  };
+};
 
 // autoPanTick 与 updateRichTextDrop 在同一 rAF 帧内会各自重测目标块（querySelector + 多次 BCR），所以按帧号缓存；帧号 0 表示帧外调用、须直测实时值
-let rtTargetFrame = 0
-let rtTargetId: string | null = null
-let rtTargetValue: RichTextTarget | null = null
-const richTextTargetForFrame = (id: string, frame: number): RichTextTarget | null => {
-  if (frame > 0 && frame === rtTargetFrame && id === rtTargetId) return rtTargetValue
-  rtTargetFrame = frame
-  rtTargetId = id
-  rtTargetValue = richTextTargetOf(id)
-  return rtTargetValue
-}
+let rtTargetFrame = 0;
+let rtTargetId: string | null = null;
+let rtTargetValue: RichTextTarget | null = null;
+const richTextTargetForFrame = (
+  id: string,
+  frame: number,
+): RichTextTarget | null => {
+  if (frame > 0 && frame === rtTargetFrame && id === rtTargetId)
+    return rtTargetValue;
+  rtTargetFrame = frame;
+  rtTargetId = id;
+  rtTargetValue = richTextTargetOf(id);
+  return rtTargetValue;
+};
 
-let rtVisibleFrame = 0
-let rtVisibleEl: HTMLElement | null = null
-let rtVisibleValue = false
-const isTargetVisibleForFrame = (el: HTMLElement | null, frame: number): boolean => {
-  if (frame > 0 && frame === rtVisibleFrame && el === rtVisibleEl) return rtVisibleValue
-  rtVisibleFrame = frame
-  rtVisibleEl = el
-  rtVisibleValue = isFullyVisibleInCanvas(el)
-  return rtVisibleValue
-}
+let rtVisibleFrame = 0;
+let rtVisibleEl: HTMLElement | null = null;
+let rtVisibleValue = false;
+const isTargetVisibleForFrame = (
+  el: HTMLElement | null,
+  frame: number,
+): boolean => {
+  if (frame > 0 && frame === rtVisibleFrame && el === rtVisibleEl)
+    return rtVisibleValue;
+  rtVisibleFrame = frame;
+  rtVisibleEl = el;
+  rtVisibleValue = isFullyVisibleInCanvas(el);
+  return rtVisibleValue;
+};
 
 const domRectToContent = (target: RichTextTarget, rect: DOMRect) => ({
-  left: target.blockLayout.x + (rect.left - target.blockRect.left) / target.domScale,
-  right: target.blockLayout.x + (rect.right - target.blockRect.left) / target.domScale,
-  top: target.blockLayout.y + (rect.top - target.blockRect.top) / target.domScale,
-  bottom: target.blockLayout.y + (rect.bottom - target.blockRect.top) / target.domScale,
-})
+  left:
+    target.blockLayout.x +
+    (rect.left - target.blockRect.left) / target.domScale,
+  right:
+    target.blockLayout.x +
+    (rect.right - target.blockRect.left) / target.domScale,
+  top:
+    target.blockLayout.y + (rect.top - target.blockRect.top) / target.domScale,
+  bottom:
+    target.blockLayout.y +
+    (rect.bottom - target.blockRect.top) / target.domScale,
+});
 
 // 离块太远会一直滚，所以仅贴边带内按距离比例滚动（步进按视觉像素折算，各缩放手感一致）
-const RT_SCROLL_EDGE = 40
-const RT_SCROLL_MAX = 12
-const isPointerInsideRichText = (target: RichTextTarget, point: Point): boolean => {
-  const rect = domRectToContent(target, target.pmRect)
-  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
-}
+const RT_SCROLL_EDGE = 40;
+const RT_SCROLL_MAX = 12;
+const isPointerInsideRichText = (
+  target: RichTextTarget,
+  point: Point,
+): boolean => {
+  const rect = domRectToContent(target, target.pmRect);
+  return (
+    point.x >= rect.left &&
+    point.x <= rect.right &&
+    point.y >= rect.top &&
+    point.y <= rect.bottom
+  );
+};
 
-const autoScrollRichText = (target: RichTextTarget, point: Point, frame: number) => {
-  if (!isTargetVisibleForFrame(target.pmEl, frame) || !isPointerInsideRichText(target, point)) return
-  const { x, y } = point
-  const area = domRectToContent(target, target.scrollRect)
-  if (x < area.left || x > area.right) return
-  const visualToContent = 1 / zoom.value
-  const edge = RT_SCROLL_EDGE * visualToContent
-  const above = area.top + edge - y
-  const below = y - (area.bottom - edge)
-  const distance = Math.max(above, below)
-  if (distance <= 0 || distance > edge) return
-  const step = Math.ceil((RT_SCROLL_MAX * visualToContent * distance) / edge)
-  target.scrollContent?.(above > 0 ? -step : step)
-}
+const autoScrollRichText = (
+  target: RichTextTarget,
+  point: Point,
+  frame: number,
+) => {
+  if (
+    !isTargetVisibleForFrame(target.pmEl, frame) ||
+    !isPointerInsideRichText(target, point)
+  )
+    return;
+  const { x, y } = point;
+  const area = domRectToContent(target, target.scrollRect);
+  if (x < area.left || x > area.right) return;
+  const visualToContent = 1 / zoom.value;
+  const edge = RT_SCROLL_EDGE * visualToContent;
+  const above = area.top + edge - y;
+  const below = y - (area.bottom - edge);
+  const distance = Math.max(above, below);
+  if (distance <= 0 || distance > edge) return;
+  const step = Math.ceil((RT_SCROLL_MAX * visualToContent * distance) / edge);
+  target.scrollContent?.(above > 0 ? -step : step);
+};
 
 // 命中元素上溯到 ProseMirror 的直系子级块元素
 const blockElementAt = (el: HTMLElement | null, pmEl: HTMLElement) => {
-  if (!el || !pmEl.contains(el)) return null
-  let block: HTMLElement = el
-  while (block.parentElement && block.parentElement !== pmEl) block = block.parentElement
-  return block.parentElement === pmEl ? block : null
-}
+  if (!el || !pmEl.contains(el)) return null;
+  let block: HTMLElement = el;
+  while (block.parentElement && block.parentElement !== pmEl)
+    block = block.parentElement;
+  return block.parentElement === pmEl ? block : null;
+};
 
 // gutter/空隙处命不中块，所以按鼠标纵向取最近顶层块作参照
-const nearestBlockElement = (target: RichTextTarget, cy: number): HTMLElement | null => {
-  let best: HTMLElement | null = null
-  let bestDistance = Infinity
+const nearestBlockElement = (
+  target: RichTextTarget,
+  cy: number,
+): HTMLElement | null => {
+  let best: HTMLElement | null = null;
+  let bestDistance = Infinity;
   for (const child of Array.from(target.pmEl.children)) {
-    const el = child as HTMLElement
-    const domRect = getVisibleBlockRect(el)
-    if (!domRect) continue
-    const rect = domRectToContent(target, domRect)
-    if (cy >= rect.top && cy <= rect.bottom) return el
-    const distance = cy < rect.top ? rect.top - cy : cy - rect.bottom
+    const el = child as HTMLElement;
+    const domRect = getVisibleBlockRect(el);
+    if (!domRect) continue;
+    const rect = domRectToContent(target, domRect);
+    if (cy >= rect.top && cy <= rect.bottom) return el;
+    const distance = cy < rect.top ? rect.top - cy : cy - rect.bottom;
     if (distance < bestDistance) {
-      bestDistance = distance
-      best = el
+      bestDistance = distance;
+      best = el;
     }
   }
-  return best
-}
+  return best;
+};
 
 // posAtCoords/coordsAtPos 混用 BCR 与鼠标坐标系、zoom 下必偏移，所以改用 elementFromPoint + posAtDOM
-const resolveRichTextDrop = (target: RichTextTarget, point: Point, viewport: ViewportOrigin) => {
-  const pm = domRectToContent(target, target.pmRect)
-  const area = domRectToContent(target, target.scrollRect)
-  const cx = clampVal(point.x, pm.left, pm.right)
-  const cy = clampVal(point.y, Math.max(pm.top, area.top), Math.min(pm.bottom, area.bottom))
-  const screen = contentToScreen(canvasTransform(), viewport, cx, cy)
+const resolveRichTextDrop = (
+  target: RichTextTarget,
+  point: Point,
+  viewport: ViewportOrigin,
+) => {
+  const pm = domRectToContent(target, target.pmRect);
+  const area = domRectToContent(target, target.scrollRect);
+  const cx = clampVal(point.x, pm.left, pm.right);
+  const cy = clampVal(
+    point.y,
+    Math.max(pm.top, area.top),
+    Math.min(pm.bottom, area.bottom),
+  );
+  const screen = contentToScreen(canvasTransform(), viewport, cx, cy);
   // gutter 处 pointer-events:none 无元素，所以再贴文本区左缘探一次
-  const insideX = contentToScreen(canvasTransform(), viewport, pm.left, cy).x + 2
-  const at = (x: number) => document.elementFromPoint(x, screen.y) as HTMLElement | null
-  const hitEl = [at(screen.x), at(insideX)].find((el) => el && target.pmEl.contains(el)) ?? null
-  const blockEl = blockElementAt(hitEl, target.pmEl) ?? nearestBlockElement(target, cy)
-  if (!blockEl) return null
-  const blockDomRect = getVisibleBlockRect(blockEl)
-  if (!blockDomRect) return null
-  const block = domRectToContent(target, blockDomRect)
-  const preferBefore = cy < (block.top + block.bottom) / 2
-  const pos = target.resolveDropAtElement(blockEl, preferBefore)
-  if (pos == null) return null
+  const insideX =
+    contentToScreen(canvasTransform(), viewport, pm.left, cy).x + 2;
+  const at = (x: number) =>
+    document.elementFromPoint(x, screen.y) as HTMLElement | null;
+  const hitEl =
+    [at(screen.x), at(insideX)].find((el) => el && target.pmEl.contains(el)) ??
+    null;
+  const blockEl =
+    blockElementAt(hitEl, target.pmEl) ?? nearestBlockElement(target, cy);
+  if (!blockEl) return null;
+  const blockDomRect = getVisibleBlockRect(blockEl);
+  if (!blockDomRect) return null;
+  const block = domRectToContent(target, blockDomRect);
+  const preferBefore = cy < (block.top + block.bottom) / 2;
+  const pos = target.resolveDropAtElement(blockEl, preferBefore);
+  if (pos == null) return null;
   return {
     id: target.id,
     pos,
     left: pm.left,
     right: pm.right,
     y: preferBefore ? block.top : block.bottom,
-  }
-}
+  };
+};
 
 // 帧内块内可能已滚动，所以松手时按实时坐标重算落点
 const resolveDropForTarget = (targetId: string, event?: MouseEvent) => {
-  const viewport = viewRect.value
-  const target = viewport ? richTextTargetOf(targetId) : null
-  if (!viewport || !target) return null
-  const point = screenToContent(canvasTransform(), viewport, event?.clientX ?? customDragLastX, event?.clientY ?? customDragLastY)
-  return resolveRichTextDrop(target, point, viewport)
-}
+  const viewport = viewRect.value;
+  const target = viewport ? richTextTargetOf(targetId) : null;
+  if (!viewport || !target) return null;
+  const point = screenToContent(
+    canvasTransform(),
+    viewport,
+    event?.clientX ?? customDragLastX,
+    event?.clientY ?? customDragLastY,
+  );
+  return resolveRichTextDrop(target, point, viewport);
+};
 
 const updateRichTextDrop = (frame = 0) => {
-  const viewport = viewRect.value
-  const targetId = richTextDropTargetId.value
-  const target = viewport && targetId ? richTextTargetForFrame(targetId, frame) : null
+  const viewport = viewRect.value;
+  const targetId = richTextDropTargetId.value;
+  const target =
+    viewport && targetId ? richTextTargetForFrame(targetId, frame) : null;
   if (!viewport || !target) {
-    setRichTextDrop(null)
-    return
+    setRichTextDrop(null);
+    return;
   }
-  const point = screenToContent(canvasTransform(), viewport, customDragLastX, customDragLastY)
+  const point = screenToContent(
+    canvasTransform(),
+    viewport,
+    customDragLastX,
+    customDragLastY,
+  );
   // 两者同时进行会让落点乱跳，所以块未完全显示时不滚块内内容
-  const canScrollInside = isPointerInsideRichText(target, point) && isTargetVisibleForFrame(target.pmEl, frame)
-  if (canScrollInside) autoScrollRichText(target, point, frame)
-  setRichTextDrop(resolveRichTextDrop(target, point, viewport))
-}
+  const canScrollInside =
+    isPointerInsideRichText(target, point) &&
+    isTargetVisibleForFrame(target.pmEl, frame);
+  if (canScrollInside) autoScrollRichText(target, point, frame);
+  setRichTextDrop(resolveRichTextDrop(target, point, viewport));
+};
 
 const applyCustomDrag = (frame: number) => {
-  customDragRafId = 0
-  if (!customDrag.active) return
+  customDragRafId = 0;
+  if (!customDrag.active) return;
   // 画布按 zoom 渲染，所以鼠标位移需除以 zoom
-  const dx = (customDragLastX - customDrag.startClientX) / zoom.value
-  const dy = (customDragLastY - customDrag.startClientY) / zoom.value
-  const panDx = (pan.x - customDrag.panStartX) / zoom.value
-  const panDy = (pan.y - customDrag.panStartY) / zoom.value
+  const dx = (customDragLastX - customDrag.startClientX) / zoom.value;
+  const dy = (customDragLastY - customDrag.startClientY) / zoom.value;
+  const panDx = (pan.x - customDrag.panStartX) / zoom.value;
+  const panDy = (pan.y - customDrag.panStartY) / zoom.value;
   customDragItems.forEach((target, id) => {
-    const origin = customDragGroup[id]
-    const layout = layoutOf(target)
+    const origin = customDragGroup[id];
+    const layout = layoutOf(target);
     // 块屏幕位置需落在整数像素，所以取整
-    layout.x = mobileMode.value ? origin.x : Math.round(origin.x + dx - panDx)
-    layout.y = Math.round(origin.y + dy - panDy)
-    if (!mobileMode.value) snapLayoutToOthers(target, layout)
-  })
-  richTextDropTargetId.value = findRichTextDropTarget()
-  updateRichTextDrop(frame)
-  flushDragLayout()
-}
+    layout.x = mobileMode.value ? origin.x : Math.round(origin.x + dx - panDx);
+    layout.y = Math.round(origin.y + dy - panDy);
+    if (!mobileMode.value) snapLayoutToOthers(target, layout);
+  });
+  richTextDropTargetId.value = findRichTextDropTarget();
+  updateRichTextDrop(frame);
+  flushDragLayout();
+};
 
 // 自定义拖拽绕过 VDR 的 snap，所以手动做边缘/中线对齐吸附
-const SNAP_TOLERANCE = 10
-const PAPERCLIP_PROXIMITY = 32
+const SNAP_TOLERANCE = 10;
+const PAPERCLIP_PROXIMITY = 32;
 const snapLayoutToOthers = (target: CanvasItem, layout: Rect) => {
   const hasOverlap = state.items.some((other) => {
-    if (other.uuid === target.uuid || customDragGroup[other.uuid]) return false
-    const o = layoutOf(other)
-    return layout.x < o.x + o.w && layout.x + layout.w > o.x && layout.y < o.y + o.h && layout.y + layout.h > o.y
-  })
-  if (hasOverlap) return
+    if (other.uuid === target.uuid || customDragGroup[other.uuid]) return false;
+    const o = layoutOf(other);
+    return (
+      layout.x < o.x + o.w &&
+      layout.x + layout.w > o.x &&
+      layout.y < o.y + o.h &&
+      layout.y + layout.h > o.y
+    );
+  });
+  if (hasOverlap) return;
 
-  const candidatesX: number[] = []
-  const candidatesY: number[] = []
+  const candidatesX: number[] = [];
+  const candidatesY: number[] = [];
   state.items.forEach((other) => {
-    if (other.uuid === target.uuid || customDragGroup[other.uuid]) return
-    const o = layoutOf(other)
+    if (other.uuid === target.uuid || customDragGroup[other.uuid]) return;
+    const o = layoutOf(other);
     candidatesX.push(
-      o.x - layout.x, o.x + o.w - layout.x,
-      o.x - (layout.x + layout.w), o.x + o.w - (layout.x + layout.w),
-      (o.x + o.w / 2) - (layout.x + layout.w / 2),
-    )
+      o.x - layout.x,
+      o.x + o.w - layout.x,
+      o.x - (layout.x + layout.w),
+      o.x + o.w - (layout.x + layout.w),
+      o.x + o.w / 2 - (layout.x + layout.w / 2),
+    );
     candidatesY.push(
-      o.y - layout.y, o.y + o.h - layout.y,
-      o.y - (layout.y + layout.h), o.y + o.h - (layout.y + layout.h),
-      (o.y + o.h / 2) - (layout.y + layout.h / 2),
-    )
-  })
+      o.y - layout.y,
+      o.y + o.h - layout.y,
+      o.y - (layout.y + layout.h),
+      o.y + o.h - (layout.y + layout.h),
+      o.y + o.h / 2 - (layout.y + layout.h / 2),
+    );
+  });
   const nearest = (arr: number[]) => {
-    let best = 0
-    let bestAbs = Infinity
+    let best = 0;
+    let bestAbs = Infinity;
     arr.forEach((d) => {
-      const abs = Math.abs(d)
+      const abs = Math.abs(d);
       if (abs <= SNAP_TOLERANCE && abs < bestAbs) {
-        bestAbs = abs
-        best = d
+        bestAbs = abs;
+        best = d;
       }
-    })
-    return best
-  }
-  layout.x += nearest(candidatesX)
-  layout.y += nearest(candidatesY)
-}
+    });
+    return best;
+  };
+  layout.x += nearest(candidatesX);
+  layout.y += nearest(candidatesY);
+};
 
 const isAdjacent = (a: Rect, b: Rect): boolean => {
-  const hasVerticalOverlap = a.y < b.y + b.h && b.y < a.y + a.h
-  const hasHorizontalOverlap = a.x < b.x + b.w && b.x < a.x + a.w
-  const touchesVerticalEdge = Math.abs(a.x + a.w - b.x) <= SNAP_TOLERANCE ||
-    Math.abs(b.x + b.w - a.x) <= SNAP_TOLERANCE
-  const touchesHorizontalEdge = Math.abs(a.y + a.h - b.y) <= SNAP_TOLERANCE ||
-    Math.abs(b.y + b.h - a.y) <= SNAP_TOLERANCE
-  return (touchesVerticalEdge && hasVerticalOverlap) ||
+  const hasVerticalOverlap = a.y < b.y + b.h && b.y < a.y + a.h;
+  const hasHorizontalOverlap = a.x < b.x + b.w && b.x < a.x + a.w;
+  const touchesVerticalEdge =
+    Math.abs(a.x + a.w - b.x) <= SNAP_TOLERANCE ||
+    Math.abs(b.x + b.w - a.x) <= SNAP_TOLERANCE;
+  const touchesHorizontalEdge =
+    Math.abs(a.y + a.h - b.y) <= SNAP_TOLERANCE ||
+    Math.abs(b.y + b.h - a.y) <= SNAP_TOLERANCE;
+  return (
+    (touchesVerticalEdge && hasVerticalOverlap) ||
     (touchesHorizontalEdge && hasHorizontalOverlap)
-}
+  );
+};
 
 // 尺寸传播受 min/max 钳制或推挤后可能把联结块推离贴合位，此时链接线已画不出来，所以同步剔除失效链接
 const pruneDetachedLinks = () => {
-  if (linkedPairs.value.size === 0 || mobileMode.value) return
-  const itemMap = new Map(state.items.map((item) => [item.uuid, item]))
-  const kept = new Set<string>()
+  if (linkedPairs.value.size === 0 || mobileMode.value) return;
+  const itemMap = new Map(state.items.map((item) => [item.uuid, item]));
+  const kept = new Set<string>();
   linkedPairs.value.forEach((key) => {
-    const [firstId, secondId] = key.split('|')
-    const first = itemMap.get(firstId)
-    const second = itemMap.get(secondId)
-    if (first && second && isAdjacent(layoutOf(first), layoutOf(second))) kept.add(key)
-  })
-  if (kept.size !== linkedPairs.value.size) linkedPairs.value = kept
-}
+    const [firstId, secondId] = key.split("|");
+    const first = itemMap.get(firstId);
+    const second = itemMap.get(secondId);
+    if (first && second && isAdjacent(layoutOf(first), layoutOf(second)))
+      kept.add(key);
+  });
+  if (kept.size !== linkedPairs.value.size) linkedPairs.value = kept;
+};
 
 // 曲别针取连接线两端点的中点定位
 const connectionPoint = (a: Rect, b: Rect): { x: number; y: number } => {
-  const { start, end } = connectionPoints(a, b)
-  return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-}
+  const { start, end } = connectionPoints(a, b);
+  return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+};
 
 // 层级已在 zIndex.ts 固定，所以曲别针无需运行时降 z
 
 // 每次渲染返回新数组会让 ResizeBox 判定 props 变更而重渲染，所以复用常量数组
-const HANDLES_MOBILE = ['tm', 'bm']
-const HANDLES_NO_TOP_MIDDLE = ['tl', 'tr', 'ml', 'mr', 'bl', 'bm', 'br']
-const HANDLES_ALL = ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br']
+const HANDLES_MOBILE = ["tm", "bm"];
+const HANDLES_NO_TOP_MIDDLE = ["tl", "tr", "ml", "mr", "bl", "bm", "br"];
+const HANDLES_ALL = ["tl", "tm", "tr", "ml", "mr", "bl", "bm", "br"];
 
 // 手柄已 Teleport 脱离 .drag-wrapper（CSS 隐藏规则失效），所以按 popup 显隐过滤 tm 手柄；可变形由 base 按 changable 收窄
 const resizeHandlesOf = (item: CanvasItem): string[] => {
-  if (mobileMode.value) return HANDLES_MOBILE
-  if (popupBlockUuid.value === item.uuid) return HANDLES_NO_TOP_MIDDLE
-  return HANDLES_ALL
-}
+  if (mobileMode.value) return HANDLES_MOBILE;
+  if (popupBlockUuid.value === item.uuid) return HANDLES_NO_TOP_MIDDLE;
+  return HANDLES_ALL;
+};
 
 // 内联箭头回调逐次渲染都是新引用、会迫使 ResizeBox 重渲染，所以按块缓存稳定回调
 interface ResizeCallbacks {
-  start: (handle: string) => void
-  resizing: (x: number, y: number, w: number, h: number) => void
-  resizestop: (x: number, y: number, w: number, h: number) => void
+  start: (handle: string) => void;
+  resizing: (x: number, y: number, w: number, h: number) => void;
+  resizestop: (x: number, y: number, w: number, h: number) => void;
 }
-const resizeCallbackCache = new WeakMap<CanvasItem, ResizeCallbacks>()
+const resizeCallbackCache = new WeakMap<CanvasItem, ResizeCallbacks>();
 const resizeCallbacksOf = (item: CanvasItem): ResizeCallbacks => {
-  const cached = resizeCallbackCache.get(item)
-  if (cached) return cached
+  const cached = resizeCallbackCache.get(item);
+  if (cached) return cached;
   const callbacks: ResizeCallbacks = {
     start: (handle) => onResizeStart(item, handle),
     resizing: (x, y, w, h) => onResizing(item, x, y, w, h),
     resizestop: (x, y, w, h) => onResizeStop(item, x, y, w, h),
-  }
-  resizeCallbackCache.set(item, callbacks)
-  return callbacks
-}
+  };
+  resizeCallbackCache.set(item, callbacks);
+  return callbacks;
+};
 
 // #region 块组件控制器
-const ZOOM_MIN = 0.5
-const ZOOM_MAX = 3
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
 
 // 组件申请移动时沿用联结语义：联动可达块一起走，移动端锁水平
 const moveBlockBy = (item: CanvasItem, dx: number, dy: number) => {
-  if (!isEditMode.value) return
-  const deltaX = mobileMode.value ? 0 : Math.round(dx)
-  const deltaY = Math.round(dy)
-  if (!deltaX && !deltaY) return
-  const targets = mobileMode.value ? [item.uuid] : Array.from(collectLinkedUuids(item.uuid))
-  const itemMap = new Map(state.items.map((it) => [it.uuid, it]))
+  if (!isEditMode.value) return;
+  const deltaX = mobileMode.value ? 0 : Math.round(dx);
+  const deltaY = Math.round(dy);
+  if (!deltaX && !deltaY) return;
+  const targets = mobileMode.value
+    ? [item.uuid]
+    : Array.from(collectLinkedUuids(item.uuid));
+  const itemMap = new Map(state.items.map((it) => [it.uuid, it]));
   targets.forEach((id) => {
-    const target = itemMap.get(id)
-    if (!target) return
-    const layout = layoutOf(target)
-    layout.x += deltaX
-    layout.y += deltaY
-  })
-  markLayoutDirty()
-  recomputeMasks()
-}
+    const target = itemMap.get(id);
+    if (!target) return;
+    const layout = layoutOf(target);
+    layout.x += deltaX;
+    layout.y += deltaY;
+  });
+  markLayoutDirty();
+  recomputeMasks();
+};
 
 // 组件自身发起的尺寸调整不受 changable 拦截；手柄与联结的锁定另有 applyResizeLayout / propagateLinkedEdges 把关
 const resizeBlockTo = (item: CanvasItem, size: Partial<BlockSize>) => {
-  if (!isEditMode.value) return
-  const c = constraintsOf(item)
-  const layout = layoutOf(item)
-  const width = clampVal(Math.round(size.width ?? layout.w), (c.minWidth ?? 0) + 8, c.maxWidth)
-  const height = clampVal(Math.round(size.height ?? layout.h), (c.minHeight ?? 0) + 8, c.maxHeight)
-  applyBlockSize(item, width, height)
-}
+  if (!isEditMode.value) return;
+  const c = constraintsOf(item);
+  const layout = layoutOf(item);
+  const width = clampVal(
+    Math.round(size.width ?? layout.w),
+    (c.minWidth ?? 0) + 8,
+    c.maxWidth,
+  );
+  const height = clampVal(
+    Math.round(size.height ?? layout.h),
+    (c.minHeight ?? 0) + 8,
+    c.maxHeight,
+  );
+  applyBlockSize(item, width, height);
+};
 
 const panCanvasBy = (dx: number, dy: number) => {
-  if (!mobileMode.value) pan.x += Math.round(dx)
-  pan.y += Math.round(dy)
-}
+  if (!mobileMode.value) pan.x += Math.round(dx);
+  pan.y += Math.round(dy);
+};
 
 const zoomCanvasTo = (value: number) => {
-  if (!Number.isFinite(value) || value <= 0) return
-  zoom.value = clampVal(value, ZOOM_MIN, ZOOM_MAX)
-}
+  if (!Number.isFinite(value) || value <= 0) return;
+  zoom.value = clampVal(value, ZOOM_MIN, ZOOM_MAX);
+};
 
 const canvasViewOf = (item: CanvasItem): CanvasViewData => ({
   zoom: zoom.value,
@@ -1575,13 +1975,16 @@ const canvasViewOf = (item: CanvasItem): CanvasViewData => ({
   viewport: viewRect.value ? { ...viewRect.value } : null,
   block: { ...layoutOf(item) },
   isPanning: isPanning.value,
-})
+});
 
 // 回调逐次渲染换引用会让块组件重渲染，所以按块缓存
-const interactionHandlerCache = new WeakMap<CanvasItem, BlockInteractionHandlers>()
+const interactionHandlerCache = new WeakMap<
+  CanvasItem,
+  BlockInteractionHandlers
+>();
 const interactionHandlersOf = (item: CanvasItem): BlockInteractionHandlers => {
-  const cached = interactionHandlerCache.get(item)
-  if (cached) return cached
+  const cached = interactionHandlerCache.get(item);
+  if (cached) return cached;
   const handlers: BlockInteractionHandlers = {
     moveBy: (dx, dy) => moveBlockBy(item, dx, dy),
     resizeTo: (size) => resizeBlockTo(item, size),
@@ -1590,164 +1993,192 @@ const interactionHandlersOf = (item: CanvasItem): BlockInteractionHandlers => {
     getCanvasView: () => canvasViewOf(item),
     writeConfig: (patch) => writeItemConfig(item, patch),
     updateConfig: (patch) => updateItemConfig(item, patch),
-  }
-  interactionHandlerCache.set(item, handlers)
-  return handlers
-}
+  };
+  interactionHandlerCache.set(item, handlers);
+  return handlers;
+};
 // #endregion 块组件控制器
 
 // 候选需两两判定相邻（O(N²)），所以与遮罩一致改为显式缓存，只在布局落定时刷新
 interface PaperclipCandidate {
-  key: string
-  a: string
-  b: string
-  x: number
-  y: number
-  linked: boolean
+  key: string;
+  a: string;
+  b: string;
+  x: number;
+  y: number;
+  linked: boolean;
 }
 
 // popup 上侧开启会盖住曲别针，所以此时清空
-const paperclipCandidateOf = (first: CanvasItem, second: CanvasItem): PaperclipCandidate | null => {
-  const key = pairKey(first.uuid, second.uuid)
-  const linked = linkedPairs.value.has(key)
-  const rectA = layoutOf(first)
-  const rectB = layoutOf(second)
-  if (!linked && !isAdjacent(rectA, rectB)) return null
-  const pt = connectionPoint(rectA, rectB)
-  return { key, a: first.uuid, b: second.uuid, x: pt.x, y: pt.y, linked }
-}
+const paperclipCandidateOf = (
+  first: CanvasItem,
+  second: CanvasItem,
+): PaperclipCandidate | null => {
+  const key = pairKey(first.uuid, second.uuid);
+  const linked = linkedPairs.value.has(key);
+  const rectA = layoutOf(first);
+  const rectB = layoutOf(second);
+  if (!linked && !isAdjacent(rectA, rectB)) return null;
+  const pt = connectionPoint(rectA, rectB);
+  return { key, a: first.uuid, b: second.uuid, x: pt.x, y: pt.y, linked };
+};
 
 const computePaperclipCandidates = (): PaperclipCandidate[] => {
-  if (mobileMode.value || popupTopOpen.value) return []
-  const out: PaperclipCandidate[] = []
+  if (mobileMode.value || popupTopOpen.value) return [];
+  const out: PaperclipCandidate[] = [];
   state.items.forEach((first, index) => {
-    const row = state.items.slice(index + 1)
+    const row = state.items
+      .slice(index + 1)
       .map((second) => paperclipCandidateOf(first, second))
-      .filter((candidate): candidate is PaperclipCandidate => !!candidate)
-    out.push(...row)
-  })
-  return out
-}
+      .filter((candidate): candidate is PaperclipCandidate => !!candidate);
+    out.push(...row);
+  });
+  return out;
+};
 
-const paperclipCandidates = shallowRef<PaperclipCandidate[]>([])
+const paperclipCandidates = shallowRef<PaperclipCandidate[]>([]);
 
 // 每帧对缓存候选判距记录最近命中 key，显隐经 v-show 切换
-const nearClipKey = ref<string | null>(null)
+const nearClipKey = ref<string | null>(null);
 const updateNearClip = (clientX: number, clientY: number) => {
-  const cr = viewRect.value
-  if (!cr) return
-  let best: string | null = null
-  let bestDist = Infinity
+  const cr = viewRect.value;
+  if (!cr) return;
+  let best: string | null = null;
+  let bestDist = Infinity;
   paperclipCandidates.value.forEach((c) => {
     // 曲别针在 .canvas 内，所以屏幕位置需加 origin/pan/容器偏移
-    const sx = c.x * zoom.value + origin.x + pan.x + cr.left
-    const sy = c.y * zoom.value + origin.y + pan.y + cr.top
-    const d = Math.hypot(sx - clientX, sy - clientY)
+    const sx = c.x * zoom.value + origin.x + pan.x + cr.left;
+    const sy = c.y * zoom.value + origin.y + pan.y + cr.top;
+    const d = Math.hypot(sx - clientX, sy - clientY);
     if (d <= PAPERCLIP_PROXIMITY && d < bestDist) {
-      bestDist = d
-      best = c.key
+      bestDist = d;
+      best = c.key;
     }
-  })
-  if (nearClipKey.value !== best) nearClipKey.value = best
-}
+  });
+  if (nearClipKey.value !== best) nearClipKey.value = best;
+};
 
 // 块拖拽走自定义路径、VDR 冲突检测不触发，所以松开时自行检测重叠并回退
 const resolveDragConflict = () => {
-  const draggedIds = new Set(Object.keys(customDragGroup))
+  const draggedIds = new Set(Object.keys(customDragGroup));
   state.items.forEach((target) => {
-    if (!draggedIds.has(target.uuid)) return
-    const layout = layoutOf(target)
+    if (!draggedIds.has(target.uuid)) return;
+    const layout = layoutOf(target);
     const conflict = state.items.some((other) => {
-      if (other.uuid === target.uuid || draggedIds.has(other.uuid)) return false
-      const ol = layoutOf(other)
-      return layout.x < ol.x + ol.w && layout.x + layout.w > ol.x && layout.y < ol.y + ol.h && layout.y + layout.h > ol.y
-    })
+      if (other.uuid === target.uuid || draggedIds.has(other.uuid))
+        return false;
+      const ol = layoutOf(other);
+      return (
+        layout.x < ol.x + ol.w &&
+        layout.x + layout.w > ol.x &&
+        layout.y < ol.y + ol.h &&
+        layout.y + layout.h > ol.y
+      );
+    });
     if (conflict) {
-      const origin = customDragGroup[target.uuid]
-      layout.x = origin.x
-      layout.y = origin.y
+      const origin = customDragGroup[target.uuid];
+      layout.x = origin.x;
+      layout.y = origin.y;
     }
-  })
-}
+  });
+};
 
 // 块配置 → 富文本节点由注册项声明，画布不感知具体组件类型
 const componentNodeOf = (item: CanvasItem) => {
-  const embed = componentMetaOf(item.component)?.embed
-  return embed ? { name: embed.nodeName, props: embed.toProps(item.config) } : null
-}
+  const embed = componentMetaOf(item.component)?.embed;
+  return embed
+    ? { name: embed.nodeName, props: embed.toProps(item.config) }
+    : null;
+};
 
-const insertDraggedComponent = (targetId: string, sourceId: string, pos: number | null): boolean => {
-  const target = state.items.find((item) => item.uuid === targetId)
-  const source = state.items.find((item) => item.uuid === sourceId)
-  const component = source ? componentNodeOf(source) : null
-  if (!target || !component) return false
-  const commands = componentRefs.value[target.uuid]?.commands
+const insertDraggedComponent = (
+  targetId: string,
+  sourceId: string,
+  pos: number | null,
+): boolean => {
+  const target = state.items.find((item) => item.uuid === targetId);
+  const source = state.items.find((item) => item.uuid === sourceId);
+  const component = source ? componentNodeOf(source) : null;
+  if (!target || !component) return false;
+  const commands = componentRefs.value[target.uuid]?.commands;
   // 沿用源块 uuid，附件类块的组件数据目录不必搬家
-  const inserted = (pos != null && commands?.insertVueComponentAt?.(pos, component.name, component.props, sourceId))
-    || !!commands?.insertVueComponent?.(component.name, component.props, sourceId)
-  if (!inserted) return false
-  const removedIds = new Set([sourceId])
-  state.items = state.items.filter((item) => !removedIds.has(item.uuid))
-  state.selectedIds = new Set()
-  delete componentRefs.value[sourceId]
-  linkedPairs.value = new Set([...linkedPairs.value].filter((key) => {
-    const [first, second] = key.split('|')
-    return !removedIds.has(first) && !removedIds.has(second)
-  }))
-  return true
-}
+  const inserted =
+    (pos != null &&
+      commands?.insertVueComponentAt?.(
+        pos,
+        component.name,
+        component.props,
+        sourceId,
+      )) ||
+    !!commands?.insertVueComponent?.(component.name, component.props, sourceId);
+  if (!inserted) return false;
+  const removedIds = new Set([sourceId]);
+  state.items = state.items.filter((item) => !removedIds.has(item.uuid));
+  state.selectedIds = new Set();
+  delete componentRefs.value[sourceId];
+  linkedPairs.value = new Set(
+    [...linkedPairs.value].filter((key) => {
+      const [first, second] = key.split("|");
+      return !removedIds.has(first) && !removedIds.has(second);
+    }),
+  );
+  return true;
+};
 
 // 松手后浏览器会补发 click，所以打标记由紧随的 click 消费，避免拖拽组被收缩为单选
-let dragJustFinished = false
+let dragJustFinished = false;
 
 const onCustomDragUp = (e?: MouseEvent) => {
-  dragJustFinished = true
-  const targetId = findRichTextDropTarget()
-  const sourceId = customDrag.sourceUuid
-  const drop = targetId ? resolveDropForTarget(targetId, e) : null
-  const inserted = targetId && sourceId ? insertDraggedComponent(targetId, sourceId, drop?.pos ?? null) : false
-  richTextDropTargetId.value = null
-  setRichTextDrop(null)
+  dragJustFinished = true;
+  const targetId = findRichTextDropTarget();
+  const sourceId = customDrag.sourceUuid;
+  const drop = targetId ? resolveDropForTarget(targetId, e) : null;
+  const inserted =
+    targetId && sourceId
+      ? insertDraggedComponent(targetId, sourceId, drop?.pos ?? null)
+      : false;
+  richTextDropTargetId.value = null;
+  setRichTextDrop(null);
   // 清空后 draggedIds 为空集，所以冲突检测须在清空 customDragGroup 前执行
-  if (!inserted) resolveDragConflict()
+  if (!inserted) resolveDragConflict();
   // props 未变时 Vue 会跳过 patch，所以回退/取整后的最终位置必须显式落回 DOM
-  flushDragLayout()
-  clearDragDom()
-  customDrag.active = false
-  customDrag.sourceUuid = null
+  flushDragLayout();
+  clearDragDom();
+  customDrag.active = false;
+  customDrag.sourceUuid = null;
   // 残留块会被框选自动滚动误补偿，所以结束即清空拖拽组
-  customDragGroup = {}
-  customDragItems = new Map()
-  customDrag.draggingUuids = new Set()
+  customDragGroup = {};
+  customDragItems = new Map();
+  customDrag.draggingUuids = new Set();
   if (customDragRafId) {
-    cancelAnimationFrame(customDragRafId)
-    customDragRafId = 0
+    cancelAnimationFrame(customDragRafId);
+    customDragRafId = 0;
   }
-  window.removeEventListener('pointermove', onCustomDragMove, true)
-  window.removeEventListener('pointerup', onCustomDragUp)
-  window.removeEventListener('mousemove', onCustomDragMove, true)
-  window.removeEventListener('mouseup', onCustomDragUp)
-  stopAutoPan()
-  document.body.classList.remove('block-handle-dragging')
-  document.documentElement.style.overflow = ''
-  document.body.style.overflow = ''
-  maybeRebaseOrigin()
-  recomputeMasks()
-  markLayoutDirty()
-}
+  window.removeEventListener("pointermove", onCustomDragMove, true);
+  window.removeEventListener("pointerup", onCustomDragUp);
+  window.removeEventListener("mousemove", onCustomDragMove, true);
+  window.removeEventListener("mouseup", onCustomDragUp);
+  stopAutoPan();
+  document.body.classList.remove("block-handle-dragging");
+  document.documentElement.style.overflow = "";
+  document.body.style.overflow = "";
+  maybeRebaseOrigin();
+  recomputeMasks();
+  markLayoutDirty();
+};
 // #endregion 自定义拖拽与联结
 
 // resize 会话（坐标全为 content 世界坐标）
 // #region 尺寸调整与联结传播
 interface ResizeSession {
-  uuid: string
-  handle: string
-  starts: Map<string, Rect>
-  lastBase: Rect
-  panStartX: number
-  panStartY: number
+  uuid: string;
+  handle: string;
+  starts: Map<string, Rect>;
+  lastBase: Rect;
+  panStartX: number;
+  panStartY: number;
 }
-let resizeSession: ResizeSession | null = null
+let resizeSession: ResizeSession | null = null;
 
 // 自动滚动会让被拖块偏离鼠标，所以按基准矩形 + 相对起始 pan 位移补偿：被拖边钉屏、锚定边随画布滚
 const applyPanCorrection = (
@@ -1757,236 +2188,285 @@ const applyPanCorrection = (
   dpX: number,
   dpY: number,
 ): Rect => {
-  const out = { ...base }
-  const minW = (c.minWidth ?? 0) + 8, maxW = c.maxWidth ?? null
-  const minH = (c.minHeight ?? 0) + 8, maxH = c.maxHeight ?? null
+  const out = { ...base };
+  const minW = (c.minWidth ?? 0) + 8,
+    maxW = c.maxWidth ?? null;
+  const minH = (c.minHeight ?? 0) + 8,
+    maxH = c.maxHeight ?? null;
   // 组件上报的 base 已按 min/max 钳制，所以带 0.5 容差防浮点抖动
-  const wClamped = base.w <= minW + 0.5 || (maxW != null && base.w >= maxW - 0.5)
-  const hClamped = base.h <= minH + 0.5 || (maxH != null && base.h >= maxH - 0.5)
+  const wClamped =
+    base.w <= minW + 0.5 || (maxW != null && base.w >= maxW - 0.5);
+  const hClamped =
+    base.h <= minH + 0.5 || (maxH != null && base.h >= maxH - 0.5);
   if (dpY && !hClamped) {
     // 拖 t 改 y+height、拖 b 改 height；补偿后按 min/max 钳制（锚定边保持 y+h 不变）
-    if (handle.includes('t')) {
-      const rawH = out.h + dpY
-      const nh = clampVal(rawH, minH, maxH)
-      out.y = out.y - dpY + (rawH - nh)
-      out.h = nh
+    if (handle.includes("t")) {
+      const rawH = out.h + dpY;
+      const nh = clampVal(rawH, minH, maxH);
+      out.y = out.y - dpY + (rawH - nh);
+      out.h = nh;
     } else {
-      out.h = clampVal(out.h - dpY, minH, maxH)
+      out.h = clampVal(out.h - dpY, minH, maxH);
     }
   }
   if (dpX && !wClamped) {
-    if (handle.includes('l')) {
-      const rawW = out.w + dpX
-      const nw = clampVal(rawW, minW, maxW)
-      out.x = out.x - dpX + (rawW - nw)
-      out.w = nw
+    if (handle.includes("l")) {
+      const rawW = out.w + dpX;
+      const nw = clampVal(rawW, minW, maxW);
+      out.x = out.x - dpX + (rawW - nw);
+      out.w = nw;
     } else {
-      out.w = clampVal(out.w - dpX, minW, maxW)
+      out.w = clampVal(out.w - dpX, minW, maxW);
     }
   }
-  return out
-}
+  return out;
+};
 
 // 按被拖边对齐其他块的边/中线，仅调被拖边、保持 min/max 钳制
-const snapResizeEdges = (handle: string, rect: Rect, c: Required<ResizeConstraints>): Rect => {
-  const out = { ...rect }
-  const minW = (c.minWidth ?? 0) + 8, maxW = c.maxWidth ?? null
-  const minH = (c.minHeight ?? 0) + 8, maxH = c.maxHeight ?? null
+const snapResizeEdges = (
+  handle: string,
+  rect: Rect,
+  c: Required<ResizeConstraints>,
+): Rect => {
+  const out = { ...rect };
+  const minW = (c.minWidth ?? 0) + 8,
+    maxW = c.maxWidth ?? null;
+  const minH = (c.minHeight ?? 0) + 8,
+    maxH = c.maxHeight ?? null;
   const nearest = (cur: number, targets: number[]): number => {
-    let best = 0
-    let bestAbs = Infinity
+    let best = 0;
+    let bestAbs = Infinity;
     targets.forEach((t) => {
-      const d = t - cur
-      const abs = Math.abs(d)
+      const d = t - cur;
+      const abs = Math.abs(d);
       if (abs <= SNAP_TOLERANCE && abs < bestAbs) {
-        bestAbs = abs
-        best = d
+        bestAbs = abs;
+        best = d;
       }
-    })
-    return best
-  }
-  const xs: number[] = []
-  const ys: number[] = []
+    });
+    return best;
+  };
+  const xs: number[] = [];
+  const ys: number[] = [];
   state.items.forEach((other) => {
-    if (other.uuid === resizeSession?.uuid) return
-    const o = layoutOf(other)
-    xs.push(o.x, o.x + o.w, o.x + o.w / 2)
-    ys.push(o.y, o.y + o.h, o.y + o.h / 2)
-  })
-  if (handle.includes('r')) out.w = clampVal(out.w + nearest(out.x + out.w, xs), minW, maxW)
-  if (handle.includes('l')) {
-    const d = nearest(out.x, xs)
+    if (other.uuid === resizeSession?.uuid) return;
+    const o = layoutOf(other);
+    xs.push(o.x, o.x + o.w, o.x + o.w / 2);
+    ys.push(o.y, o.y + o.h, o.y + o.h / 2);
+  });
+  if (handle.includes("r"))
+    out.w = clampVal(out.w + nearest(out.x + out.w, xs), minW, maxW);
+  if (handle.includes("l")) {
+    const d = nearest(out.x, xs);
     if (d !== 0) {
-      const nw = clampVal(out.w - d, minW, maxW)
-      out.x = out.x + out.w - nw
-      out.w = nw
+      const nw = clampVal(out.w - d, minW, maxW);
+      out.x = out.x + out.w - nw;
+      out.w = nw;
     }
   }
-  if (handle.includes('b')) out.h = clampVal(out.h + nearest(out.y + out.h, ys), minH, maxH)
-  if (handle.includes('t')) {
-    const d = nearest(out.y, ys)
+  if (handle.includes("b"))
+    out.h = clampVal(out.h + nearest(out.y + out.h, ys), minH, maxH);
+  if (handle.includes("t")) {
+    const d = nearest(out.y, ys);
     if (d !== 0) {
-      const nh = clampVal(out.h - d, minH, maxH)
-      out.y = out.y + out.h - nh
-      out.h = nh
+      const nh = clampVal(out.h - d, minH, maxH);
+      out.y = out.y + out.h - nh;
+      out.h = nh;
     }
   }
-  return out
-}
+  return out;
+};
 
 // autoPan 滚动时贴底联结块会被钉屏压缩，所以滚动期间冻结联结传播
 const applyResizeLayout = (item: CanvasItem, propagate: boolean) => {
-  const rs = resizeSession
-  if (!rs) return
+  const rs = resizeSession;
+  if (!rs) return;
   const final = applyPanCorrection(
     rs.lastBase,
     rs.handle,
     constraintsOf(item),
     (pan.x - rs.panStartX) / zoom.value,
     (pan.y - rs.panStartY) / zoom.value,
-  )
+  );
   // 高度由内容驱动的块不参与自动滚动补偿
   if (!heightChangableOf(item, blockEnvOf())) {
-    final.y = rs.lastBase.y
-    final.h = rs.lastBase.h
+    final.y = rs.lastBase.y;
+    final.h = rs.lastBase.h;
   }
-  const snapped = snapResizeEdges(rs.handle, final, constraintsOf(item))
-  const layout = layoutOf(item)
-  layout.x = Math.round(snapped.x)
-  layout.y = Math.round(snapped.y)
-  layout.w = Math.round(snapped.w)
-  layout.h = Math.round(snapped.h)
-  if (propagate) syncLinkedEdges(item, snapped.x, snapped.y, snapped.w, snapped.h)
+  const snapped = snapResizeEdges(rs.handle, final, constraintsOf(item));
+  const layout = layoutOf(item);
+  layout.x = Math.round(snapped.x);
+  layout.y = Math.round(snapped.y);
+  layout.w = Math.round(snapped.w);
+  layout.h = Math.round(snapped.h);
+  if (propagate)
+    syncLinkedEdges(item, snapped.x, snapped.y, snapped.w, snapped.h);
   // resize 全走纯 layout 写入，而块内尺寸必须即时重排，所以每帧显式刷新
-  markLayoutDirty()
-}
+  markLayoutDirty();
+};
 
 // autoPan 时鼠标可能停住，所以在 rAF 循环内补偿被拖块并冻结联结传播
 const compensateResizeAutoPan = () => {
-  const rs = resizeSession
-  if (!rs) return
-  const item = state.items.find((it) => it.uuid === rs.uuid)
-  if (item) applyResizeLayout(item, false)
-}
+  const rs = resizeSession;
+  if (!rs) return;
+  const item = state.items.find((it) => it.uuid === rs.uuid);
+  if (item) applyResizeLayout(item, false);
+};
 
 const clampVal = (v: number, min: number, max: number | null) => {
-  if (v < min) return min
-  if (max != null && v > max) return max
-  return v
-}
+  if (v < min) return min;
+  if (max != null && v > max) return max;
+  return v;
+};
 
-const syncLinkedEdges = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
-  const rs = resizeSession
-  if (!rs || rs.uuid !== item.uuid) return
-  propagateLinkedEdges(item, { x, y, w, h }, rs.starts)
-}
+const syncLinkedEdges = (
+  item: CanvasItem,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) => {
+  const rs = resizeSession;
+  if (!rs || rs.uuid !== item.uuid) return;
+  propagateLinkedEdges(item, { x, y, w, h }, rs.starts);
+};
 
 // 沿链接图 BFS 传播共享边：尺寸按自身 min/max 钳制（与 VDR min=minWidth+8 一致），位置按起始 + 父块总位移重算（不逐帧累加，防错位）
-const propagateLinkedEdges = (item: CanvasItem, rect: Rect, starts: Map<string, Rect>): Set<string> => {
-  const positions: Record<string, Rect> = {}
-  const itemMap = new Map(state.items.map((target) => [target.uuid, target]))
-  const neighborMap = linkedNeighborMap.value
-  const env = blockEnvOf()
+const propagateLinkedEdges = (
+  item: CanvasItem,
+  rect: Rect,
+  starts: Map<string, Rect>,
+): Set<string> => {
+  const positions: Record<string, Rect> = {};
+  const itemMap = new Map(state.items.map((target) => [target.uuid, target]));
+  const neighborMap = linkedNeighborMap.value;
+  const env = blockEnvOf();
   // autoPan 改变了 layout，所以 positions 用当前布局初始化，方位判定仍基于 starts
   starts.forEach((start, id) => {
-    const target = itemMap.get(id)
-    positions[id] = target ? { ...layoutOf(target) } : { ...start }
-  })
-  positions[item.uuid] = { ...rect }
+    const target = itemMap.get(id);
+    positions[id] = target ? { ...layoutOf(target) } : { ...start };
+  });
+  positions[item.uuid] = { ...rect };
   // 分维 BFS：右/下邻居正向传播（跟右/下缘），左/上邻居反向跟当前块，保持整链贴合
-  const queue = [item.uuid]
-  const seenX = new Set([item.uuid])
-  const seenY = new Set([item.uuid])
+  const queue = [item.uuid];
+  const seenX = new Set([item.uuid]);
+  const seenY = new Set([item.uuid]);
   while (queue.length) {
-    const pid = queue.shift()!
-    const pRect = positions[pid]
-    const pStart = starts.get(pid)
-    if (!pRect || !pStart) continue
-    ;(neighborMap.get(pid) ?? []).forEach((nid) => {
-      const nStart = starts.get(nid)
-      const target = itemMap.get(nid)
-      if (!nStart || !target) return
-      const c = constraintsOf(target)
+    const pid = queue.shift()!;
+    const pRect = positions[pid];
+    const pStart = starts.get(pid);
+    if (!pRect || !pStart) continue;
+    (neighborMap.get(pid) ?? []).forEach((nid) => {
+      const nStart = starts.get(nid);
+      const target = itemMap.get(nid);
+      if (!nStart || !target) return;
+      const c = constraintsOf(target);
       // 宽/高不可变的块只跟随平移，不参与对应轴重算
-      const fixedW = widthChangableOf(target, env) ? null : (positions[nid]?.w ?? nStart.w)
-      const fixedH = heightChangableOf(target, env) ? null : (positions[nid]?.h ?? nStart.h)
-      const minW = fixedW ?? (c.minWidth ?? 0) + 8, maxW = fixedW ?? c.maxWidth ?? null
-      const minH = fixedH ?? (c.minHeight ?? 0) + 8
-      const maxH = fixedH ?? c.maxHeight ?? null
-      let enqueue = false
+      const fixedW = widthChangableOf(target, env)
+        ? null
+        : (positions[nid]?.w ?? nStart.w);
+      const fixedH = heightChangableOf(target, env)
+        ? null
+        : (positions[nid]?.h ?? nStart.h);
+      const minW = fixedW ?? (c.minWidth ?? 0) + 8,
+        maxW = fixedW ?? c.maxWidth ?? null;
+      const minH = fixedH ?? (c.minHeight ?? 0) + 8;
+      const maxH = fixedH ?? c.maxHeight ?? null;
+      let enqueue = false;
       // 交叉轴也贴合时会被另一轴拉走，所以只按主方向传播
-      const xTouching = Math.abs(pStart.x + pStart.w - nStart.x) <= SNAP_TOLERANCE ||
-        Math.abs(nStart.x + nStart.w - pStart.x) <= SNAP_TOLERANCE
-      const yTouching = Math.abs(pStart.y + pStart.h - nStart.y) <= SNAP_TOLERANCE ||
-        Math.abs(nStart.y + nStart.h - pStart.y) <= SNAP_TOLERANCE
-      if (!seenX.has(nid) && Math.abs(pStart.x + pStart.w - nStart.x) <= SNAP_TOLERANCE && !yTouching) {
+      const xTouching =
+        Math.abs(pStart.x + pStart.w - nStart.x) <= SNAP_TOLERANCE ||
+        Math.abs(nStart.x + nStart.w - pStart.x) <= SNAP_TOLERANCE;
+      const yTouching =
+        Math.abs(pStart.y + pStart.h - nStart.y) <= SNAP_TOLERANCE ||
+        Math.abs(nStart.y + nStart.h - pStart.y) <= SNAP_TOLERANCE;
+      if (
+        !seenX.has(nid) &&
+        Math.abs(pStart.x + pStart.w - nStart.x) <= SNAP_TOLERANCE &&
+        !yTouching
+      ) {
         // N 在 P 右：左缘跟右缘，宽度按当前右缘重算
-        seenX.add(nid)
-        const nNew = positions[nid] ?? { ...nStart }
-        const curRight = nNew.x + nNew.w
-        nNew.x = pRect.x + pRect.w
-        nNew.w = clampVal(curRight - nNew.x, minW, maxW)
-        positions[nid] = nNew
-        enqueue = true
-      } else if (!seenX.has(nid) && Math.abs(nStart.x + nStart.w - pStart.x) <= SNAP_TOLERANCE && !yTouching) {
+        seenX.add(nid);
+        const nNew = positions[nid] ?? { ...nStart };
+        const curRight = nNew.x + nNew.w;
+        nNew.x = pRect.x + pRect.w;
+        nNew.w = clampVal(curRight - nNew.x, minW, maxW);
+        positions[nid] = nNew;
+        enqueue = true;
+      } else if (
+        !seenX.has(nid) &&
+        Math.abs(nStart.x + nStart.w - pStart.x) <= SNAP_TOLERANCE &&
+        !yTouching
+      ) {
         // N 在 P 左：右缘贴合 P 左缘
-        seenX.add(nid)
-        const nNew = positions[nid] ?? { ...nStart }
-        nNew.w = clampVal(pRect.x - nNew.x, minW, maxW)
-        nNew.x = pRect.x - nNew.w
-        positions[nid] = nNew
-        enqueue = true
+        seenX.add(nid);
+        const nNew = positions[nid] ?? { ...nStart };
+        nNew.w = clampVal(pRect.x - nNew.x, minW, maxW);
+        nNew.x = pRect.x - nNew.w;
+        positions[nid] = nNew;
+        enqueue = true;
       }
-      if (!seenY.has(nid) && Math.abs(pStart.y + pStart.h - nStart.y) <= SNAP_TOLERANCE && !xTouching) {
+      if (
+        !seenY.has(nid) &&
+        Math.abs(pStart.y + pStart.h - nStart.y) <= SNAP_TOLERANCE &&
+        !xTouching
+      ) {
         // N 在 P 下：上缘跟下缘，高度按当前下缘重算
-        seenY.add(nid)
-        const nNew = positions[nid] ?? { ...nStart }
-        const curBottom = nNew.y + nNew.h
-        nNew.y = pRect.y + pRect.h
-        nNew.h = clampVal(curBottom - nNew.y, minH, maxH)
-        positions[nid] = nNew
-        enqueue = true
-      } else if (!seenY.has(nid) && Math.abs(nStart.y + nStart.h - pStart.y) <= SNAP_TOLERANCE && !xTouching) {
+        seenY.add(nid);
+        const nNew = positions[nid] ?? { ...nStart };
+        const curBottom = nNew.y + nNew.h;
+        nNew.y = pRect.y + pRect.h;
+        nNew.h = clampVal(curBottom - nNew.y, minH, maxH);
+        positions[nid] = nNew;
+        enqueue = true;
+      } else if (
+        !seenY.has(nid) &&
+        Math.abs(nStart.y + nStart.h - pStart.y) <= SNAP_TOLERANCE &&
+        !xTouching
+      ) {
         // N 在 P 上：下缘贴合 P 上缘
-        seenY.add(nid)
-        const nNew = positions[nid] ?? { ...nStart }
-        nNew.h = clampVal(pRect.y - nNew.y, minH, maxH)
-        nNew.y = pRect.y - nNew.h
-        positions[nid] = nNew
-        enqueue = true
+        seenY.add(nid);
+        const nNew = positions[nid] ?? { ...nStart };
+        nNew.h = clampVal(pRect.y - nNew.y, minH, maxH);
+        nNew.y = pRect.y - nNew.h;
+        positions[nid] = nNew;
+        enqueue = true;
       }
-      if (enqueue) queue.push(nid)
-    })
+      if (enqueue) queue.push(nid);
+    });
   }
   // A 的坐标已由 compensateResizeAutoPan 补偿，所以传播结果直接写回内容坐标即可
-  const changedIds = new Set<string>()
+  const changedIds = new Set<string>();
   Object.keys(positions).forEach((id) => {
-    if (id === item.uuid) return
-    const target = itemMap.get(id)
-    if (!target) return
-    const p = positions[id]
-    const tl = layoutOf(target)
-    if (p.x !== tl.x || p.y !== tl.y || p.w !== tl.w || p.h !== tl.h) changedIds.add(id)
-    tl.x = Math.round(p.x)
-    tl.y = Math.round(p.y)
-    tl.w = Math.round(p.w)
-    tl.h = Math.round(p.h)
-  })
-  return changedIds
-}
+    if (id === item.uuid) return;
+    const target = itemMap.get(id);
+    if (!target) return;
+    const p = positions[id];
+    const tl = layoutOf(target);
+    if (p.x !== tl.x || p.y !== tl.y || p.w !== tl.w || p.h !== tl.h)
+      changedIds.add(id);
+    tl.x = Math.round(p.x);
+    tl.y = Math.round(p.y);
+    tl.w = Math.round(p.w);
+    tl.h = Math.round(p.h);
+  });
+  return changedIds;
+};
 
 const captureLinkedStarts = (uuid: string): Map<string, Rect> => {
-  const starts = new Map<string, Rect>()
+  const starts = new Map<string, Rect>();
   collectLinkedUuids(uuid).forEach((id) => {
-    const target = state.items.find((entry) => entry.uuid === id)
-    if (target) starts.set(id, { ...layoutOf(target) })
-  })
-  return starts
-}
+    const target = state.items.find((entry) => entry.uuid === id);
+    if (target) starts.set(id, { ...layoutOf(target) });
+  });
+  return starts;
+};
 
 const onResizeStart = (item: CanvasItem, handle: string) => {
   // 移动端不启用块联结，仅桌面端收集
-  const starts = mobileMode.value ? new Map<string, Rect>() : captureLinkedStarts(item.uuid)
+  const starts = mobileMode.value
+    ? new Map<string, Rect>()
+    : captureLinkedStarts(item.uuid);
   resizeSession = {
     uuid: item.uuid,
     handle,
@@ -1994,338 +2474,421 @@ const onResizeStart = (item: CanvasItem, handle: string) => {
     lastBase: { ...layoutOf(item) },
     panStartX: pan.x,
     panStartY: pan.y,
-  }
-}
+  };
+};
 
 // resize 到视口边缘时启动 autoPan（startAutoPan 幂等）
-const onResizing = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
-  const rs = resizeSession
-  if (!rs || rs.uuid !== item.uuid) return
-  rs.lastBase = { x, y, w, h }
+const onResizing = (
+  item: CanvasItem,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) => {
+  const rs = resizeSession;
+  if (!rs || rs.uuid !== item.uuid) return;
+  rs.lastBase = { x, y, w, h };
   // 用会话累计 pan 变化判定会让 B 永久冻结，所以用实时是否在滚动判定
-  const { vx: rx, vy: ry } = restrictedPanVelocity()
-  applyResizeLayout(item, rx === 0 && ry === 0)
-  startAutoPan()
-}
+  const { vx: rx, vy: ry } = restrictedPanVelocity();
+  applyResizeLayout(item, rx === 0 && ry === 0);
+  startAutoPan();
+};
 
-const onResizeStop = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
-  const rs = resizeSession
+const onResizeStop = (
+  item: CanvasItem,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) => {
+  const rs = resizeSession;
   if (rs && rs.uuid === item.uuid) {
-    rs.lastBase = { x, y, w, h }
+    rs.lastBase = { x, y, w, h };
     // 松手瞬间就要恢复联结传播，所以先停 autoPan 再落位
-    stopAutoPan()
-    applyResizeLayout(item, true)
+    stopAutoPan();
+    applyResizeLayout(item, true);
   } else {
-    const layout = layoutOf(item)
-    layout.x = Math.round(x)
-    layout.y = Math.round(y)
-    layout.w = Math.round(w)
-    layout.h = Math.round(h)
-    markLayoutDirty()
+    const layout = layoutOf(item);
+    layout.x = Math.round(x);
+    layout.y = Math.round(y);
+    layout.w = Math.round(w);
+    layout.h = Math.round(h);
+    markLayoutDirty();
   }
-  resizeSession = null
-  pruneDetachedLinks()
-  recomputeMasks()
-}
+  resizeSession = null;
+  pruneDetachedLinks();
+  recomputeMasks();
+};
 // #endregion 尺寸调整与联结传播
 
 // 移动端纵向堆叠，autoHeight 变化后下方块须跟随平移，否则重叠
 // #region 高度自适应
 const shiftBlocksBelow = (item: CanvasItem, delta: number) => {
-  if (delta === 0) return
+  if (delta === 0) return;
   state.items
-    .filter((it) => it.uuid !== item.uuid && it.layout.mobile.y > item.layout.mobile.y)
+    .filter(
+      (it) =>
+        it.uuid !== item.uuid && it.layout.mobile.y > item.layout.mobile.y,
+    )
     .sort((a, b) => a.layout.mobile.y - b.layout.mobile.y)
-    .forEach((it) => { it.layout.mobile.y += delta })
-}
+    .forEach((it) => {
+      it.layout.mobile.y += delta;
+    });
+};
 
 // 联结链上的位移判定必须基于变化前的相对关系，否则逐级改高后贴合判定会失效
 interface LinkedShift {
-  starts: Map<string, Rect>
-  itemMap: Map<string, CanvasItem>
-  moved: Set<string>
+  starts: Map<string, Rect>;
+  itemMap: Map<string, CanvasItem>;
+  moved: Set<string>;
 }
 
-type PushAxis = 'x' | 'y'
+type PushAxis = "x" | "y";
 
 interface AxisShift {
-  delta: number
-  axis: PushAxis
+  delta: number;
+  axis: PushAxis;
 }
 
 const buildShiftContext = (): LinkedShift => ({
   starts: new Map(state.items.map((it) => [it.uuid, { ...layoutOf(it) }])),
   itemMap: new Map(state.items.map((it) => [it.uuid, it])),
   moved: new Set(),
-})
+});
 
-const isOverlappingX = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x
-const isOverlappingY = (a: Rect, b: Rect) => a.y < b.y + b.h && a.y + a.h > b.y
+const isOverlappingX = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x;
+const isOverlappingY = (a: Rect, b: Rect) => a.y < b.y + b.h && a.y + a.h > b.y;
 
 // 与位移块保持横向贴合的邻居分两类：正下方贴合、以及上缘齐的同行块（后者不跟则下方横跨块会脱开）
 const touchesVertically = (from: Rect, to: Rect): boolean => {
-  const belowAttached = isOverlappingX(from, to) && Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE
-  const sameRowAttached = Math.abs(to.y - from.y) <= SNAP_TOLERANCE &&
-    (Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE || Math.abs(from.x - (to.x + to.w)) <= SNAP_TOLERANCE)
-  return belowAttached || sameRowAttached
-}
+  const belowAttached =
+    isOverlappingX(from, to) &&
+    Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE;
+  const sameRowAttached =
+    Math.abs(to.y - from.y) <= SNAP_TOLERANCE &&
+    (Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE ||
+      Math.abs(from.x - (to.x + to.w)) <= SNAP_TOLERANCE);
+  return belowAttached || sameRowAttached;
+};
 
 // 横向推挤的跟随规则与纵向镜像：正右侧贴合、以及左缘齐的同列块
 const touchesHorizontally = (from: Rect, to: Rect): boolean => {
-  const rightAttached = isOverlappingY(from, to) && Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE
-  const sameColumnAttached = Math.abs(to.x - from.x) <= SNAP_TOLERANCE &&
-    (Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE || Math.abs(from.y - (to.y + to.h)) <= SNAP_TOLERANCE)
-  return rightAttached || sameColumnAttached
-}
+  const rightAttached =
+    isOverlappingY(from, to) &&
+    Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE;
+  const sameColumnAttached =
+    Math.abs(to.x - from.x) <= SNAP_TOLERANCE &&
+    (Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE ||
+      Math.abs(from.y - (to.y + to.h)) <= SNAP_TOLERANCE);
+  return rightAttached || sameColumnAttached;
+};
 
-const axisAlong = (rect: Rect, axis: PushAxis) => (axis === 'x' ? rect.x : rect.y)
-const axisSize = (rect: Rect, axis: PushAxis) => (axis === 'x' ? rect.w : rect.h)
+const axisAlong = (rect: Rect, axis: PushAxis) =>
+  axis === "x" ? rect.x : rect.y;
+const axisSize = (rect: Rect, axis: PushAxis) =>
+  axis === "x" ? rect.w : rect.h;
 const setAxis = (rect: Rect, axis: PushAxis, value: number) => {
-  if (axis === 'x') rect.x = value
-  else rect.y = value
-}
+  if (axis === "x") rect.x = value;
+  else rect.y = value;
+};
 
 // 尺寸推挤时整片联结群一起搬运，链才会一直闭合
-const shiftLinkedGroup = (rootId: string, step: AxisShift, shift: LinkedShift) => {
-  const touches = step.axis === 'x' ? touchesHorizontally : touchesVertically
-  const queue = [rootId]
+const shiftLinkedGroup = (
+  rootId: string,
+  step: AxisShift,
+  shift: LinkedShift,
+) => {
+  const touches = step.axis === "x" ? touchesHorizontally : touchesVertically;
+  const queue = [rootId];
   while (queue.length) {
-    const id = queue.shift()!
-    const source = shift.starts.get(id)
-    if (!source) continue
-    ;(linkedNeighborMap.value.get(id) ?? []).forEach((neighborId) => {
-      if (shift.moved.has(neighborId)) return
-      const neighborStart = shift.starts.get(neighborId)
-      const neighbor = shift.itemMap.get(neighborId)
-      if (!neighborStart || !neighbor) return
-      if (!touches(source, neighborStart)) return
-      setAxis(layoutOf(neighbor), step.axis, axisAlong(neighborStart, step.axis) + step.delta)
-      shift.moved.add(neighborId)
-      queue.push(neighborId)
-    })
+    const id = queue.shift()!;
+    const source = shift.starts.get(id);
+    if (!source) continue;
+    (linkedNeighborMap.value.get(id) ?? []).forEach((neighborId) => {
+      if (shift.moved.has(neighborId)) return;
+      const neighborStart = shift.starts.get(neighborId);
+      const neighbor = shift.itemMap.get(neighborId);
+      if (!neighborStart || !neighbor) return;
+      if (!touches(source, neighborStart)) return;
+      setAxis(
+        layoutOf(neighbor),
+        step.axis,
+        axisAlong(neighborStart, step.axis) + step.delta,
+      );
+      shift.moved.add(neighborId);
+      queue.push(neighborId);
+    });
   }
-}
+};
 
 // 尺寸增长后按变更前方位推挤：右侧块右推、下方块下推，变宽新产生的横向重叠不能被误判成下方块
-const pushAxisOverlap = (root: CanvasItem, shift: LinkedShift, axis: PushAxis) => {
-  const rootLayout = layoutOf(root)
-  const rootStart = shift.starts.get(root.uuid)
-  if (!rootStart) return
-  const crosses = axis === 'x' ? isOverlappingY : isOverlappingX
-  const startLimit = axisAlong(rootStart, axis) + axisSize(rootStart, axis) - EDGE_TOL
+const pushAxisOverlap = (
+  root: CanvasItem,
+  shift: LinkedShift,
+  axis: PushAxis,
+) => {
+  const rootLayout = layoutOf(root);
+  const rootStart = shift.starts.get(root.uuid);
+  if (!rootStart) return;
+  const crosses = axis === "x" ? isOverlappingY : isOverlappingX;
+  const startLimit =
+    axisAlong(rootStart, axis) + axisSize(rootStart, axis) - EDGE_TOL;
   const targets = state.items
-    .filter((other) => other.uuid !== root.uuid && crosses(rootLayout, layoutOf(other)))
-    .sort((a, b) => axisAlong(layoutOf(a), axis) - axisAlong(layoutOf(b), axis))
-  let cursor = axisAlong(rootLayout, axis) + axisSize(rootLayout, axis)
+    .filter(
+      (other) =>
+        other.uuid !== root.uuid && crosses(rootLayout, layoutOf(other)),
+    )
+    .sort(
+      (a, b) => axisAlong(layoutOf(a), axis) - axisAlong(layoutOf(b), axis),
+    );
+  let cursor = axisAlong(rootLayout, axis) + axisSize(rootLayout, axis);
   targets.forEach((other) => {
-    const layout = layoutOf(other)
-    const start = shift.starts.get(other.uuid)
+    const layout = layoutOf(other);
+    const start = shift.starts.get(other.uuid);
     // 只推变更前就贴在右侧/下方的块，原本重叠的块保持原位
-    if (!start || axisAlong(start, axis) < startLimit) return
+    if (!start || axisAlong(start, axis) < startLimit) return;
     if (shift.moved.has(other.uuid)) {
-      cursor = Math.max(cursor, axisAlong(layout, axis) + axisSize(layout, axis))
-      return
+      cursor = Math.max(
+        cursor,
+        axisAlong(layout, axis) + axisSize(layout, axis),
+      );
+      return;
     }
-    const pos = axisAlong(layout, axis)
-    if (pos >= cursor) return
-    setAxis(layout, axis, cursor)
-    shift.moved.add(other.uuid)
-    shiftLinkedGroup(other.uuid, { delta: cursor - pos, axis }, shift)
-    cursor = axisAlong(layout, axis) + axisSize(layout, axis)
-  })
-}
+    const pos = axisAlong(layout, axis);
+    if (pos >= cursor) return;
+    setAxis(layout, axis, cursor);
+    shift.moved.add(other.uuid);
+    shiftLinkedGroup(other.uuid, { delta: cursor - pos, axis }, shift);
+    cursor = axisAlong(layout, axis) + axisSize(layout, axis);
+  });
+};
 
 // 联结群整体位移后，逐块消解与未联结块的重叠：先按横向推右，再按纵向推下
 const pushOverlapped = (shift: LinkedShift) => {
   const seeds = Array.from(shift.moved)
     .map((id) => shift.itemMap.get(id))
     .filter((item): item is CanvasItem => !!item)
-    .sort((a, b) => layoutOf(a).y - layoutOf(b).y)
-  seeds.forEach((seed) => pushAxisOverlap(seed, shift, 'x'))
-  seeds.forEach((seed) => pushAxisOverlap(seed, shift, 'y'))
-}
+    .sort((a, b) => layoutOf(a).y - layoutOf(b).y);
+  seeds.forEach((seed) => pushAxisOverlap(seed, shift, "x"));
+  seeds.forEach((seed) => pushAxisOverlap(seed, shift, "y"));
+};
 
 // 尺寸变更复用 resize 的共享边传播，再消解增长造成的重叠
 const applyBlockSize = (item: CanvasItem, width: number, height: number) => {
-  const layout = layoutOf(item)
-  if (layout.w === width && layout.h === height) return
+  const layout = layoutOf(item);
+  if (layout.w === width && layout.h === height) return;
   if (mobileMode.value) {
     // 先算 delta 再覆盖高度，使下方堆叠块跟随平移
-    const dy = height - layout.h
-    layout.h = height
-    shiftBlocksBelow(item, dy)
-    scheduleGeometryRefresh()
-    markLayoutDirty()
-    return
+    const dy = height - layout.h;
+    layout.h = height;
+    shiftBlocksBelow(item, dy);
+    scheduleGeometryRefresh();
+    markLayoutDirty();
+    return;
   }
-  const shift = buildShiftContext()
-  shift.moved.add(item.uuid)
-  layout.w = width
-  layout.h = height
+  const shift = buildShiftContext();
+  shift.moved.add(item.uuid);
+  layout.w = width;
+  layout.h = height;
   if (linkedPairs.value.size > 0) {
-    propagateLinkedEdges(item, layout, shift.starts).forEach((id) => shift.moved.add(id))
+    propagateLinkedEdges(item, layout, shift.starts).forEach((id) =>
+      shift.moved.add(id),
+    );
   }
-  pushOverlapped(shift)
+  pushOverlapped(shift);
   // 手柄会话中途的 layout 还可能被下一帧重算，等 onResizeStop 落定后再剔除失效链接
-  if (!resizeSession) pruneDetachedLinks()
-  scheduleGeometryRefresh()
-  markLayoutDirty()
-}
+  if (!resizeSession) pruneDetachedLinks();
+  scheduleGeometryRefresh();
+  markLayoutDirty();
+};
 // #endregion 高度自适应
 
 // #region 选中与聚焦
 // Ctrl 加选/减选，否则单选
 const selectOnClick = (id: string, e?: MouseEvent) => {
   if (!e?.ctrlKey) {
-    state.selectedIds = new Set([id])
-    return
+    state.selectedIds = new Set([id]);
+    return;
   }
-  const next = new Set(state.selectedIds)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  state.selectedIds = next
-}
+  const next = new Set(state.selectedIds);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  state.selectedIds = next;
+};
 
 // 已在多选集合中的块被拖拽时保留整个集合
 const selectForDrag = (id: string, e: MouseEvent) => {
-  if (state.selectedIds.has(id) && state.selectedIds.size > 1) return
-  selectOnClick(id, e)
-}
+  if (state.selectedIds.has(id) && state.selectedIds.size > 1) return;
+  selectOnClick(id, e);
+};
 
 const updateSelectionBox = () => {
-  const x = Math.min(selectionState.startX, selectionState.currentX)
-  const y = Math.min(selectionState.startY, selectionState.currentY)
-  const w = Math.abs(selectionState.currentX - selectionState.startX)
-  const h = Math.abs(selectionState.currentY - selectionState.startY)
-  selectionBox.value = w > 2 || h > 2 ? { x, y, w, h } : null
-}
+  const x = Math.min(selectionState.startX, selectionState.currentX);
+  const y = Math.min(selectionState.startY, selectionState.currentY);
+  const w = Math.abs(selectionState.currentX - selectionState.startX);
+  const h = Math.abs(selectionState.currentY - selectionState.startY);
+  selectionBox.value = w > 2 || h > 2 ? { x, y, w, h } : null;
+};
 
-const isRectIntersectingItem = (rect: { x: number; y: number; w: number; h: number }, item: CanvasItem) => {
-  const itemRect = layoutOf(item)
-  return itemRect.x < rect.x + rect.w && itemRect.x + itemRect.w > rect.x && itemRect.y < rect.y + rect.h && itemRect.y + itemRect.h > rect.y
-}
+const isRectIntersectingItem = (
+  rect: { x: number; y: number; w: number; h: number },
+  item: CanvasItem,
+) => {
+  const itemRect = layoutOf(item);
+  return (
+    itemRect.x < rect.x + rect.w &&
+    itemRect.x + itemRect.w > rect.x &&
+    itemRect.y < rect.y + rect.h &&
+    itemRect.y + itemRect.h > rect.y
+  );
+};
 
 const onCanvasMouseDown = (e: MouseEvent) => {
   // 两个"刚结束"标记仅用于吞掉紧随的 click，新按下即新会话
-  dragJustFinished = false
-  selectionState.justFinishedSelection = false
-  startSelection(e)
-  startPan(e)
-}
+  dragJustFinished = false;
+  selectionState.justFinishedSelection = false;
+  startSelection(e);
+  startPan(e);
+};
 
 const startSelection = (e: MouseEvent) => {
-  const target = e.target as HTMLElement
-  if (e.button !== 0) return
-  if (target.closest('.drag-wrapper') || target.closest('.drag-handle') || target.closest('.toolbar')) return
+  const target = e.target as HTMLElement;
+  if (e.button !== 0) return;
+  if (
+    target.closest(".drag-wrapper") ||
+    target.closest(".drag-handle") ||
+    target.closest(".toolbar")
+  )
+    return;
 
-  const rect = canvasContainerRef.value?.getBoundingClientRect()
-  if (!rect) return
+  const rect = canvasContainerRef.value?.getBoundingClientRect();
+  if (!rect) return;
 
-  e.preventDefault()
-  selectionState.active = true
-  selectionState.extend = e.ctrlKey
-  selectionState.justFinishedSelection = false
+  e.preventDefault();
+  selectionState.active = true;
+  selectionState.extend = e.ctrlKey;
+  selectionState.justFinishedSelection = false;
   // 事件挂容器级且 .canvas 带 pan/zoom，所以用 utils 统一换算
-  const pt = screenToContent(canvasTransform(), rect, e.clientX, e.clientY)
-  selectionState.startX = pt.x
-  selectionState.startY = pt.y
-  selectionState.currentX = selectionState.startX
-  selectionState.currentY = selectionState.startY
-  updateSelectionBox()
+  const pt = screenToContent(canvasTransform(), rect, e.clientX, e.clientY);
+  selectionState.startX = pt.x;
+  selectionState.startY = pt.y;
+  selectionState.currentX = selectionState.startX;
+  selectionState.currentY = selectionState.startY;
+  updateSelectionBox();
   // 点击空白也会激活框选会话，所以推迟到真正拖出框选框后再启动 autoPan
-}
+};
 
 // 独立出"由坐标刷新框选"，供 autoPan 每帧调用（鼠标可能停住）
 const updateSelectionAt = (clientX: number, clientY: number) => {
-  if (!selectionState.active) return
-  const rect = viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect()
-  if (!rect) return
-  const pt = screenToContent(canvasTransform(), rect, clientX, clientY)
-  selectionState.currentX = pt.x
-  selectionState.currentY = pt.y
-  updateSelectionBox()
-  if (selectionBox.value) startAutoPan()
-}
+  if (!selectionState.active) return;
+  const rect =
+    viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect();
+  if (!rect) return;
+  const pt = screenToContent(canvasTransform(), rect, clientX, clientY);
+  selectionState.currentX = pt.x;
+  selectionState.currentY = pt.y;
+  updateSelectionBox();
+  if (selectionBox.value) startAutoPan();
+};
 
 const updateSelection = (e: MouseEvent) => {
-  if (!selectionState.active) return
-  e.preventDefault()
-  updateSelectionAt(e.clientX, e.clientY)
-}
+  if (!selectionState.active) return;
+  e.preventDefault();
+  updateSelectionAt(e.clientX, e.clientY);
+};
 
 const onCanvasMousemove = (e: MouseEvent) => {
-  updateSelection(e)
-  updateHoverOwner(e)
-  updateAddPreview(e)
-}
+  updateSelection(e);
+  updateHoverOwner(e);
+  updateAddPreview(e);
+};
 
 // 预览跟随鼠标：落位解析每帧 O(N)，所以节流到 ~30fps；拖拽/框选会话激活时清空
-const addPreviewKey = ref<CanvasItem['component'] | null>(null)
-const addPreviewPos = ref<{ x: number; y: number } | null>(null)
-let previewRafId = 0
-let previewClientX = 0
-let previewClientY = 0
+const addPreviewKey = ref<CanvasItem["component"] | null>(null);
+const addPreviewPos = ref<{ x: number; y: number } | null>(null);
+let previewRafId = 0;
+let previewClientX = 0;
+let previewClientY = 0;
 
 const cancelPreviewFrame = () => {
-  if (!previewRafId) return
-  cancelAnimationFrame(previewRafId)
-  previewRafId = 0
-}
+  if (!previewRafId) return;
+  cancelAnimationFrame(previewRafId);
+  previewRafId = 0;
+};
 
 const applyAddPreview = () => {
-  previewRafId = 0
-  if (!isEditMode.value || state.selectedIds.size > 0 || !addPreviewKey.value || selectionState.active || customDrag.active) {
-    addPreviewPos.value = null
-    return
+  previewRafId = 0;
+  if (
+    !isEditMode.value ||
+    state.selectedIds.size > 0 ||
+    !addPreviewKey.value ||
+    selectionState.active ||
+    customDrag.active
+  ) {
+    addPreviewPos.value = null;
+    return;
   }
-  const rect = viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect()
-  if (rect) addPreviewPos.value = screenToContent(canvasTransform(), rect, previewClientX, previewClientY)
-}
+  const rect =
+    viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect();
+  if (rect)
+    addPreviewPos.value = screenToContent(
+      canvasTransform(),
+      rect,
+      previewClientX,
+      previewClientY,
+    );
+};
 
 const updateAddPreview = (e: MouseEvent) => {
-  if (!isEditMode.value || state.selectedIds.size > 0 || !addPreviewKey.value || selectionState.active || customDrag.active) {
-    cancelPreviewFrame()
-    if (addPreviewPos.value) addPreviewPos.value = null
-    return
+  if (
+    !isEditMode.value ||
+    state.selectedIds.size > 0 ||
+    !addPreviewKey.value ||
+    selectionState.active ||
+    customDrag.active
+  ) {
+    cancelPreviewFrame();
+    if (addPreviewPos.value) addPreviewPos.value = null;
+    return;
   }
-  previewClientX = e.clientX
-  previewClientY = e.clientY
-  if (!previewRafId) previewRafId = requestAnimationFrame(applyAddPreview)
-}
+  previewClientX = e.clientX;
+  previewClientY = e.clientY;
+  if (!previewRafId) previewRafId = requestAnimationFrame(applyAddPreview);
+};
 
 // 经方法设置，避免直接暴露 ref 的类型解包问题
-const setAddPreview = (key: CanvasItem['component'] | null) => {
-  cancelPreviewFrame()
-  addPreviewKey.value = key
-  if (!key) addPreviewPos.value = null
-}
+const setAddPreview = (key: CanvasItem["component"] | null) => {
+  cancelPreviewFrame();
+  addPreviewKey.value = key;
+  if (!key) addPreviewPos.value = null;
+};
 
 // 与真正添加共用 resolveAddSpot，保证预览与落位一致
 const addPreviewSpot = computed(() => {
-  const key = addPreviewKey.value
-  const pos = addPreviewPos.value
-  if (!key || !pos) return null
-  return resolveAddSpot(key, pos).spot
-})
+  const key = addPreviewKey.value;
+  const pos = addPreviewPos.value;
+  if (!key || !pos) return null;
+  return resolveAddSpot(key, pos).spot;
+});
 
 // 移动端预览宽度取画布宽而非默认尺寸
-const previewWidthOf = (key: CanvasItem['component']): number => {
-  const meta = componentMetaOf(key)
-  if (mobileMode.value) return canvasWidth.value || meta?.defaultSize.w || 0
-  return meta?.defaultSize.w ?? 0
-}
+const previewWidthOf = (key: CanvasItem["component"]): number => {
+  const meta = componentMetaOf(key);
+  if (mobileMode.value) return canvasWidth.value || meta?.defaultSize.w || 0;
+  return meta?.defaultSize.w ?? 0;
+};
 
 // 预览几何：content 坐标换算成视口像素
 const previewGeometry = computed(() => {
-  const key = addPreviewKey.value
-  const spot = addPreviewSpot.value
-  if (!key || !spot) return null
-  const cr = viewRect.value
-  if (!cr) return null
-  const z = zoom.value
-  const w = previewWidthOf(key)
-  const h = componentMetaOf(key)?.defaultSize.h ?? 0
-  const sc = contentToScreen(canvasTransform(), cr, spot.x, spot.y)
+  const key = addPreviewKey.value;
+  const spot = addPreviewSpot.value;
+  if (!key || !spot) return null;
+  const cr = viewRect.value;
+  if (!cr) return null;
+  const z = zoom.value;
+  const w = previewWidthOf(key);
+  const h = componentMetaOf(key)?.defaultSize.h ?? 0;
+  const sc = contentToScreen(canvasTransform(), cr, spot.x, spot.y);
   return {
     left: sc.x,
     top: sc.y,
@@ -2333,661 +2896,828 @@ const previewGeometry = computed(() => {
     bottom: sc.y + h * z,
     centerX: sc.x + (w * z) / 2,
     centerY: sc.y + (h * z) / 2,
-  }
-})
+  };
+});
 const previewVisible = computed(() => {
-  const g = previewGeometry.value
-  const cr = viewRect.value
-  if (!g || !cr) return false
-  return g.left < cr.right && g.right > cr.left && g.top < cr.bottom && g.bottom > cr.top
-})
+  const g = previewGeometry.value;
+  const cr = viewRect.value;
+  if (!g || !cr) return false;
+  return (
+    g.left < cr.right &&
+    g.right > cr.left &&
+    g.top < cr.bottom &&
+    g.bottom > cr.top
+  );
+});
 // 预览框在视口外时需指示方向，所以按预览中心相对鼠标的方向角定位箭头
 const previewArrowStyle = computed<CSSProperties>(() => {
-  const g = previewGeometry.value
-  const cr = viewRect.value
-  if (!g || !cr) return {}
-  const vx = mouseScreen.value.x
-  const vy = mouseScreen.value.y
-  const ang = Math.atan2(g.centerY - vy, g.centerX - vx)
-  const radius = 22
+  const g = previewGeometry.value;
+  const cr = viewRect.value;
+  if (!g || !cr) return {};
+  const vx = mouseScreen.value.x;
+  const vy = mouseScreen.value.y;
+  const ang = Math.atan2(g.centerY - vy, g.centerX - vx);
+  const radius = 22;
   return {
     left: `${vx - cr.left + Math.cos(ang) * radius}px`,
     top: `${vy - cr.top + Math.sin(ang) * radius}px`,
     transform: `translate(-50%, -50%) rotate(${ang + Math.PI / 2}rad)`,
-  }
-})
+  };
+});
 // 仅在无选中块时显示，所以 z 复用 Z_LAYER.outline
 const addPreviewStyle = computed<CSSProperties>(() => {
-  const key = addPreviewKey.value
-  const spot = addPreviewSpot.value
-  if (!key || !spot) return {}
+  const key = addPreviewKey.value;
+  const spot = addPreviewSpot.value;
+  if (!key || !spot) return {};
   return {
     left: `${roundToPx(spot.x)}px`,
     top: `${roundToPx(spot.y)}px`,
     width: `${roundToPx(previewWidthOf(key))}px`,
     height: `${roundToPx(componentMetaOf(key)?.defaultSize.h ?? 0)}px`,
     zIndex: Z_LAYER.outline,
-  }
-})
+  };
+});
 
 // scrollIntoView 会滚出容器偏移导致画面位移，所以归零容器滚动，由 pan 独占控制
 const resetCanvasScroll = () => {
-  const c = canvasContainerRef.value
+  const c = canvasContainerRef.value;
   if (c && (c.scrollLeft !== 0 || c.scrollTop !== 0)) {
-    c.scrollLeft = 0
-    c.scrollTop = 0
+    c.scrollLeft = 0;
+    c.scrollTop = 0;
   }
-}
+};
 
 // 移入焦点会打断另一块正在输入的光标，所以焦点只由点击给出
 const focusBlockContent = (id: string) => {
   nextTick(() => {
-    resetCanvasScroll()
-    const wrapper = document.querySelector(`.drag-wrapper[data-uuid="${id}"]`)
-    const pm = wrapper?.querySelector('.ProseMirror') as HTMLElement | null
+    resetCanvasScroll();
+    const wrapper = document.querySelector(`.drag-wrapper[data-uuid="${id}"]`);
+    const pm = wrapper?.querySelector(".ProseMirror") as HTMLElement | null;
     if (pm) {
-      pm.focus({ preventScroll: true })
-      return
+      pm.focus({ preventScroll: true });
+      return;
     }
-    const ta = wrapper?.querySelector('textarea') as HTMLElement | null
-    if (ta) ta.focus({ preventScroll: true })
-  })
-}
+    const ta = wrapper?.querySelector("textarea") as HTMLElement | null;
+    if (ta) ta.focus({ preventScroll: true });
+  });
+};
 // #endregion 选中与聚焦
 
 // 记录 popup 所在块 uuid，以便只隐藏该块的 tm 手柄
 // #region 弹层与命中测试
-const popupBlockUuid = ref<string | null>(null)
+const popupBlockUuid = ref<string | null>(null);
 const onBlockPopupChange = (e: Event) => {
-  const detail = (e as CustomEvent).detail as { open?: boolean; uuid?: string | null }
+  const detail = (e as CustomEvent).detail as {
+    open?: boolean;
+    uuid?: string | null;
+  };
   // 旧块关闭事件会误清新块状态，所以仅当 uuid 匹配时才清除
   if (detail.open && detail.uuid) {
-    popupBlockUuid.value = detail.uuid
-  } else if (!detail.open && detail.uuid && popupBlockUuid.value === detail.uuid) {
-    popupBlockUuid.value = null
+    popupBlockUuid.value = detail.uuid;
+  } else if (
+    !detail.open &&
+    detail.uuid &&
+    popupBlockUuid.value === detail.uuid
+  ) {
+    popupBlockUuid.value = null;
   }
-}
+};
 
 // popupBlockUuid 仅表示覆盖 tm 手柄，所以另设 popupActiveUuid 表示 popup 是否弹出
-const popupActiveUuid = ref<string | null>(null)
+const popupActiveUuid = ref<string | null>(null);
 const onBlockHandleActiveChange = (e: Event) => {
-  const detail = (e as CustomEvent).detail as { active?: boolean; uuid?: string | null }
+  const detail = (e as CustomEvent).detail as {
+    active?: boolean;
+    uuid?: string | null;
+  };
   // 旧块关闭事件会误清新块状态，所以仅当 uuid 匹配时才清除
   if (detail.active && detail.uuid) {
-    popupActiveUuid.value = detail.uuid
-  } else if (!detail.active && detail.uuid && popupActiveUuid.value === detail.uuid) {
-    popupActiveUuid.value = null
+    popupActiveUuid.value = detail.uuid;
+  } else if (
+    !detail.active &&
+    detail.uuid &&
+    popupActiveUuid.value === detail.uuid
+  ) {
+    popupActiveUuid.value = null;
   }
-}
+};
 
-const popupTopOpen = ref(false)
+const popupTopOpen = ref(false);
 const onBlockPopupTopChange = (e: Event) => {
-  const detail = (e as CustomEvent).detail as { open?: boolean }
-  popupTopOpen.value = !!detail.open
-}
+  const detail = (e as CustomEvent).detail as { open?: boolean };
+  popupTopOpen.value = !!detail.open;
+};
 
 // 候选改为缓存后，需在 popup 上侧开关/链接变化时显式刷新
-watch([popupTopOpen, linkedPairs], () => { paperclipCandidates.value = computePaperclipCandidates() })
+watch([popupTopOpen, linkedPairs], () => {
+  paperclipCandidates.value = computePaperclipCandidates();
+});
 
 interface ScreenRect {
-  left: number
-  top: number
-  right: number
-  bottom: number
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
-type ScreenRectFactory = (x: number, y: number, w: number, h: number) => ScreenRect | null
+type ScreenRectFactory = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) => ScreenRect | null;
 
 // 逐 mousemove 读 DOM 矩形会强制同步布局，所以用公式直接换算屏幕矩形（误差 ≤0.5px）
 const screenRectFactory = (): ScreenRectFactory => {
-  const cr = viewRect.value
-  const t = canvasTransform()
+  const cr = viewRect.value;
+  const t = canvasTransform();
   return (x, y, w, h) => {
-    if (!cr) return null
-    const tl = contentToScreen(t, cr, x, y)
-    return { left: tl.x, top: tl.y, right: tl.x + w * t.zoom, bottom: tl.y + h * t.zoom }
-  }
-}
+    if (!cr) return null;
+    const tl = contentToScreen(t, cr, x, y);
+    return {
+      left: tl.x,
+      top: tl.y,
+      right: tl.x + w * t.zoom,
+      bottom: tl.y + h * t.zoom,
+    };
+  };
+};
 
-const insideScreenRect = (rect: ScreenRect, clientX: number, clientY: number): boolean =>
-  clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+const insideScreenRect = (
+  rect: ScreenRect,
+  clientX: number,
+  clientY: number,
+): boolean =>
+  clientX >= rect.left &&
+  clientX <= rect.right &&
+  clientY >= rect.top &&
+  clientY <= rect.bottom;
 
 // 命中测试不读真实 DOM 矩形，所以复用设置栏同一套几何公式
-const settingsBarRectOf = (rectOf: ScreenRectFactory, item: CanvasItem): ScreenRect | null => {
-  const rect = settingsBarRectOfContent(layoutOf(item), placementOf(item))
-  return rectOf(rect.x, rect.y, rect.w, rect.h)
-}
+const settingsBarRectOf = (
+  rectOf: ScreenRectFactory,
+  item: CanvasItem,
+): ScreenRect | null => {
+  const rect = settingsBarRectOfContent(layoutOf(item), placementOf(item));
+  return rectOf(rect.x, rect.y, rect.w, rect.h);
+};
 
 // 三个命中判定都只在选中块里找，所以先取选中块小集合（原实现每次 pointermove 都遍历全量块、随块数线性劣化）
 const selectedBlockItems = (): CanvasItem[] =>
-  state.selectedIds.size === 0 ? [] : state.items.filter((it) => state.selectedIds.has(it.uuid))
+  state.selectedIds.size === 0
+    ? []
+    : state.items.filter((it) => state.selectedIds.has(it.uuid));
 
 const hitSettingsBar = (clientX: number, clientY: number): string | null => {
-  const rectOf = screenRectFactory()
+  const rectOf = screenRectFactory();
   const hit = selectedBlockItems().find((item) => {
-    if (!isActive(item.uuid)) return false
-    const rect = settingsBarRectOf(rectOf, item)
-    return !!rect && insideScreenRect(rect, clientX, clientY)
-  })
-  return hit?.uuid ?? null
-}
+    if (!isActive(item.uuid)) return false;
+    const rect = settingsBarRectOf(rectOf, item);
+    return !!rect && insideScreenRect(rect, clientX, clientY);
+  });
+  return hit?.uuid ?? null;
+};
 
-const RESIZE_HANDLE_HIT_MARGIN = 2
+const RESIZE_HANDLE_HIT_MARGIN = 2;
 // 常量要与 ResizeBox 的 HANDLE_POS/HANDLE_SIZE 保持一致
-const HANDLE_SIZE = 8
-const HANDLE_OUTSET = 5
-const handleContentPos = (handle: string, l: Rect): { x: number; y: number } => ({
-  x: handle.includes('l') ? l.x - HANDLE_OUTSET
-    : handle.includes('r') ? l.x + l.w - HANDLE_OUTSET
+const HANDLE_SIZE = 8;
+const HANDLE_OUTSET = 5;
+const handleContentPos = (
+  handle: string,
+  l: Rect,
+): { x: number; y: number } => ({
+  x: handle.includes("l")
+    ? l.x - HANDLE_OUTSET
+    : handle.includes("r")
+      ? l.x + l.w - HANDLE_OUTSET
       : l.x + l.w / 2 - HANDLE_SIZE / 2,
-  y: handle.includes('t') ? l.y - HANDLE_OUTSET
-    : handle.includes('b') ? l.y + l.h - HANDLE_OUTSET
+  y: handle.includes("t")
+    ? l.y - HANDLE_OUTSET
+    : handle.includes("b")
+      ? l.y + l.h - HANDLE_OUTSET
       : l.y + l.h / 2 - HANDLE_SIZE / 2,
-})
+});
 
 const makeResizeHandleHitTest = (clientX: number, clientY: number) => {
-  const rectOf = screenRectFactory()
+  const rectOf = screenRectFactory();
   return (item: CanvasItem): boolean => {
-    const l = layoutOf(item)
+    const l = layoutOf(item);
     return resizeHandlesOf(item).some((handle) => {
-      const pos = handleContentPos(handle, l)
-      const rect = rectOf(pos.x, pos.y, HANDLE_SIZE, HANDLE_SIZE)
-      if (!rect) return false
-      return clientX >= rect.left - RESIZE_HANDLE_HIT_MARGIN && clientX <= rect.right + RESIZE_HANDLE_HIT_MARGIN &&
-        clientY >= rect.top - RESIZE_HANDLE_HIT_MARGIN && clientY <= rect.bottom + RESIZE_HANDLE_HIT_MARGIN
-    })
-  }
-}
+      const pos = handleContentPos(handle, l);
+      const rect = rectOf(pos.x, pos.y, HANDLE_SIZE, HANDLE_SIZE);
+      if (!rect) return false;
+      return (
+        clientX >= rect.left - RESIZE_HANDLE_HIT_MARGIN &&
+        clientX <= rect.right + RESIZE_HANDLE_HIT_MARGIN &&
+        clientY >= rect.top - RESIZE_HANDLE_HIT_MARGIN &&
+        clientY <= rect.bottom + RESIZE_HANDLE_HIT_MARGIN
+      );
+    });
+  };
+};
 
 const hitResizeHandle = (clientX: number, clientY: number): string | null => {
-  const test = makeResizeHandleHitTest(clientX, clientY)
-  return selectedBlockItems().find((item) => isActive(item.uuid) && test(item))?.uuid ?? null
-}
+  const test = makeResizeHandleHitTest(clientX, clientY);
+  return (
+    selectedBlockItems().find((item) => isActive(item.uuid) && test(item))
+      ?.uuid ?? null
+  );
+};
 
 const hitHandle = (clientX: number, clientY: number): string | null => {
   for (const item of selectedBlockItems()) {
-    const el = document.querySelector<HTMLElement>(`.floating-handle[data-uuid="${item.uuid}"]`)
-    if (!el) continue
-    const rect = el.getBoundingClientRect()
-    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) return item.uuid
-    const inGapY = handlePlacementOf(item) === 'top'
-      ? clientY >= rect.bottom && clientY <= rect.bottom + HANDLE_GAP
-      : clientY <= rect.top && clientY >= rect.top - HANDLE_GAP
-    if (clientX >= rect.left && clientX <= rect.right && inGapY) return item.uuid
+    const el = document.querySelector<HTMLElement>(
+      `.floating-handle[data-uuid="${item.uuid}"]`,
+    );
+    if (!el) continue;
+    const rect = el.getBoundingClientRect();
+    if (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    )
+      return item.uuid;
+    const inGapY =
+      handlePlacementOf(item) === "top"
+        ? clientY >= rect.bottom && clientY <= rect.bottom + HANDLE_GAP
+        : clientY <= rect.top && clientY >= rect.top - HANDLE_GAP;
+    if (clientX >= rect.left && clientX <= rect.right && inGapY)
+      return item.uuid;
   }
-  return null
-}
+  return null;
+};
 
 // 鼠标移向 popup 会经过块间空隙被判为块外，所以按坐标（4px 容差）命中 popup
-const POPUP_HIT_MARGIN = 4
+const POPUP_HIT_MARGIN = 4;
 // 遍历全部 popup 读矩形会强制布局，所以只按 id 定向查询已激活的 popup
-const popupHitUuid = (id: string | null, clientX: number, clientY: number): string | null => {
-  if (!id) return null
-  const el = document.querySelector<HTMLElement>(`.block-handle-popup[data-uuid="${id}"]`)
-  const r = el?.getBoundingClientRect()
-  if (!r) return null
-  const inX = clientX >= r.left - POPUP_HIT_MARGIN && clientX <= r.right + POPUP_HIT_MARGIN
-  const inY = clientY >= r.top - POPUP_HIT_MARGIN && clientY <= r.bottom + POPUP_HIT_MARGIN
-  return inX && inY ? id : null
-}
+const popupHitUuid = (
+  id: string | null,
+  clientX: number,
+  clientY: number,
+): string | null => {
+  if (!id) return null;
+  const el = document.querySelector<HTMLElement>(
+    `.block-handle-popup[data-uuid="${id}"]`,
+  );
+  const r = el?.getBoundingClientRect();
+  if (!r) return null;
+  const inX =
+    clientX >= r.left - POPUP_HIT_MARGIN &&
+    clientX <= r.right + POPUP_HIT_MARGIN;
+  const inY =
+    clientY >= r.top - POPUP_HIT_MARGIN &&
+    clientY <= r.bottom + POPUP_HIT_MARGIN;
+  return inX && inY ? id : null;
+};
 
 const hitPopupBlock = (clientX: number, clientY: number): string | null =>
-  popupHitUuid(popupActiveUuid.value, clientX, clientY) ?? popupHitUuid(popupBlockUuid.value, clientX, clientY)
+  popupHitUuid(popupActiveUuid.value, clientX, clientY) ??
+  popupHitUuid(popupBlockUuid.value, clientX, clientY);
 
 // 命中优先级：设置栏 → 缩放手柄 → popup → 拖拽栏/缝隙 → 块本体；先走 O(1) closest，空白处才几何命中
 const resolvePointerHit = (e: MouseEvent): string | null => {
-  const target = e.target as HTMLElement
-  const directId = target.closest<HTMLElement>('.side-settings, .handle, .drag-handle, .drag-wrapper')?.dataset.uuid
-  if (directId) return directId
-  return hitSettingsBar(e.clientX, e.clientY) ?? hitResizeHandle(e.clientX, e.clientY)
-    ?? hitPopupBlock(e.clientX, e.clientY) ?? hitHandle(e.clientX, e.clientY)
-}
+  const target = e.target as HTMLElement;
+  const directId = target.closest<HTMLElement>(
+    ".side-settings, .handle, .drag-handle, .drag-wrapper",
+  )?.dataset.uuid;
+  if (directId) return directId;
+  return (
+    hitSettingsBar(e.clientX, e.clientY) ??
+    hitResizeHandle(e.clientX, e.clientY) ??
+    hitPopupBlock(e.clientX, e.clientY) ??
+    hitHandle(e.clientX, e.clientY)
+  );
+};
 
 // 按鼠标到各选中块矩形的最小距离取最近者（仅空白命中时调用）
-const nearestSelectedUuid = (clientX: number, clientY: number): string | null => {
+const nearestSelectedUuid = (
+  clientX: number,
+  clientY: number,
+): string | null => {
   // 预览开启时高频触发，所以无选中块时短路
-  if (state.selectedIds.size === 0) return null
-  if (!viewRect.value) return null
-  const rectOf = screenRectFactory()
-  let bestId: string | null = null
-  let bestDist = Infinity
+  if (state.selectedIds.size === 0) return null;
+  if (!viewRect.value) return null;
+  const rectOf = screenRectFactory();
+  let bestId: string | null = null;
+  let bestDist = Infinity;
   state.items.forEach((item) => {
-    if (!state.selectedIds.has(item.uuid)) return
-    const l = layoutOf(item)
-    const rect = rectOf(l.x, l.y, l.w, l.h)
-    if (!rect) return
-    const dx = Math.max(rect.left - clientX, 0, clientX - rect.right)
-    const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom)
-    const dist = Math.hypot(dx, dy)
+    if (!state.selectedIds.has(item.uuid)) return;
+    const l = layoutOf(item);
+    const rect = rectOf(l.x, l.y, l.w, l.h);
+    if (!rect) return;
+    const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
+    const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
+    const dist = Math.hypot(dx, dy);
     if (dist < bestDist) {
-      bestDist = dist
-      bestId = item.uuid
+      bestDist = dist;
+      bestId = item.uuid;
     }
-  })
-  return bestId
-}
+  });
+  return bestId;
+};
 
 // 选中只由点击/框选决定，悬停仅切换浮层归属
-const hoveredUuid = ref<string | null>(null)
-const outlineOwnerId = computed(() => customDrag.active ? customDrag.sourceUuid : hoveredUuid.value)
+const hoveredUuid = ref<string | null>(null);
+const outlineOwnerId = computed(() =>
+  customDrag.active ? customDrag.sourceUuid : hoveredUuid.value,
+);
 
 // 逐块 v-if 每帧为全部块求值会掉帧，所以先算出小集合再渲染
 const floatingOwnerId = computed(() => {
-  if (!isEditMode.value) return null
-  const id = customDrag.active ? customDrag.sourceUuid : hoveredUuid.value
-  return id && state.selectedIds.has(id) ? id : null
-})
-const floatingOwnerItem = computed(() => state.items.find((it) => it.uuid === floatingOwnerId.value) ?? null)
+  if (!isEditMode.value) return null;
+  const id = customDrag.active ? customDrag.sourceUuid : hoveredUuid.value;
+  return id && state.selectedIds.has(id) ? id : null;
+});
+const floatingOwnerItem = computed(
+  () => state.items.find((it) => it.uuid === floatingOwnerId.value) ?? null,
+);
 // popup 弹出时块顶部手柄隐藏，拖拽栏一并隐藏以免争位
 const floatingHandleItem = computed(() => {
-  const item = floatingOwnerItem.value
-  return item && popupBlockUuid.value !== item.uuid ? item : null
-})
+  const item = floatingOwnerItem.value;
+  return item && popupBlockUuid.value !== item.uuid ? item : null;
+});
 // 设置栏是否出现由块组件自身是否提供设置插槽决定
-const sideSettingsItem = computed(() => floatingOwnerItem.value)
+const sideSettingsItem = computed(() => floatingOwnerItem.value);
 const selectedOutlineItems = computed(() =>
-  isEditMode.value ? state.items.filter((it) => state.selectedIds.has(it.uuid)) : []
-)
+  isEditMode.value
+    ? state.items.filter((it) => state.selectedIds.has(it.uuid))
+    : [],
+);
 
 // 描边环外扩 OUTLINE_PX，外圆角须同步变大才不露块自身的尖角
-const OUTLINE_RADIUS = OUTLINE_PX + ROUNDED
+const OUTLINE_RADIUS = OUTLINE_PX + ROUNDED;
 // 遮罩边界须比轮廓外扩一圈，避免抗锯齿边被裁
-const OUTLINE_MASK_PAD = 8
+const OUTLINE_MASK_PAD = 8;
 
 interface OutlineBand {
-  uuid: string
-  outer: Rect
-  inner: Rect
+  uuid: string;
+  outer: Rect;
+  inner: Rect;
 }
 
 const outlineBandOf = (item: CanvasItem): OutlineBand => {
-  const l = layoutOf(item)
-  const expand = roundToPx(OUTLINE_PX)
-  const x = roundToPx(l.x)
-  const y = roundToPx(l.y)
-  const w = roundToPx(l.w)
-  const h = roundToPx(l.h)
+  const l = layoutOf(item);
+  const expand = roundToPx(OUTLINE_PX);
+  const x = roundToPx(l.x);
+  const y = roundToPx(l.y);
+  const w = roundToPx(l.w);
+  const h = roundToPx(l.h);
   return {
     uuid: item.uuid,
-    outer: { x: x - expand, y: y - expand, w: w + expand * 2, h: h + expand * 2 },
+    outer: {
+      x: x - expand,
+      y: y - expand,
+      w: w + expand * 2,
+      h: h + expand * 2,
+    },
     inner: { x, y, w, h },
-  }
-}
+  };
+};
 
 const outlineBoundsOf = (bands: OutlineBand[]): Rect => {
-  const minX = Math.min(...bands.map((band) => band.outer.x))
-  const minY = Math.min(...bands.map((band) => band.outer.y))
-  const maxX = Math.max(...bands.map((band) => band.outer.x + band.outer.w))
-  const maxY = Math.max(...bands.map((band) => band.outer.y + band.outer.h))
+  const minX = Math.min(...bands.map((band) => band.outer.x));
+  const minY = Math.min(...bands.map((band) => band.outer.y));
+  const maxX = Math.max(...bands.map((band) => band.outer.x + band.outer.w));
+  const maxY = Math.max(...bands.map((band) => band.outer.y + band.outer.h));
   return {
     x: minX - OUTLINE_MASK_PAD,
     y: minY - OUTLINE_MASK_PAD,
     w: maxX - minX + OUTLINE_MASK_PAD * 2,
     h: maxY - minY + OUTLINE_MASK_PAD * 2,
-  }
-}
+  };
+};
 
 // 多选的外扩环会在贴合边互相压住叠成粗线，所以并集轮廓只在单块时退化为普通环
 const outlineBands = computed<OutlineBand[]>(() => {
-  void layoutVersion.value
-  const items = selectedOutlineItems.value
-  return items.length > 1 ? items.map(outlineBandOf) : []
-})
+  void layoutVersion.value;
+  const items = selectedOutlineItems.value;
+  return items.length > 1 ? items.map(outlineBandOf) : [];
+});
 const outlineBounds = computed(() =>
-  outlineBands.value.length ? outlineBoundsOf(outlineBands.value) : { x: 0, y: 0, w: 0, h: 0 },
-)
-const outlineRingItems = computed(() => (outlineBands.value.length ? [] : selectedOutlineItems.value))
-const outlineMaskId = `md-outline-mask-${useId()}`
+  outlineBands.value.length
+    ? outlineBoundsOf(outlineBands.value)
+    : { x: 0, y: 0, w: 0, h: 0 },
+);
+const outlineRingItems = computed(() =>
+  outlineBands.value.length ? [] : selectedOutlineItems.value,
+);
+const outlineMaskId = `md-outline-mask-${useId()}`;
 
 const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
-  startCustomDrag(item, e)
-}
+  startCustomDrag(item, e);
+};
 
 // 归属块必须是选中块，否则取最近选中块，避免鼠标扫过未选中块时拖拽栏全消失
-const applyFloatingOwner = (hitId: string | null, clientX: number, clientY: number) => {
-  const owner = hitId && state.selectedIds.has(hitId) ? hitId : nearestSelectedUuid(clientX, clientY)
-  if (owner !== hoveredUuid.value) hoveredUuid.value = owner
-}
+const applyFloatingOwner = (
+  hitId: string | null,
+  clientX: number,
+  clientY: number,
+) => {
+  const owner =
+    hitId && state.selectedIds.has(hitId)
+      ? hitId
+      : nearestSelectedUuid(clientX, clientY);
+  if (owner !== hoveredUuid.value) hoveredUuid.value = owner;
+};
 
 const isHoverOwnerLocked = (e: MouseEvent): boolean =>
-  !isEditMode.value || e.button !== 0 || !!resizeSession || selectionState.active || customDrag.active
-  || !!popupActiveUuid.value || e.ctrlKey || e.shiftKey || e.altKey || e.metaKey
+  !isEditMode.value ||
+  e.button !== 0 ||
+  !!resizeSession ||
+  selectionState.active ||
+  customDrag.active ||
+  !!popupActiveUuid.value ||
+  e.ctrlKey ||
+  e.shiftKey ||
+  e.altKey ||
+  e.metaKey;
 
 // 悬停只切换浮层归属
 const updateHoverOwner = (e: MouseEvent) => {
-  if (isHoverOwnerLocked(e)) return
-  applyFloatingOwner(resolvePointerHit(e), e.clientX, e.clientY)
-}
+  if (isHoverOwnerLocked(e)) return;
+  applyFloatingOwner(resolvePointerHit(e), e.clientX, e.clientY);
+};
 // #endregion 弹层与命中测试
 
 // #region 框选收尾与点击
 const finishSelection = () => {
-  if (!selectionState.active) return
-  selectionState.active = false
-  stopAutoPan()
-  const rect = selectionBox.value
+  if (!selectionState.active) return;
+  selectionState.active = false;
+  stopAutoPan();
+  const rect = selectionBox.value;
   if (rect) {
-    const matchedIds = state.items.filter((item) => isRectIntersectingItem(rect, item)).map((item) => item.uuid)
+    const matchedIds = state.items
+      .filter((item) => isRectIntersectingItem(rect, item))
+      .map((item) => item.uuid);
     if (selectionState.extend) {
-      const next = new Set(state.selectedIds)
-      matchedIds.forEach((id) => next.add(id))
-      state.selectedIds = next
+      const next = new Set(state.selectedIds);
+      matchedIds.forEach((id) => next.add(id));
+      state.selectedIds = next;
     } else {
-      state.selectedIds = new Set(matchedIds)
+      state.selectedIds = new Set(matchedIds);
     }
   } else if (!selectionState.extend) {
-    state.selectedIds = new Set()
+    state.selectedIds = new Set();
   }
-  selectionState.justFinishedSelection = true
-  selectionBox.value = null
-}
+  selectionState.justFinishedSelection = true;
+  selectionBox.value = null;
+};
 
 // 浏览器已原生聚焦可编辑内容，所以仅块内非交互区域补聚焦，且焦点已在本块内时不重设
 const FOCUS_SKIP_SELECTOR =
-  'button, a, input, select, textarea, [contenteditable="true"], [role="button"], .v-btn, .v-menu, .v-overlay, .block-handle-positioner'
+  'button, a, input, select, textarea, [contenteditable="true"], [role="button"], .v-btn, .v-menu, .v-overlay, .block-handle-positioner';
 
 const focusBlockOnClick = (id: string, target: HTMLElement) => {
-  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"]`)
-  if (!wrapper || wrapper.contains(document.activeElement)) return
-  if (target.closest(FOCUS_SKIP_SELECTOR)) return
-  focusBlockContent(id)
-}
+  const wrapper = document.querySelector<HTMLElement>(
+    `.drag-wrapper[data-uuid="${id}"]`,
+  );
+  if (!wrapper || wrapper.contains(document.activeElement)) return;
+  if (target.closest(FOCUS_SKIP_SELECTOR)) return;
+  focusBlockContent(id);
+};
 
 const handleCanvasClick = (e: MouseEvent) => {
-  const target = e.target as HTMLElement
+  const target = e.target as HTMLElement;
   if (selectionState.justFinishedSelection || dragJustFinished) {
-    selectionState.justFinishedSelection = false
-    dragJustFinished = false
-    return
+    selectionState.justFinishedSelection = false;
+    dragJustFinished = false;
+    return;
   }
-  if (target.closest('.handle, .drag-handle, .side-settings, .snap-paperclip, .toolbar')) return
-  const id = target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid
+  if (
+    target.closest(
+      ".handle, .drag-handle, .side-settings, .snap-paperclip, .toolbar",
+    )
+  )
+    return;
+  const id = target.closest<HTMLElement>(".drag-wrapper")?.dataset.uuid;
   if (id && state.items.some((item) => item.uuid === id)) {
-    if (!isEditMode.value) return
-    selectOnClick(id, e)
-    bringToTop(id)
+    if (!isEditMode.value) return;
+    selectOnClick(id, e);
+    bringToTop(id);
     // 点击时鼠标不再移动、悬停归属不会自行更新，所以选中后立即把归属指到该块（未被选中时回落为最近选中块）
-    applyFloatingOwner(id, e.clientX, e.clientY)
-    focusBlockOnClick(id, target)
-    return
+    applyFloatingOwner(id, e.clientX, e.clientY);
+    focusBlockOnClick(id, target);
+    return;
   }
-  state.selectedIds = new Set()
-}
+  state.selectedIds = new Set();
+};
 
 // 选中由 click 统一处理，所以 focusin 只提升层级
 const handleCanvasFocusin = (e: FocusEvent) => {
-  const wrapper = (e.target as HTMLElement).closest<HTMLElement>('.drag-wrapper')
-  const id = wrapper?.dataset.uuid
-  if (!id || !isEditMode.value) return
-  if (!state.items.some((item) => item.uuid === id)) return
-  bringToTop(id)
-}
+  const wrapper = (e.target as HTMLElement).closest<HTMLElement>(
+    ".drag-wrapper",
+  );
+  const id = wrapper?.dataset.uuid;
+  if (!id || !isEditMode.value) return;
+  if (!state.items.some((item) => item.uuid === id)) return;
+  bringToTop(id);
+};
 // #endregion 框选收尾与点击
 
 // #region 数据同步与布局刷新
 const syncComponentData = () => {
   state.items.forEach((item) => {
-    const inst = componentRefs.value[item.uuid]
-    const saved = inst?.flushConfig?.() ?? inst?.saveConfig?.()
+    const inst = componentRefs.value[item.uuid];
+    const saved = inst?.flushConfig?.() ?? inst?.saveConfig?.();
     if (saved) {
-      item.config = { ...item.config, ...saved } as WidgetConfig
+      item.config = { ...item.config, ...saved } as WidgetConfig;
     }
-  })
-}
+  });
+};
 
-const ARRANGE_GAP = 16
-const ARRANGE_TOP = 16
-const ARRANGE_LEFT = 16
+const ARRANGE_GAP = 16;
+const ARRANGE_TOP = 16;
+const ARRANGE_LEFT = 16;
 
 const updateCanvasWidth = () => {
-  const container = canvasContainerRef.value ?? canvasRef.value
+  const container = canvasContainerRef.value ?? canvasRef.value;
   if (container) {
-    canvasWidth.value = container.clientWidth
+    canvasWidth.value = container.clientWidth;
   }
-}
+};
 
 const stretchMobileWidth = (item: CanvasItem) => {
-  const mobile = item.layout.mobile
-  mobile.x = 0
-  mobile.w = canvasWidth.value
-}
+  const mobile = item.layout.mobile;
+  mobile.x = 0;
+  mobile.w = canvasWidth.value;
+};
 
 const applyMobileLayout = () => {
-  if (!mobileMode.value || canvasWidth.value <= 0) return
-  state.items.forEach(item => {
-    stretchMobileWidth(item)
-    const { desktop, mobile } = item.layout
+  if (!mobileMode.value || canvasWidth.value <= 0) return;
+  state.items.forEach((item) => {
+    stretchMobileWidth(item);
+    const { desktop, mobile } = item.layout;
     // 旧数据可能缺失移动端位置/高度，从桌面布局补齐
-    if (mobile.y == null) mobile.y = desktop.y
-    if (mobile.h == null) mobile.h = desktop.h
-  })
-}
+    if (mobile.y == null) mobile.y = desktop.y;
+    if (mobile.h == null) mobile.h = desktop.h;
+  });
+};
 
 const refreshLayout = () => {
-  updateCanvasWidth()
-  if (mobileMode.value) applyMobileLayout()
-}
+  updateCanvasWidth();
+  if (mobileMode.value) applyMobileLayout();
+};
 
 // 内容要在组件重挂载前同步，所以用 flush: 'pre'
-watch(mobileMode, () => {
-  syncComponentData()
-  if (mobileMode.value) {
-    // 移动端锁水平，所以把水平原点并入桌面布局并归零
-    if (origin.x) {
-      state.items.forEach((it) => { it.layout.desktop.x += origin.x })
-      origin.x = 0
+watch(
+  mobileMode,
+  () => {
+    syncComponentData();
+    if (mobileMode.value) {
+      // 移动端锁水平，所以把水平原点并入桌面布局并归零
+      if (origin.x) {
+        state.items.forEach((it) => {
+          it.layout.desktop.x += origin.x;
+        });
+        origin.x = 0;
+      }
+      // 移动端按视口宽度拉伸，所以归零缩放；归零属模式重置，跳过锚点补偿
+      zoomAnchorPrev = 1;
+      zoom.value = 1;
     }
-    // 移动端按视口宽度拉伸，所以归零缩放；归零属模式重置，跳过锚点补偿
-    zoomAnchorPrev = 1
-    zoom.value = 1
-  }
-  // 残留 pan.y 会把另一布局顶出视口，所以切换时归零平移
-  pan.x = 0
-  pan.y = 0
-  autoArrange(mobileMode.value ? 'mobile' : 'desktop')
-  recomputeMasks()
-  nextTick(() => {
-    refreshLayout()
-    // 换布局会整体改变可见性，所以要按新视口重算虚拟集
-    reconcileVirtualBlocks()
-  })
-}, { flush: 'pre' })
+    // 残留 pan.y 会把另一布局顶出视口，所以切换时归零平移
+    pan.x = 0;
+    pan.y = 0;
+    autoArrange(mobileMode.value ? "mobile" : "desktop");
+    recomputeMasks();
+    nextTick(() => {
+      refreshLayout();
+      // 换布局会整体改变可见性，所以要按新视口重算虚拟集
+      reconcileVirtualBlocks();
+    });
+  },
+  { flush: "pre" },
+);
 
 // 块删除后其曲别针链接失效，随 items 变化自动清理
 watch(
   () => state.items.map((it) => it.uuid),
   (ids) => {
-    const idSet = new Set(ids)
+    const idSet = new Set(ids);
     linkedPairs.value = new Set(
-      Array.from(linkedPairs.value).filter((k) => k.split('|').every((id) => idSet.has(id)))
-    )
+      Array.from(linkedPairs.value).filter((k) =>
+        k.split("|").every((id) => idSet.has(id)),
+      ),
+    );
     // 块删除后其滚动记录也失效，所以一并清理
-    Array.from(virtualScrolls.keys()).forEach((id) => { if (!idSet.has(id)) virtualScrolls.delete(id) })
-    scheduleVirtualReconcile()
-  }
-)
+    Array.from(virtualScrolls.keys()).forEach((id) => {
+      if (!idSet.has(id)) virtualScrolls.delete(id);
+    });
+    scheduleVirtualReconcile();
+  },
+);
 
 // 编辑器嵌在块内拿不到画布选中态，所以选中集变化时派发全局事件
 watch(
-  () => [...state.selectedIds].sort().join(','),
-  () => window.dispatchEvent(new CustomEvent('Mindrizzle:block-selection', { detail: { uuids: [...state.selectedIds] } })),
-)
+  () => [...state.selectedIds].sort().join(","),
+  () =>
+    window.dispatchEvent(
+      new CustomEvent("Mindrizzle:block-selection", {
+        detail: { uuids: [...state.selectedIds] },
+      }),
+    ),
+);
 
 const onResize = () => {
-  refreshViewRect()
-  refreshLayout()
-  invalidateCanvasScaleCache()
-  recomputeMasks()
-  scheduleVirtualReconcile()
-}
+  refreshViewRect();
+  refreshLayout();
+  invalidateCanvasScaleCache();
+  recomputeMasks();
+  scheduleVirtualReconcile();
+};
 // #endregion 数据同步与布局刷新
 
 // 未排的块按桌面阅读顺序纵向堆叠在已排块下方（x 恒 0）
 // #region 自动布局与添加
 const autoArrangeMobile = () => {
-  const pending = state.items.filter((it) => !it.arranged.mobile)
-  if (pending.length === 0) return
-  let cursor = ARRANGE_TOP
+  const pending = state.items.filter((it) => !it.arranged.mobile);
+  if (pending.length === 0) return;
+  let cursor = ARRANGE_TOP;
   state.items.forEach((it) => {
-    if (it.arranged.mobile) cursor = Math.max(cursor, it.layout.mobile.y + it.layout.mobile.h)
-  })
+    if (it.arranged.mobile)
+      cursor = Math.max(cursor, it.layout.mobile.y + it.layout.mobile.h);
+  });
   pending
     .sort((a, b) => a.layout.desktop.y - b.layout.desktop.y)
     .forEach((it) => {
-      const m = it.layout.mobile
-      m.x = 0
-      m.h = m.h > 0 ? m.h : it.layout.desktop.h
-      m.y = Math.round(cursor + ARRANGE_GAP)
-      cursor = m.y + m.h
-      it.arranged.mobile = true
-    })
-}
+      const m = it.layout.mobile;
+      m.x = 0;
+      m.h = m.h > 0 ? m.h : it.layout.desktop.h;
+      m.y = Math.round(cursor + ARRANGE_GAP);
+      cursor = m.y + m.h;
+      it.arranged.mobile = true;
+    });
+};
 
 // 未排的块按视口宽度瀑布流平铺在已排块下方
 const autoArrangeDesktop = () => {
-  const pending = state.items.filter((it) => !it.arranged.desktop)
-  if (pending.length === 0) return
-  let cursorY = ARRANGE_TOP
+  const pending = state.items.filter((it) => !it.arranged.desktop);
+  if (pending.length === 0) return;
+  let cursorY = ARRANGE_TOP;
   state.items.forEach((it) => {
-    if (it.arranged.desktop) cursorY = Math.max(cursorY, it.layout.desktop.y + it.layout.desktop.h)
-  })
-  const maxX = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2)
-  let cursorX = ARRANGE_LEFT
-  let rowH = 0
+    if (it.arranged.desktop)
+      cursorY = Math.max(cursorY, it.layout.desktop.y + it.layout.desktop.h);
+  });
+  const maxX = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2);
+  let cursorX = ARRANGE_LEFT;
+  let rowH = 0;
   pending
     .sort((a, b) => a.layout.desktop.y - b.layout.desktop.y)
     .forEach((it) => {
-      const d = it.layout.desktop
+      const d = it.layout.desktop;
       if (cursorX + d.w > maxX - ARRANGE_LEFT) {
-        cursorX = ARRANGE_LEFT
-        cursorY += rowH + ARRANGE_GAP
-        rowH = 0
+        cursorX = ARRANGE_LEFT;
+        cursorY += rowH + ARRANGE_GAP;
+        rowH = 0;
       }
-      d.x = cursorX
-      d.y = Math.round(cursorY)
-      cursorX += d.w + ARRANGE_GAP
-      rowH = Math.max(rowH, d.h)
-      it.arranged.desktop = true
-    })
-}
+      d.x = cursorX;
+      d.y = Math.round(cursorY);
+      cursorX += d.w + ARRANGE_GAP;
+      rowH = Math.max(rowH, d.h);
+      it.arranged.desktop = true;
+    });
+};
 
-const autoArrange = (mode: 'desktop' | 'mobile') => {
-  if (mode === 'mobile') autoArrangeMobile()
-  else autoArrangeDesktop()
+const autoArrange = (mode: "desktop" | "mobile") => {
+  if (mode === "mobile") autoArrangeMobile();
+  else autoArrangeDesktop();
   // 排列只写 layout（非响应式），所以须显式刷新
-  markLayoutDirty()
-}
+  markLayoutDirty();
+};
 
 // 桌面端取各已放块底部作候选顶边、视口内从左到右找空位（贴底候选比固定网格更紧凑）；移动端追加到末尾
 const freeSpotFor = (w: number, h: number): { x: number; y: number } => {
   if (mobileMode.value) {
-    let maxBottom = 0
+    let maxBottom = 0;
     state.items.forEach((it) => {
-      maxBottom = Math.max(maxBottom, it.layout.mobile.y + it.layout.mobile.h)
-    })
-    return { x: 0, y: Math.round(maxBottom + ARRANGE_GAP) }
+      maxBottom = Math.max(maxBottom, it.layout.mobile.y + it.layout.mobile.h);
+    });
+    return { x: 0, y: Math.round(maxBottom + ARRANGE_GAP) };
   }
-  const placed = state.items.map((it) => layoutOf(it))
+  const placed = state.items.map((it) => layoutOf(it));
   // canvasWidth 是像素，所以换算 content 宽度需除 zoom（否则换行边界错位）
-  const vx = Math.round(-(origin.x + pan.x) / zoom.value)
-  const vy = Math.round(-(origin.y + pan.y) / zoom.value)
-  const viewW = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2)
+  const vx = Math.round(-(origin.x + pan.x) / zoom.value);
+  const vy = Math.round(-(origin.y + pan.y) / zoom.value);
+  const viewW = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2);
   // vx 随 panToBlock 漂移会让连续添加的块逐次左偏，所以 x 起点对齐既有块最左 x
-  const leftBase = placed.length ? Math.min(...placed.map((p) => p.x)) : vx + ARRANGE_LEFT
+  const leftBase = placed.length
+    ? Math.min(...placed.map((p) => p.x))
+    : vx + ARRANGE_LEFT;
   // 有块时只取各块底部贴底，无块时用视口顶
   const candidateYs = placed.length
     ? placed.map((p) => p.y + p.h + ARRANGE_GAP).sort((a, b) => a - b)
-    : [vy + ARRANGE_TOP]
+    : [vy + ARRANGE_TOP];
   for (const cy of candidateYs) {
-    let cursorX = leftBase
+    let cursorX = leftBase;
     while (cursorX + w <= leftBase + viewW - ARRANGE_LEFT) {
-      const overlap = placed.some((p) => cursorX < p.x + p.w && cursorX + w > p.x && cy < p.y + p.h && cy + h > p.y)
-      if (!overlap) return { x: Math.round(cursorX), y: Math.round(cy) }
-      cursorX += w + ARRANGE_GAP
+      const overlap = placed.some(
+        (p) =>
+          cursorX < p.x + p.w &&
+          cursorX + w > p.x &&
+          cy < p.y + p.h &&
+          cy + h > p.y,
+      );
+      if (!overlap) return { x: Math.round(cursorX), y: Math.round(cy) };
+      cursorX += w + ARRANGE_GAP;
     }
   }
-  const maxBottom = state.items.reduce((m, it) => Math.max(m, layoutOf(it).y + layoutOf(it).h), vy)
-  return { x: leftBase, y: Math.round(maxBottom + ARRANGE_GAP) }
-}
+  const maxBottom = state.items.reduce(
+    (m, it) => Math.max(m, layoutOf(it).y + layoutOf(it).h),
+    vy,
+  );
+  return { x: leftBase, y: Math.round(maxBottom + ARRANGE_GAP) };
+};
 
 // 让块中心落在视口中心：按 屏幕 = 坐标*zoom + origin + pan 反解 pan
 const panToBlock = (id: string) => {
-  const item = state.items.find((it) => it.uuid === id)
-  if (!item) return
-  const layout = layoutOf(item)
-  const cont = canvasContainerRef.value
-  const vw = cont?.clientWidth ?? window.innerWidth
-  const vh = cont?.clientHeight ?? window.innerHeight
-  const cx = (layout.x + layout.w / 2) * zoom.value
-  const cy = (layout.y + layout.h / 2) * zoom.value
-  if (!mobileMode.value) pan.x = Math.round(vw / 2 - origin.x - cx)
-  pan.y = Math.round(vh / 2 - origin.y - cy)
-}
+  const item = state.items.find((it) => it.uuid === id);
+  if (!item) return;
+  const layout = layoutOf(item);
+  const cont = canvasContainerRef.value;
+  const vw = cont?.clientWidth ?? window.innerWidth;
+  const vh = cont?.clientHeight ?? window.innerHeight;
+  const cx = (layout.x + layout.w / 2) * zoom.value;
+  const cy = (layout.y + layout.h / 2) * zoom.value;
+  if (!mobileMode.value) pan.x = Math.round(vw / 2 - origin.x - cx);
+  pan.y = Math.round(vh / 2 - origin.y - cy);
+};
 
 // 新增块在屏幕内不动摄像机，在屏幕外才移动视角
 const isRectVisibleInViewport = (rect: Rect): boolean => {
-  const cont = canvasContainerRef.value
-  if (!cont) return true
-  const cr = cont.getBoundingClientRect()
-  const tl = contentToScreen(canvasTransform(), cr, rect.x, rect.y)
-  const br = contentToScreen(canvasTransform(), cr, rect.x + rect.w, rect.y + rect.h)
-  return tl.x < cr.right && br.x > cr.left && tl.y < cr.bottom && br.y > cr.top
-}
+  const cont = canvasContainerRef.value;
+  if (!cont) return true;
+  const cr = cont.getBoundingClientRect();
+  const tl = contentToScreen(canvasTransform(), cr, rect.x, rect.y);
+  const br = contentToScreen(
+    canvasTransform(),
+    cr,
+    rect.x + rect.w,
+    rect.y + rect.h,
+  );
+  return tl.x < cr.right && br.x > cr.left && tl.y < cr.bottom && br.y > cr.top;
+};
 
 // 每帧 O(N) 检测重叠开销大，所以用块群包围盒粗筛
 const itemsBounds = computed(() => {
   // layout 已非响应式，所以显式订阅版本号
-  void layoutVersion.value
-  if (state.items.length === 0) return null
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  void layoutVersion.value;
+  if (state.items.length === 0) return null;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   state.items.forEach((it) => {
-    const l = layoutOf(it)
-    if (l.x < minX) minX = l.x
-    if (l.y < minY) minY = l.y
-    if (l.x + l.w > maxX) maxX = l.x + l.w
-    if (l.y + l.h > maxY) maxY = l.y + l.h
-  })
-  return { minX, minY, maxX, maxY }
-})
+    const l = layoutOf(it);
+    if (l.x < minX) minX = l.x;
+    if (l.y < minY) minY = l.y;
+    if (l.x + l.w > maxX) maxX = l.x + l.w;
+    if (l.y + l.h > maxY) maxY = l.y + l.h;
+  });
+  return { minX, minY, maxX, maxY };
+});
 
 // 鼠标处不重叠用鼠标处、重叠则自动排列；添加与预览共用
-const resolveAddSpot = (key: CanvasItem['component'], at?: { x: number; y: number }): { spot: { x: number; y: number } } => {
-  const meta = componentMetaOf(key)
-  if (!meta) return { spot: { x: 0, y: 0 } }
-  if (!at) return { spot: freeSpotFor(meta.defaultSize.w, meta.defaultSize.h) }
+const resolveAddSpot = (
+  key: CanvasItem["component"],
+  at?: { x: number; y: number },
+): { spot: { x: number; y: number } } => {
+  const meta = componentMetaOf(key);
+  if (!meta) return { spot: { x: 0, y: 0 } };
+  if (!at) return { spot: freeSpotFor(meta.defaultSize.w, meta.defaultSize.h) };
   if (mobileMode.value) {
     // 移动端锁水平（x 恒 0、宽贴屏），但 y 跟随鼠标位置
-    return { spot: { x: 0, y: Math.round(at.y) } }
+    return { spot: { x: 0, y: Math.round(at.y) } };
   }
-  const { w, h } = meta.defaultSize
+  const { w, h } = meta.defaultSize;
   const overlapsAt = (x: number, y: number) => {
-    const b = itemsBounds.value
-    if (b && (x + w <= b.minX || x >= b.maxX || y + h <= b.minY || y >= b.maxY)) return false
+    const b = itemsBounds.value;
+    if (b && (x + w <= b.minX || x >= b.maxX || y + h <= b.minY || y >= b.maxY))
+      return false;
     return state.items.some((it) => {
-      const l = layoutOf(it)
-      return x < l.x + l.w && x + w > l.x && y < l.y + l.h && y + h > l.y
-    })
-  }
-  const spot = { x: Math.round(at.x), y: Math.round(at.y) }
-  return overlapsAt(spot.x, spot.y)
-    ? { spot: freeSpotFor(w, h) }
-    : { spot }
-}
+      const l = layoutOf(it);
+      return x < l.x + l.w && x + w > l.x && y < l.y + l.h && y + h > l.y;
+    });
+  };
+  const spot = { x: Math.round(at.x), y: Math.round(at.y) };
+  return overlapsAt(spot.x, spot.y) ? { spot: freeSpotFor(w, h) } : { spot };
+};
 
 const addComponent = (
-  key: CanvasItem['component'],
+  key: CanvasItem["component"],
   at?: { x: number; y: number },
   config?: WidgetConfig,
   // 插入块抽出时沿用原 uuid，组件数据目录直接复用，不用等异步复制
   preferredUuid?: string,
 ): string | null => {
-  const meta = componentMetaOf(key)
-  if (!meta) return null
-  const uuid = preferredUuid && !state.items.some((item) => item.uuid === preferredUuid)
-    ? preferredUuid
-    : generateBlockUuid()
-  const { spot } = resolveAddSpot(key, at)
-  const { x, y } = spot
+  const meta = componentMetaOf(key);
+  if (!meta) return null;
+  const uuid =
+    preferredUuid && !state.items.some((item) => item.uuid === preferredUuid)
+      ? preferredUuid
+      : generateBlockUuid();
+  const { spot } = resolveAddSpot(key, at);
+  const { x, y } = spot;
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   const newItem: CanvasItem = markRaw({
     uuid,
@@ -2998,91 +3728,112 @@ const addComponent = (
       mobile: { x: 0, y, ...meta.defaultSize },
     },
     arranged: { desktop: !mobileMode.value, mobile: mobileMode.value },
-  })
-  state.items.push(newItem)
+  });
+  state.items.push(newItem);
   if (mobileMode.value && canvasWidth.value > 0) {
-    stretchMobileWidth(newItem)
+    stretchMobileWidth(newItem);
   }
-  if (!isRectVisibleInViewport(layoutOf(newItem))) panToBlock(newItem.uuid)
-  recomputeMasks()
-  return uuid
-}
+  if (!isRectVisibleInViewport(layoutOf(newItem))) panToBlock(newItem.uuid);
+  recomputeMasks();
+  return uuid;
+};
 // #endregion 自动布局与添加
 
 // #region 插入组件拖出成块
 // 节点名 → 块注册项由注册表声明，画布不感知具体组件类型
-const extractMetaOf = (nodeName: string) => embeddedBlockOf(nodeName)
+const extractMetaOf = (nodeName: string) => embeddedBlockOf(nodeName);
 
 // 仅编辑态且落点在画布内才新增块，经 detail.accepted 同步回填结果
 type ExtractDetail = {
-  componentName: string
-  props: Record<string, any>
+  componentName: string;
+  props: Record<string, any>;
   // 嵌入节点的组件数据目录，拖出成块后要把文件搬过去
-  uuid?: string
-  clientX: number
-  clientY: number
-  accepted: boolean
-}
+  uuid?: string;
+  clientX: number;
+  clientY: number;
+  accepted: boolean;
+};
 const onExtractComponent = (event: Event) => {
-  const detail = (event as CustomEvent<ExtractDetail>).detail
-  const meta = detail ? extractMetaOf(detail.componentName) : undefined
-  const extract = meta?.embed
-  const rect = canvasContainerRef.value?.getBoundingClientRect()
-  if (!meta || !extract || !rect || !isEditMode.value) return
-  const isInside = detail.clientX >= rect.left && detail.clientX <= rect.right
-    && detail.clientY >= rect.top && detail.clientY <= rect.bottom
-  if (!isInside) return
+  const detail = (event as CustomEvent<ExtractDetail>).detail;
+  const meta = detail ? extractMetaOf(detail.componentName) : undefined;
+  const extract = meta?.embed;
+  const rect = canvasContainerRef.value?.getBoundingClientRect();
+  if (!meta || !extract || !rect || !isEditMode.value) return;
+  const isInside =
+    detail.clientX >= rect.left &&
+    detail.clientX <= rect.right &&
+    detail.clientY >= rect.top &&
+    detail.clientY <= rect.bottom;
+  if (!isInside) return;
   const id = addComponent(
     meta.key,
     screenToContent(canvasTransform(), rect, detail.clientX, detail.clientY),
     extract.fromProps(detail.props),
     detail.uuid,
-  )
-  if (!id) return
-  detail.accepted = true
+  );
+  if (!id) return;
+  detail.accepted = true;
   // uuid 被占用（节点被复制过）或旧节点没有 uuid 时只能另起一个目录，这时才需要搬文件
   if (detail.uuid && detail.uuid !== id) {
     void copyComponentFiles(detail.uuid, id).catch((cause) => {
-      if (isTauri()) void logError(`迁移组件数据失败：${getErrorMessage(cause)}`)
-    })
+      if (isTauri())
+        void logError(`迁移组件数据失败：${getErrorMessage(cause)}`);
+    });
   }
   // 抽出后新块置为选中以给反馈，并对随之补发的 click 置标记，避免被当"点击空白"清掉选中
-  state.selectedIds = new Set([id])
-  dragJustFinished = true
-}
+  state.selectedIds = new Set([id]);
+  dragJustFinished = true;
+};
 // #endregion 插入组件拖出成块
 
 // #region 编辑器虚拟化
 // ProseMirror 实例带着插件 state、ResizeObserver 与逐块 window 捕获监听，所以视口外的块销毁实例、只留静态快照
-const VIRTUAL_MARGIN = 400
+const VIRTUAL_MARGIN = 400;
 
 // 快照表既是"已虚拟化"的标记也是占位内容：从未渲染过的块存空串，回视口时按 config 重建
-const virtualSnapshots = shallowRef<Record<string, string>>({})
-const isVirtualized = (id: string): boolean => virtualSnapshots.value[id] !== undefined
+const virtualSnapshots = shallowRef<Record<string, string>>({});
+const isVirtualized = (id: string): boolean =>
+  virtualSnapshots.value[id] !== undefined;
 
 interface ScrollRecord {
-  selector: string
-  index: number
-  top: number
-  left: number
+  selector: string;
+  index: number;
+  top: number;
+  left: number;
 }
 // 块内滚动量随实例一起销毁，所以画布侧留一份：快照克隆与重建后的实例都要还原
-const virtualScrolls = new Map<string, ScrollRecord[]>()
+const virtualScrolls = new Map<string, ScrollRecord[]>();
 
 // 判定纯走换算公式（不读 DOM 矩形），否则每帧要为 N 个块触发强制布局
 const isBlockNearViewport = (item: CanvasItem): boolean => {
-  const viewport = viewRect.value
-  if (!viewport) return true
-  const layout = layoutOf(item)
-  const topLeft = contentToScreen(canvasTransform(), viewport, layout.x, layout.y)
-  const bottomRight = contentToScreen(canvasTransform(), viewport, layout.x + layout.w, layout.y + layout.h)
-  return topLeft.x < viewport.right + VIRTUAL_MARGIN && bottomRight.x > viewport.left - VIRTUAL_MARGIN &&
-    topLeft.y < viewport.bottom + VIRTUAL_MARGIN && bottomRight.y > viewport.top - VIRTUAL_MARGIN
-}
+  const viewport = viewRect.value;
+  if (!viewport) return true;
+  const layout = layoutOf(item);
+  const topLeft = contentToScreen(
+    canvasTransform(),
+    viewport,
+    layout.x,
+    layout.y,
+  );
+  const bottomRight = contentToScreen(
+    canvasTransform(),
+    viewport,
+    layout.x + layout.w,
+    layout.y + layout.h,
+  );
+  return (
+    topLeft.x < viewport.right + VIRTUAL_MARGIN &&
+    bottomRight.x > viewport.left - VIRTUAL_MARGIN &&
+    topLeft.y < viewport.bottom + VIRTUAL_MARGIN &&
+    bottomRight.y > viewport.top - VIRTUAL_MARGIN
+  );
+};
 
 // 焦点在块内时销毁实例会丢光标与未提交输入，所以按 activeElement 反查（整轮只查一次）
 const focusedUuid = (): string | null =>
-  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid ?? null
+  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
+    ".drag-wrapper",
+  )?.dataset.uuid ?? null;
 
 // 选中/拖拽/resize/popup/联结落点都依赖活实例，所以在可见性之外额外固定
 const isBlockPinned = (item: CanvasItem): boolean =>
@@ -3091,132 +3842,165 @@ const isBlockPinned = (item: CanvasItem): boolean =>
   resizeSession?.uuid === item.uuid ||
   popupBlockUuid.value === item.uuid ||
   popupActiveUuid.value === item.uuid ||
-  richTextDropTargetId.value === item.uuid
+  richTextDropTargetId.value === item.uuid;
 
 // 克隆里残留的 contenteditable/tabindex 会让快照仍可聚焦与输入，所以要剔除
 const sanitizeSnapshot = (html: string): string => {
-  const holder = document.createElement('template')
-  holder.innerHTML = html
-  holder.content.querySelectorAll('[contenteditable], [tabindex]').forEach((el) => {
-    el.removeAttribute('contenteditable')
-    el.removeAttribute('tabindex')
-  })
-  return holder.innerHTML
-}
+  const holder = document.createElement("template");
+  holder.innerHTML = html;
+  holder.content
+    .querySelectorAll("[contenteditable], [tabindex]")
+    .forEach((el) => {
+      el.removeAttribute("contenteditable");
+      el.removeAttribute("tabindex");
+    });
+  return holder.innerHTML;
+};
 
 // 可滚动层的类名在两种组件里都稳定（.editor-scroll / .edit-layer / .highlight-layer），所以按类名 + 序号定位
 const scrollRecordsOf = (root: HTMLElement): ScrollRecord[] => {
-  const records: ScrollRecord[] = []
-  Array.from(root.querySelectorAll<HTMLElement>('*')).forEach((el) => {
-    if (el.scrollTop <= 0 && el.scrollLeft <= 0) return
-    const selector = Array.from(el.classList).map((name) => `.${name}`).join('')
-    if (!selector) return
-    const peers = Array.from(root.querySelectorAll<HTMLElement>(selector))
-    records.push({ selector, index: peers.indexOf(el), top: el.scrollTop, left: el.scrollLeft })
-  })
-  return records
-}
+  const records: ScrollRecord[] = [];
+  Array.from(root.querySelectorAll<HTMLElement>("*")).forEach((el) => {
+    if (el.scrollTop <= 0 && el.scrollLeft <= 0) return;
+    const selector = Array.from(el.classList)
+      .map((name) => `.${name}`)
+      .join("");
+    if (!selector) return;
+    const peers = Array.from(root.querySelectorAll<HTMLElement>(selector));
+    records.push({
+      selector,
+      index: peers.indexOf(el),
+      top: el.scrollTop,
+      left: el.scrollLeft,
+    });
+  });
+  return records;
+};
 
 // 销毁前必须先把内容与视觉搬走——实例一去，doc 与 DOM 都取不到
 const virtualizeBlock = (item: CanvasItem): string => {
-  const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${item.uuid}"] .inner-component`)
-  if (!root) return ''
-  const inst = componentRefs.value[item.uuid]
-  const config = inst?.flushConfig?.() ?? inst?.saveConfig?.()
-  if (config) item.config = { ...item.config, ...config } as WidgetConfig
-  const records = scrollRecordsOf(root)
-  if (records.length) virtualScrolls.set(item.uuid, records)
+  const root = canvasRef.value?.querySelector<HTMLElement>(
+    `.drag-wrapper[data-uuid="${item.uuid}"] .inner-component`,
+  );
+  if (!root) return "";
+  const inst = componentRefs.value[item.uuid];
+  const config = inst?.flushConfig?.() ?? inst?.saveConfig?.();
+  if (config) item.config = { ...item.config, ...config } as WidgetConfig;
+  const records = scrollRecordsOf(root);
+  if (records.length) virtualScrolls.set(item.uuid, records);
   // 自绘块（canvas/WebGL）的 DOM 克隆是空白，快照内容由块自己给出；空串表示走 DOM 克隆
-  const custom = inst?.snapshotHtml?.()
-  return sanitizeSnapshot(custom ? custom : root.outerHTML)
-}
+  const custom = inst?.snapshotHtml?.();
+  return sanitizeSnapshot(custom ? custom : root.outerHTML);
+};
 
-const applyScrollRecords = (root: HTMLElement | null, records: ScrollRecord[]): void => {
-  if (!root) return
+const applyScrollRecords = (
+  root: HTMLElement | null,
+  records: ScrollRecord[],
+): void => {
+  if (!root) return;
   records.forEach((record) => {
-    const target = root.querySelectorAll<HTMLElement>(record.selector)[record.index]
-    if (!target) return
-    target.scrollTop = record.top
-    target.scrollLeft = record.left
-  })
-}
+    const target = root.querySelectorAll<HTMLElement>(record.selector)[
+      record.index
+    ];
+    if (!target) return;
+    target.scrollTop = record.top;
+    target.scrollLeft = record.left;
+  });
+};
 
 // 快照克隆与重建后的实例同为 .inner-component，所以还原入口只需块 uuid
 const applyBlockScrolls = (id: string): void => {
-  const records = virtualScrolls.get(id)
-  if (!records) return
-  const root = canvasRef.value?.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"] .inner-component`) ?? null
-  applyScrollRecords(root, records)
-}
+  const records = virtualScrolls.get(id);
+  if (!records) return;
+  const root =
+    canvasRef.value?.querySelector<HTMLElement>(
+      `.drag-wrapper[data-uuid="${id}"] .inner-component`,
+    ) ?? null;
+  applyScrollRecords(root, records);
+};
 
 // 克隆内容与代码块（异步组件）都可能晚一帧才撑开滚动区，所以 tick 后再补一帧
 const restoreScrollsSoon = (ids: string[]): void => {
-  nextTick(() => ids.forEach(applyBlockScrolls))
-  requestAnimationFrame(() => ids.forEach(applyBlockScrolls))
-}
+  nextTick(() => ids.forEach(applyBlockScrolls));
+  requestAnimationFrame(() => ids.forEach(applyBlockScrolls));
+};
 
-const sameBlockUuids = (first: Record<string, unknown>, second: Record<string, unknown>): boolean => {
-  const keys = Object.keys(first)
-  if (keys.length !== Object.keys(second).length) return false
-  return keys.every((key) => key in second)
-}
+const sameBlockUuids = (
+  first: Record<string, unknown>,
+  second: Record<string, unknown>,
+): boolean => {
+  const keys = Object.keys(first);
+  if (keys.length !== Object.keys(second).length) return false;
+  return keys.every((key) => key in second);
+};
 
 const reconcileVirtualBlocks = () => {
-  const focused = focusedUuid()
-  const nextSnapshots: Record<string, string> = {}
-  const touchedIds: string[] = []
+  const focused = focusedUuid();
+  const nextSnapshots: Record<string, string> = {};
+  const touchedIds: string[] = [];
   state.items.forEach((item) => {
-    if (focused === item.uuid || isBlockPinned(item) || isBlockNearViewport(item)) {
-      if (isVirtualized(item.uuid)) touchedIds.push(item.uuid)
-      return
+    if (
+      focused === item.uuid ||
+      isBlockPinned(item) ||
+      isBlockNearViewport(item)
+    ) {
+      if (isVirtualized(item.uuid)) touchedIds.push(item.uuid);
+      return;
     }
     if (isVirtualized(item.uuid)) {
-      nextSnapshots[item.uuid] = virtualSnapshots.value[item.uuid]
-      return
+      nextSnapshots[item.uuid] = virtualSnapshots.value[item.uuid];
+      return;
     }
-    nextSnapshots[item.uuid] = virtualizeBlock(item)
-    touchedIds.push(item.uuid)
-  })
-  if (sameBlockUuids(nextSnapshots, virtualSnapshots.value)) return
-  virtualSnapshots.value = nextSnapshots
+    nextSnapshots[item.uuid] = virtualizeBlock(item);
+    touchedIds.push(item.uuid);
+  });
+  if (sameBlockUuids(nextSnapshots, virtualSnapshots.value)) return;
+  virtualSnapshots.value = nextSnapshots;
   // 换手两边的 DOM 都是新渲染的，所以都要把块内滚动还原
-  if (touchedIds.length) restoreScrollsSoon(touchedIds)
-}
+  if (touchedIds.length) restoreScrollsSoon(touchedIds);
+};
 
-let virtualRafId = 0
+let virtualRafId = 0;
 const scheduleVirtualReconcile = () => {
-  if (virtualRafId) return
+  if (virtualRafId) return;
   virtualRafId = requestAnimationFrame(() => {
-    virtualRafId = 0
-    reconcileVirtualBlocks()
-  })
-}
+    virtualRafId = 0;
+    reconcileVirtualBlocks();
+  });
+};
 // #endregion 编辑器虚拟化
 
 // #region 保存与加载
 const save = () => {
-  syncComponentData()
+  syncComponentData();
   // 块坐标需保持小值防溢出，所以以块群包围盒中心为新原点保存相对坐标
-  const absOf = (r: Rect) => ({ x: r.x + origin.x + pan.x, y: r.y + origin.y + pan.y })
-  let cx = 0, cy = 0
+  const absOf = (r: Rect) => ({
+    x: r.x + origin.x + pan.x,
+    y: r.y + origin.y + pan.y,
+  });
+  let cx = 0,
+    cy = 0;
   if (state.items.length) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
     state.items.forEach((it) => {
-      const a = absOf(it.layout.desktop)
-      if (a.x < minX) minX = a.x
-      if (a.y < minY) minY = a.y
-      if (a.x > maxX) maxX = a.x
-      if (a.y > maxY) maxY = a.y
-    })
-    cx = Math.round((minX + maxX) / 2)
-    cy = Math.round((minY + maxY) / 2)
+      const a = absOf(it.layout.desktop);
+      if (a.x < minX) minX = a.x;
+      if (a.y < minY) minY = a.y;
+      if (a.x > maxX) maxX = a.x;
+      if (a.y > maxY) maxY = a.y;
+    });
+    cx = Math.round((minX + maxX) / 2);
+    cy = Math.round((minY + maxY) / 2);
   }
   const toSaveRect = (r: Rect) => ({
     x: Math.round(r.x + origin.x + pan.x - cx),
     y: Math.round(r.y + origin.y + pan.y - cy),
     w: Math.round(r.w),
     h: Math.round(r.h),
-  })
+  });
   // 移动端宽度运行时拉伸，不持久化
   const serializable = state.items.map((it) => ({
     uuid: it.uuid,
@@ -3224,312 +4008,399 @@ const save = () => {
     config: it.config,
     layout: {
       desktop: toSaveRect(it.layout.desktop),
-      mobile: { x: 0, y: Math.round(it.layout.mobile.y + origin.y + pan.y - cy), h: Math.round(it.layout.mobile.h) },
+      mobile: {
+        x: 0,
+        y: Math.round(it.layout.mobile.y + origin.y + pan.y - cy),
+        h: Math.round(it.layout.mobile.h),
+      },
     },
     arranged: { ...it.arranged },
-  }))
-  return JSON.stringify({ origin: { x: cx, y: cy }, items: serializable, links: Array.from(linkedPairs.value) })
-}
+  }));
+  return JSON.stringify({
+    origin: { x: cx, y: cy },
+    items: serializable,
+    links: Array.from(linkedPairs.value),
+  });
+};
 
 // 兼容双端布局重构前的扁平格式并对缺失字段兜底
 const normalizeLoadedItem = (it: any): CanvasItem => {
-  const component: CanvasItem['component'] = blockDefinitionOf(it.component as string)
+  const component: CanvasItem["component"] = blockDefinitionOf(
+    it.component as string,
+  )
     ? (it.component as string)
-    : DEFAULT_COMPONENT_KEY
-  const isLegacyFlat = !it.layout && typeof it.x === 'number' && typeof it.y === 'number'
+    : DEFAULT_COMPONENT_KEY;
+  const isLegacyFlat =
+    !it.layout && typeof it.x === "number" && typeof it.y === "number";
   const desktop: Rect = isLegacyFlat
     ? { x: it.x, y: it.y, w: it.w ?? 400, h: it.h ?? 300 }
-    : { x: 0, y: 0, w: 400, h: 300, ...(it.layout?.desktop ?? {}) }
-  const mobile: Rect = { ...desktop, ...(it.layout?.mobile ?? {}) }
+    : { x: 0, y: 0, w: 400, h: 300, ...(it.layout?.desktop ?? {}) };
+  const mobile: Rect = { ...desktop, ...(it.layout?.mobile ?? {}) };
   // 坐标异常会使块丢失，所以一律归 0
-  desktop.x = typeof desktop.x === 'number' ? desktop.x : 0
-  desktop.y = typeof desktop.y === 'number' ? desktop.y : 0
-  mobile.x = typeof mobile.x === 'number' ? mobile.x : 0
-  mobile.y = typeof mobile.y === 'number' ? mobile.y : 0
+  desktop.x = typeof desktop.x === "number" ? desktop.x : 0;
+  desktop.y = typeof desktop.y === "number" ? desktop.y : 0;
+  mobile.x = typeof mobile.x === "number" ? mobile.x : 0;
+  mobile.y = typeof mobile.y === "number" ? mobile.y : 0;
   // 旧数据无 arranged：desktop 视为已排，mobile 与 desktop 完全一致（纯副本）则视为未排
-  let arranged = { desktop: true, mobile: true }
-  if (it.arranged && typeof it.arranged === 'object') {
+  let arranged = { desktop: true, mobile: true };
+  if (it.arranged && typeof it.arranged === "object") {
     arranged = {
       desktop: it.arranged.desktop !== false,
       mobile: it.arranged.mobile !== false,
-    }
+    };
   } else {
-    const savedMobile = it.layout?.mobile
-    const mobileIsCopy = !savedMobile || (savedMobile.y === desktop.y && savedMobile.h === desktop.h)
-    arranged = { desktop: true, mobile: !mobileIsCopy }
+    const savedMobile = it.layout?.mobile;
+    const mobileIsCopy =
+      !savedMobile ||
+      (savedMobile.y === desktop.y && savedMobile.h === desktop.h);
+    arranged = { desktop: true, mobile: !mobileIsCopy };
   }
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   return markRaw({
-    uuid: typeof it.uuid === 'string' && it.uuid ? it.uuid : generateBlockUuid(),
+    uuid:
+      typeof it.uuid === "string" && it.uuid ? it.uuid : generateBlockUuid(),
     component,
-    config: (it.config ?? componentMetaOf(component)?.defaultConfig() ?? {}) as WidgetConfig,
+    config: (it.config ??
+      componentMetaOf(component)?.defaultConfig() ??
+      {}) as WidgetConfig,
     layout: { desktop, mobile },
     arranged,
-  })
-}
+  });
+};
 
 const load = async (raw: string) => {
-  if (!raw) return
-  let parsed: any
+  if (!raw) return;
+  let parsed: any;
   try {
-    parsed = JSON.parse(raw)
+    parsed = JSON.parse(raw);
   } catch {
-    return // 忽略，数据损坏不影响主流程
+    return; // 忽略，数据损坏不影响主流程
   }
   if (Array.isArray(parsed)) {
-    state.items = parsed.map(normalizeLoadedItem)
-    origin.x = 0
-    origin.y = 0
+    state.items = parsed.map(normalizeLoadedItem);
+    origin.x = 0;
+    origin.y = 0;
   } else if (parsed && Array.isArray(parsed.items)) {
-    state.items = parsed.items.map(normalizeLoadedItem)
-    origin.x = typeof parsed.origin?.x === 'number' ? parsed.origin.x : 0
-    origin.y = typeof parsed.origin?.y === 'number' ? parsed.origin.y : 0
+    state.items = parsed.items.map(normalizeLoadedItem);
+    origin.x = typeof parsed.origin?.x === "number" ? parsed.origin.x : 0;
+    origin.y = typeof parsed.origin?.y === "number" ? parsed.origin.y : 0;
   } else {
-    return
+    return;
   }
   // 保存坐标相对 origin 归一化，加载后归零平移、从原点查看内容
-  pan.x = 0
-  pan.y = 0
+  pan.x = 0;
+  pan.y = 0;
   // 旧文档的快照全部失效，且要在首次渲染前定好虚拟集（否则 N 块先建实例再逐个销毁）
-  virtualSnapshots.value = {}
-  virtualScrolls.clear()
-  reconcileVirtualBlocks()
+  virtualSnapshots.value = {};
+  virtualScrolls.clear();
+  reconcileVirtualBlocks();
   // 曲别针链接随文档持久化（watcher 会过滤失效链接）
   linkedPairs.value = new Set(
-    Array.isArray(parsed.links) ? parsed.links.filter((k: unknown) => typeof k === 'string') : []
-  )
-  await nextTick()
-  await nextTick()
+    Array.isArray(parsed.links)
+      ? parsed.links.filter((k: unknown) => typeof k === "string")
+      : [],
+  );
+  await nextTick();
+  await nextTick();
   if (mobileMode.value) {
     // origin.x 非 0 会把块水平顶出屏外，所以并入 desktop.x 并归零
     if (origin.x) {
-      state.items.forEach((it) => { it.layout.desktop.x += origin.x })
-      origin.x = 0
+      state.items.forEach((it) => {
+        it.layout.desktop.x += origin.x;
+      });
+      origin.x = 0;
     }
-    updateCanvasWidth()
-    applyMobileLayout()
+    updateCanvasWidth();
+    applyMobileLayout();
   }
-  autoArrange(mobileMode.value ? 'mobile' : 'desktop')
+  autoArrange(mobileMode.value ? "mobile" : "desktop");
   // 排列改了 layout，所以要按落定后的位置再定一次虚拟集（首次渲染那次用的是文件里的旧坐标）
-  reconcileVirtualBlocks()
+  reconcileVirtualBlocks();
   state.items.forEach((item) => {
-    const inst = componentRefs.value[item.uuid]
-    if (inst?.applyConfig) inst.applyConfig(item.config)
-    else inst?.loadConfig?.(item.config)
-  })
-  recomputeMasks()
-}
+    const inst = componentRefs.value[item.uuid];
+    if (inst?.applyConfig) inst.applyConfig(item.config);
+    else inst?.loadConfig?.(item.config);
+  });
+  recomputeMasks();
+};
 // #endregion 保存与加载
 
 // #region 块复制与粘贴
-const PASTE_OFFSET = 32
-const PASTE_MAX_ATTEMPTS = 24
+const PASTE_OFFSET = 32;
+const PASTE_MAX_ATTEMPTS = 24;
 
 const copySelection = (): ClipboardSnapshot | null => {
-  const selected = selectedBlockItems()
-  if (!selected.length) return null
-  const ids = new Set(selected.map((item) => item.uuid))
+  const selected = selectedBlockItems();
+  if (!selected.length) return null;
+  const ids = new Set(selected.map((item) => item.uuid));
   return {
     // config 只在复制瞬间取值，之后原块怎么改都不影响剪贴板
     blocks: selected.map((item) => ({
       uuid: item.uuid,
       component: item.component,
       config: JSON.parse(JSON.stringify(item.config)),
-      layout: { desktop: { ...item.layout.desktop }, mobile: { ...item.layout.mobile } },
+      layout: {
+        desktop: { ...item.layout.desktop },
+        mobile: { ...item.layout.mobile },
+      },
       arranged: { ...item.arranged },
     })),
-    links: Array.from(linkedPairs.value).filter((key) => key.split('|').every((id) => ids.has(id))),
-  }
-}
+    links: Array.from(linkedPairs.value).filter((key) =>
+      key.split("|").every((id) => ids.has(id)),
+    ),
+  };
+};
 
 const clipboardCenterOf = (blocks: ClipboardBlock[]): Point => {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   blocks.forEach((block) => {
-    const rect = block.layout.desktop
-    minX = Math.min(minX, rect.x)
-    minY = Math.min(minY, rect.y)
-    maxX = Math.max(maxX, rect.x + rect.w)
-    maxY = Math.max(maxY, rect.y + rect.h)
-  })
-  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
-}
+    const rect = block.layout.desktop;
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, rect.x + rect.w);
+    maxY = Math.max(maxY, rect.y + rect.h);
+  });
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+};
 
 const isSameNote = (source: ClipboardSource): boolean => {
-  const current = getCurrentNote()
-  return current.fileName === source.fileName
-    && (current.dir ?? '') === (source.dir ?? '')
-    && (current.filePath ?? '') === (source.filePath ?? '')
-}
+  const current = getCurrentNote();
+  return (
+    current.fileName === source.fileName &&
+    (current.dir ?? "") === (source.dir ?? "") &&
+    (current.filePath ?? "") === (source.filePath ?? "")
+  );
+};
 
 const viewportCenterInContent = (): Point | null => {
-  const rect = canvasContainerRef.value?.getBoundingClientRect()
-  if (!rect) return null
-  return screenToContent(canvasTransform(), rect, rect.left + rect.width / 2, rect.top + rect.height / 2)
-}
+  const rect = canvasContainerRef.value?.getBoundingClientRect();
+  if (!rect) return null;
+  return screenToContent(
+    canvasTransform(),
+    rect,
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2,
+  );
+};
 
 const overlapsAt = (rect: Rect): boolean =>
   state.items.some((item) => {
-    const l = layoutOf(item)
-    return rect.x < l.x + l.w && rect.x + rect.w > l.x && rect.y < l.y + l.h && rect.y + rect.h > l.y
-  })
+    const l = layoutOf(item);
+    return (
+      rect.x < l.x + l.w &&
+      rect.x + rect.w > l.x &&
+      rect.y < l.y + l.h &&
+      rect.y + rect.h > l.y
+    );
+  });
 
-const groupOverlaps = (blocks: ClipboardBlock[], dx: number, dy: number): boolean =>
+const groupOverlaps = (
+  blocks: ClipboardBlock[],
+  dx: number,
+  dy: number,
+): boolean =>
   blocks.some((block) => {
-    const rect = block.layout.desktop
-    return overlapsAt({ x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h })
-  })
+    const rect = block.layout.desktop;
+    return overlapsAt({ x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h });
+  });
 
 // 同笔记沿原位置错开，跨笔记落到当前视口中心，否则可能粘到看不见的坐标
-const resolvePasteOffset = (blocks: ClipboardBlock[], source: ClipboardSource): { dx: number; dy: number } => {
-  const center = clipboardCenterOf(blocks)
-  const target = isSameNote(source) ? center : (viewportCenterInContent() ?? center)
-  let dx = Math.round(target.x - center.x)
-  let dy = Math.round(target.y - center.y)
+const resolvePasteOffset = (
+  blocks: ClipboardBlock[],
+  source: ClipboardSource,
+): { dx: number; dy: number } => {
+  const center = clipboardCenterOf(blocks);
+  const target = isSameNote(source)
+    ? center
+    : (viewportCenterInContent() ?? center);
+  let dx = Math.round(target.x - center.x);
+  let dy = Math.round(target.y - center.y);
   // 移动端块宽贴屏且纵向堆叠，横向偏移毫无意义，也谈不上重叠
-  if (mobileMode.value) return { dx: 0, dy }
-  for (let attempt = 0; attempt < PASTE_MAX_ATTEMPTS && groupOverlaps(blocks, dx, dy); attempt++) {
-    dx += PASTE_OFFSET
-    dy += PASTE_OFFSET
+  if (mobileMode.value) return { dx: 0, dy };
+  for (
+    let attempt = 0;
+    attempt < PASTE_MAX_ATTEMPTS && groupOverlaps(blocks, dx, dy);
+    attempt++
+  ) {
+    dx += PASTE_OFFSET;
+    dy += PASTE_OFFSET;
   }
-  return { dx, dy }
-}
+  return { dx, dy };
+};
 
 const buildPastedItem = (
   block: ClipboardBlock,
   uuid: string,
   offset: { dx: number; dy: number },
-): CanvasItem => markRaw({
-  uuid,
-  component: block.component,
-  config: JSON.parse(JSON.stringify(block.config)),
-  layout: {
-    desktop: {
-      x: block.layout.desktop.x + offset.dx,
-      y: block.layout.desktop.y + offset.dy,
-      w: block.layout.desktop.w,
-      h: block.layout.desktop.h,
+): CanvasItem =>
+  markRaw({
+    uuid,
+    component: block.component,
+    config: JSON.parse(JSON.stringify(block.config)),
+    layout: {
+      desktop: {
+        x: block.layout.desktop.x + offset.dx,
+        y: block.layout.desktop.y + offset.dy,
+        w: block.layout.desktop.w,
+        h: block.layout.desktop.h,
+      },
+      mobile: {
+        x: 0,
+        y: block.layout.mobile.y + offset.dy,
+        w: block.layout.mobile.w,
+        h: block.layout.mobile.h,
+      },
     },
-    mobile: {
-      x: 0,
-      y: block.layout.mobile.y + offset.dy,
-      w: block.layout.mobile.w,
-      h: block.layout.mobile.h,
-    },
-  },
-  arranged: { ...block.arranged },
-})
+    arranged: { ...block.arranged },
+  });
 
-const linkPastedPairs = (links: string[], uuidMap: Map<string, string>): void => {
+const linkPastedPairs = (
+  links: string[],
+  uuidMap: Map<string, string>,
+): void => {
   links.forEach((key) => {
-    const [first, second] = key.split('|')
-    const nextFirst = uuidMap.get(first)
-    const nextSecond = uuidMap.get(second)
-    if (nextFirst && nextSecond) linkedPairs.value.add(pairKey(nextFirst, nextSecond))
-  })
-}
+    const [first, second] = key.split("|");
+    const nextFirst = uuidMap.get(first);
+    const nextSecond = uuidMap.get(second);
+    if (nextFirst && nextSecond)
+      linkedPairs.value.add(pairKey(nextFirst, nextSecond));
+  });
+};
 
-const copyPastedAssets = (blocks: ClipboardBlock[], uuidMap: Map<string, string>, source: ClipboardSource): void => {
+const copyPastedAssets = (
+  blocks: ClipboardBlock[],
+  uuidMap: Map<string, string>,
+  source: ClipboardSource,
+): void => {
   blocks.forEach((block) => {
-    const uuid = uuidMap.get(block.uuid)
-    if (!uuid) return
-    void copyComponentFiles(block.uuid, uuid, source).catch((cause: unknown) => {
-      if (isTauri()) void logError(`粘贴组件数据失败：${getErrorMessage(cause)}`)
-    })
-  })
-}
+    const uuid = uuidMap.get(block.uuid);
+    if (!uuid) return;
+    void copyComponentFiles(block.uuid, uuid, source).catch(
+      (cause: unknown) => {
+        if (isTauri())
+          void logError(`粘贴组件数据失败：${getErrorMessage(cause)}`);
+      },
+    );
+  });
+};
 
 const pasteBlocks = (entry: ClipboardEntry): void => {
-  if (!isEditMode.value || !entry.blocks.length) return
-  const offset = resolvePasteOffset(entry.blocks, entry.source)
-  const uuidMap = new Map<string, string>()
-  const created: string[] = []
+  if (!isEditMode.value || !entry.blocks.length) return;
+  const offset = resolvePasteOffset(entry.blocks, entry.source);
+  const uuidMap = new Map<string, string>();
+  const created: string[] = [];
   entry.blocks.forEach((block) => {
-    const uuid = generateBlockUuid()
-    uuidMap.set(block.uuid, uuid)
-    created.push(uuid)
-    const item = buildPastedItem(block, uuid, offset)
-    state.items.push(item)
-    if (mobileMode.value && canvasWidth.value > 0) stretchMobileWidth(item)
-    bringToTop(uuid)
-  })
-  linkPastedPairs(entry.links, uuidMap)
-  copyPastedAssets(entry.blocks, uuidMap, entry.source)
-  state.selectedIds = new Set(created)
-  recomputeMasks()
-}
+    const uuid = generateBlockUuid();
+    uuidMap.set(block.uuid, uuid);
+    created.push(uuid);
+    const item = buildPastedItem(block, uuid, offset);
+    state.items.push(item);
+    if (mobileMode.value && canvasWidth.value > 0) stretchMobileWidth(item);
+    bringToTop(uuid);
+  });
+  linkPastedPairs(entry.links, uuidMap);
+  copyPastedAssets(entry.blocks, uuidMap, entry.source);
+  state.selectedIds = new Set(created);
+  recomputeMasks();
+};
 // #endregion 块复制与粘贴
 
 // #region 命令与生命周期
 const batchToggleHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
   Array.from(state.selectedIds).forEach((id) => {
-    componentRefs.value[id]?.commands?.toggleHeading?.({ level })
-  })
-}
+    componentRefs.value[id]?.commands?.toggleHeading?.({ level });
+  });
+};
 
 const deleteSelected = () => {
-  if (!isEditMode.value || state.selectedIds.size === 0) return
-  const ids = Array.from(state.selectedIds)
-  state.items = state.items.filter((it) => !ids.includes(it.uuid))
-  state.selectedIds = new Set()
-  ids.forEach(id => { delete componentRefs.value[id] })
-  recomputeMasks() // 删除块会改变贴合关系，刷新遮罩
-}
+  if (!isEditMode.value || state.selectedIds.size === 0) return;
+  const ids = Array.from(state.selectedIds);
+  state.items = state.items.filter((it) => !ids.includes(it.uuid));
+  state.selectedIds = new Set();
+  ids.forEach((id) => {
+    delete componentRefs.value[id];
+  });
+  recomputeMasks(); // 删除块会改变贴合关系，刷新遮罩
+};
 
 // mouseup 丢失会让会话残留、守卫永久禁用，所以失焦/指针取消时统一重置
 const abortSessions = () => {
-  if (customDrag.active) onCustomDragUp()
-  if (selectionState.active) finishSelection()
-  if (panSession.active) stopPan()
-  leftButtonDown = false
-}
+  if (customDrag.active) onCustomDragUp();
+  if (selectionState.active) finishSelection();
+  if (panSession.active) stopPan();
+  leftButtonDown = false;
+};
 
 onMounted(() => {
-  refreshViewRect()
-  nextTick(refreshLayout)
-  scheduleVirtualReconcile()
-  canvasContainerRef.value?.addEventListener('mousedown', handleCanvasMouseDownCapture, true)
-  window.addEventListener('mousedown', onGlobalMouseDownCapture, true)
-  window.addEventListener('mousedown', trackLeftButtonDown, true)
-  window.addEventListener('mouseup', trackLeftButtonUp, true)
-  window.addEventListener('resize', onResize)
+  refreshViewRect();
+  nextTick(refreshLayout);
+  scheduleVirtualReconcile();
+  canvasContainerRef.value?.addEventListener(
+    "mousedown",
+    handleCanvasMouseDownCapture,
+    true,
+  );
+  window.addEventListener("mousedown", onGlobalMouseDownCapture, true);
+  window.addEventListener("mousedown", trackLeftButtonDown, true);
+  window.addEventListener("mouseup", trackLeftButtonUp, true);
+  window.addEventListener("resize", onResize);
   // ProseMirror 会冒泡拦截 mousemove，所以监听用捕获阶段
-  window.addEventListener('mousemove', updateSelection, true)
-  window.addEventListener('mouseup', finishSelection)
-  window.addEventListener('mousemove', updatePan, true)
-  window.addEventListener('mouseup', stopPan)
-  window.addEventListener('contextmenu', preventContextMenu)
-  window.addEventListener('mousemove', updateMousePos, true)
-  window.addEventListener('Mindrizzle:canvas-pan', onCanvasPanEvent)
-  window.addEventListener('Mindrizzle:extract-component', onExtractComponent)
-  window.addEventListener('Mindrizzle:block-popup', onBlockPopupChange)
-  window.addEventListener('Mindrizzle:block-popup-top', onBlockPopupTopChange)
-  window.addEventListener('Mindrizzle:block-handle-active', onBlockHandleActiveChange)
-  window.addEventListener('blur', abortSessions)
-  window.addEventListener('pointercancel', abortSessions)
-})
+  window.addEventListener("mousemove", updateSelection, true);
+  window.addEventListener("mouseup", finishSelection);
+  window.addEventListener("mousemove", updatePan, true);
+  window.addEventListener("mouseup", stopPan);
+  window.addEventListener("contextmenu", preventContextMenu);
+  window.addEventListener("mousemove", updateMousePos, true);
+  window.addEventListener("Mindrizzle:canvas-pan", onCanvasPanEvent);
+  window.addEventListener("Mindrizzle:extract-component", onExtractComponent);
+  window.addEventListener("Mindrizzle:block-popup", onBlockPopupChange);
+  window.addEventListener("Mindrizzle:block-popup-top", onBlockPopupTopChange);
+  window.addEventListener(
+    "Mindrizzle:block-handle-active",
+    onBlockHandleActiveChange,
+  );
+  window.addEventListener("blur", abortSessions);
+  window.addEventListener("pointercancel", abortSessions);
+});
 
 onUnmounted(() => {
-  cancelPreviewFrame()
-  if (geometryRafId) cancelAnimationFrame(geometryRafId)
-  if (virtualRafId) cancelAnimationFrame(virtualRafId)
-  canvasContainerRef.value?.removeEventListener('mousedown', handleCanvasMouseDownCapture, true)
-  window.removeEventListener('mousedown', onGlobalMouseDownCapture, true)
-  window.removeEventListener('mousedown', trackLeftButtonDown, true)
-  window.removeEventListener('mouseup', trackLeftButtonUp, true)
-  window.removeEventListener('resize', onResize)
-  window.removeEventListener('mousemove', updateSelection, true)
-  window.removeEventListener('mouseup', finishSelection)
-  window.removeEventListener('mousemove', updatePan, true)
-  window.removeEventListener('mouseup', stopPan)
-  window.removeEventListener('contextmenu', preventContextMenu)
-  window.removeEventListener('mousemove', updateMousePos, true)
-  window.removeEventListener('Mindrizzle:canvas-pan', onCanvasPanEvent)
-  window.removeEventListener('Mindrizzle:extract-component', onExtractComponent)
-  window.removeEventListener('Mindrizzle:block-popup', onBlockPopupChange)
-  window.removeEventListener('Mindrizzle:block-popup-top', onBlockPopupTopChange)
-  window.removeEventListener('Mindrizzle:block-handle-active', onBlockHandleActiveChange)
-  window.removeEventListener('pointercancel', abortSessions)
-})
+  cancelPreviewFrame();
+  if (geometryRafId) cancelAnimationFrame(geometryRafId);
+  if (virtualRafId) cancelAnimationFrame(virtualRafId);
+  canvasContainerRef.value?.removeEventListener(
+    "mousedown",
+    handleCanvasMouseDownCapture,
+    true,
+  );
+  window.removeEventListener("mousedown", onGlobalMouseDownCapture, true);
+  window.removeEventListener("mousedown", trackLeftButtonDown, true);
+  window.removeEventListener("mouseup", trackLeftButtonUp, true);
+  window.removeEventListener("resize", onResize);
+  window.removeEventListener("mousemove", updateSelection, true);
+  window.removeEventListener("mouseup", finishSelection);
+  window.removeEventListener("mousemove", updatePan, true);
+  window.removeEventListener("mouseup", stopPan);
+  window.removeEventListener("contextmenu", preventContextMenu);
+  window.removeEventListener("mousemove", updateMousePos, true);
+  window.removeEventListener("Mindrizzle:canvas-pan", onCanvasPanEvent);
+  window.removeEventListener(
+    "Mindrizzle:extract-component",
+    onExtractComponent,
+  );
+  window.removeEventListener("Mindrizzle:block-popup", onBlockPopupChange);
+  window.removeEventListener(
+    "Mindrizzle:block-popup-top",
+    onBlockPopupTopChange,
+  );
+  window.removeEventListener(
+    "Mindrizzle:block-handle-active",
+    onBlockHandleActiveChange,
+  );
+  window.removeEventListener("pointercancel", abortSessions);
+});
 
 defineExpose({
   state,
@@ -3563,7 +4434,7 @@ defineExpose({
   batchToggleHeading,
   deleteSelected,
   compensateResizeAutoPan,
-})
+});
 // #endregion 命令与生命周期
 </script>
 
@@ -3582,7 +4453,11 @@ defineExpose({
 .canvas-dots {
   position: absolute;
   /* 层尺寸与 background-size 由 dotsStyle 随 zoom 提供 */
-  background-image: radial-gradient(circle, rgba(var(--v-theme-on-surface), 0.15) 1px, transparent 1px);
+  background-image: radial-gradient(
+    circle,
+    rgba(var(--v-theme-on-surface), 0.15) 1px,
+    transparent 1px
+  );
   background-repeat: repeat;
   pointer-events: none;
 }
@@ -3749,7 +4624,10 @@ defineExpose({
   border: 1px solid rgba(var(--v-theme-on-surface), 0.22);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   color: rgba(var(--v-theme-primary), 0.95);
-  transition: background 0.12s, color 0.12s, transform 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    transform 0.12s;
 }
 .snap-paperclip:hover {
   transform: translate(-50%, -50%) scale(1.15);

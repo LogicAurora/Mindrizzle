@@ -1,42 +1,45 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router';
-import { invokeCommand } from '../utils/invoke'
-import { invalidateNoteSetEntries } from '../utils/noteSetStore'
-import { error as LogError } from '@tauri-apps/plugin-log';
+import { ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import { invokeCommand } from "../utils/invoke";
+import { invalidateNoteSetEntries } from "../utils/noteSetStore";
+import { error as LogError } from "@tauri-apps/plugin-log";
 
-const props = defineProps<{ isOpen: boolean; dir?: string }>()
-const emit = defineEmits<{ 'update:close': [value: { status: boolean }] }>()
+const props = defineProps<{ isOpen: boolean; dir?: string }>();
+const emit = defineEmits<{ "update:close": [value: { status: boolean }] }>();
 
-let dialog = ref(false)
+let dialog = ref(false);
 
 watch(
   () => props.isOpen,
   (newVal) => {
-    dialog.value = newVal
+    dialog.value = newVal;
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
-watch(() => dialog.value, (newVal) => {
-  if (!newVal) {
-    emit('update:close', { status: false })
-  }
-})
+watch(
+  () => dialog.value,
+  (newVal) => {
+    if (!newVal) {
+      emit("update:close", { status: false });
+    }
+  },
+);
 
-const title = ref('')
-const description = ref('')
-const fileName = ref('')
+const title = ref("");
+const description = ref("");
+const fileName = ref("");
 
 const shortRules = [
-  (v: any) => !!v || '不可为空',
-  (v: string) => v.length <= 30 || '太长了'
-]
+  (v: any) => !!v || "不可为空",
+  (v: string) => v.length <= 30 || "太长了",
+];
 
 const longRules = [
-  (v: any) => !!v || '不可为空',
-  (v: string) => v.length <= 1000 || '太长了'
-]
+  (v: any) => !!v || "不可为空",
+  (v: string) => v.length <= 1000 || "太长了",
+];
 
 function isValidFileName(name: string): boolean {
   if (!name || name.length > 50) return false;
@@ -44,51 +47,78 @@ function isValidFileName(name: string): boolean {
   if (/[\\/:*?"<>|]/.test(name)) return false;
   // 不允许以空格开头、以空格或点结尾
   if (/^\s|[\s.]$/.test(name)) return false;
-  const reserved = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+  const reserved = [
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
+  ];
   if (reserved.includes(name.toUpperCase())) return false;
   return true;
 }
 
-const fileNameAsyncError = ref<true | string>(true)
+const fileNameAsyncError = ref<true | string>(true);
 
-let debounceTimer: number | null = null
+let debounceTimer: number | null = null;
 const debouncedCheck = (name: string) => {
-  if (debounceTimer) clearTimeout(debounceTimer)
+  if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = window.setTimeout(async () => {
     if (!name) {
-      fileNameAsyncError.value = true
-      return
+      fileNameAsyncError.value = true;
+      return;
     }
     if (!isValidFileName(name)) {
-      fileNameAsyncError.value = '文件名必须长度≤50、不含 \ / : * ? " < > |，不以空格开头或空格/点结尾，且不能是 Windows 保留设备名（如 CON、NUL 等，不区分大小写）。'
-      return
+      fileNameAsyncError.value =
+        '文件名必须长度≤50、不含 \ / : * ? " < > |，不以空格开头或空格/点结尾，且不能是 Windows 保留设备名（如 CON、NUL 等，不区分大小写）。';
+      return;
     }
     try {
-      const valid = await invokeCommand<boolean>('is_file_name_valid', { fileName: name, dir: props.dir })
-      fileNameAsyncError.value = valid ? true : '文件名已被占用'
+      const valid = await invokeCommand<boolean>("is_file_name_valid", {
+        fileName: name,
+        dir: props.dir,
+      });
+      fileNameAsyncError.value = valid ? true : "文件名已被占用";
     } catch {
-      fileNameAsyncError.value = '校验失败，请重试'
+      fileNameAsyncError.value = "校验失败，请重试";
     }
-  }, 500)
-}
+  }, 500);
+};
 
-watch(fileName, (newVal) => debouncedCheck(newVal))
+watch(fileName, (newVal) => debouncedCheck(newVal));
 
 const fileRules = [
-  () => fileNameAsyncError.value // Vuetify 规则以 true 通过、字符串为错误提示
-]
+  () => fileNameAsyncError.value, // Vuetify 规则以 true 通过、字符串为错误提示
+];
 
-const infoForm = ref()
+const infoForm = ref();
 const router = useRouter();
 
-import { getErrorMessage } from  "../utils/getErrorMessage"
+import { getErrorMessage } from "../utils/getErrorMessage";
 
 async function submit() {
   const { valid } = await infoForm.value.validate();
   if (!valid) return;
 
   try {
-    const createdFileName = await invokeCommand<string>('create_mdr_file', {
+    const createdFileName = await invokeCommand<string>("create_mdr_file", {
       mdrFileInfo: {
         title: title.value,
         description: description.value,
@@ -99,9 +129,13 @@ async function submit() {
     });
     dialog.value = false;
     invalidateNoteSetEntries();
-    router.push({ name: 'editor', params: { fileName: createdFileName }, query: props.dir ? { dir: props.dir } : {} })
-  } catch(e) {
-    LogError(getErrorMessage(e))
+    router.push({
+      name: "editor",
+      params: { fileName: createdFileName },
+      query: props.dir ? { dir: props.dir } : {},
+    });
+  } catch (e) {
+    LogError(getErrorMessage(e));
   }
 }
 </script>
@@ -139,9 +173,7 @@ async function submit() {
           取消
         </v-btn>
         <v-spacer />
-        <v-btn color="primary" variant="text" @click="submit()">
-          提交
-        </v-btn>
+        <v-btn color="primary" variant="text" @click="submit()"> 提交 </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

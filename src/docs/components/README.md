@@ -1,19 +1,20 @@
 <!-- 最后验证: 2026-10-25 -->
+
 # 画布块开发
 
 一个块 = **两个同名文件 + 自动注册**。第一次写块从 [01 快速上手](01-quick-start.md) 开始。
 
 ## 文档导航
 
-| 文档 | 什么时候看 |
-| --- | --- |
-| [01 快速上手](01-quick-start.md) | 第一次写块，照着抄 |
-| [02 BlockContext](02-context.md) | 想知道块里能调什么 |
-| [03 块定义](03-definition.md) | 写 `Xxx.block.ts` 时查字段 |
-| [04 生命周期](04-lifecycle.md) | 搞清谁什么时候调你、视口外显示什么 |
-| [05 设置面板](05-settings.md) | 要给块加设置项 |
-| [06 私有文件](06-files.md) | 要存图片、附件、大文本 |
-| [07 常见坑](07-pitfalls.md) | 卡住了、提交前自查 |
+| 文档                             | 什么时候看                         |
+| -------------------------------- | ---------------------------------- |
+| [01 快速上手](01-quick-start.md) | 第一次写块，照着抄                 |
+| [02 BlockContext](02-context.md) | 想知道块里能调什么                 |
+| [03 块定义](03-definition.md)    | 写 `Xxx.block.ts` 时查字段         |
+| [04 生命周期](04-lifecycle.md)   | 搞清谁什么时候调你、视口外显示什么 |
+| [05 设置面板](05-settings.md)    | 要给块加设置项                     |
+| [06 私有文件](06-files.md)       | 要存图片、附件、大文本             |
+| [07 常见坑](07-pitfalls.md)      | 卡住了、提交前自查                 |
 
 ## 一个块的分层
 
@@ -50,10 +51,10 @@ Components/
 </template>
 
 <script setup lang="ts">
-import BlockShell from '../Sdk/BlockShell.vue'
-import { useBlockContext } from '../Sdk/blockContext.ts'
+import BlockShell from "../Sdk/BlockShell.vue";
+import { useBlockContext } from "../Sdk/blockContext.ts";
 
-const ctx = useBlockContext<{ text: string }>()
+const ctx = useBlockContext<{ text: string }>();
 </script>
 ```
 
@@ -61,16 +62,16 @@ const ctx = useBlockContext<{ text: string }>()
 
 ## 内置块
 
-| key | 添加菜单 | 数据 | 说明 |
-| --- | --- | --- | --- |
-| `RichTextEditor` | 富文本 | `config.content` | ProseMirror 文档；可接收拖入 |
-| `EditableCodeBlock` | 代码块 | `config.code` / `language` | 可拖进富文本（`embed`） |
-| `ImageBlock` | 图片 | `config.path` + `ctx.files` | 平铺与自动尺寸 |
-| `FileBlock` | 附件 | `config.name` / `mime` / `size` + `ctx.files` | 归档内固定 `file.bin`；图片内联预览，桌面端可另存 |
-| `LinkBlock` | 链接 | `config.url` / `title` / `description` / `imageUrl` | 前端抓 og 标签，跨域失败退回手填 |
-| `TableBlock` | 表格 | `config.rows` / `header` / `stripe` / `showIndex` / `fitHeight` / `merges` | vxe-table 渲染（关闭虚拟滚动，走原生滚动条）；选中时右侧工具栏放行/列/表头/合并；设置面板只有「高度适应内容」（开启后按实测内容高自动同步）；行号按数据行绝对编号；Enter 沿列下移；列宽可拖；拖选可复制/粘贴 TSV；可拖入富文本 |
-| `TaskListBlock` | 任务 | `config.title` / `tasks` | 勾选、续写、进度 |
-| `CanvasTestBench` | 测试台 | — | 调试用，`order: 90` 排在最后 |
+| key                 | 添加菜单 | 数据                                                                       | 说明                                                                                                                                                                                                                           |
+| ------------------- | -------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RichTextEditor`    | 富文本   | `config.content`                                                           | ProseMirror 文档；可接收拖入                                                                                                                                                                                                   |
+| `EditableCodeBlock` | 代码块   | `config.code` / `language`                                                 | 可拖进富文本（`embed`）                                                                                                                                                                                                        |
+| `ImageBlock`        | 图片     | `config.path` + `ctx.files`                                                | 平铺与自动尺寸                                                                                                                                                                                                                 |
+| `FileBlock`         | 附件     | `config.name` / `mime` / `size` + `ctx.files`                              | 归档内固定 `file.bin`；图片内联预览，桌面端可另存                                                                                                                                                                              |
+| `LinkBlock`         | 链接     | `config.url` / `title` / `description` / `imageUrl`                        | 前端抓 og 标签，跨域失败退回手填                                                                                                                                                                                               |
+| `TableBlock`        | 表格     | `config.rows` / `header` / `stripe` / `showIndex` / `fitHeight` / `merges` | vxe-table 渲染（关闭虚拟滚动，走原生滚动条）；选中时右侧工具栏放行/列/表头/合并；设置面板只有「高度适应内容」（开启后按实测内容高自动同步）；行号按数据行绝对编号；Enter 沿列下移；列宽可拖；拖选可复制/粘贴 TSV；可拖入富文本 |
+| `TaskListBlock`     | 任务     | `config.title` / `tasks`                                                   | 勾选、续写、进度                                                                                                                                                                                                               |
+| `CanvasTestBench`   | 测试台   | —                                                                          | 调试用，`order: 90` 排在最后                                                                                                                                                                                                   |
 
 ## 相关
 

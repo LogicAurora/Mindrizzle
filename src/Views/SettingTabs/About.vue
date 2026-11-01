@@ -1,71 +1,81 @@
 <script setup lang="ts">
-import { invoke, isTauri } from '@tauri-apps/api/core'
-import { mdiCheck, mdiClose, mdiContentCopy, mdiGithub, mdiInformationOutline } from '@mdi/js'
-import { computed, ref } from 'vue'
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import {
+  mdiCheck,
+  mdiClose,
+  mdiContentCopy,
+  mdiGithub,
+  mdiInformationOutline,
+} from "@mdi/js";
+import { computed, ref } from "vue";
 
-import packageInfo from '../../../package.json'
-import appIconUrl from '../../../app-icon.svg'
-import MdrSettingsPageBase from './MdrSettingsPageBase.vue'
+import packageInfo from "../../../package.json";
+import appIconUrl from "../../../app-icon.svg";
+import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
 
-const isDiagnosticsOpen = ref(false)
-const isGitCommitLoaded = ref(!isTauri())
-const gitCommit = ref(isTauri() ? '读取中' : '不可用（网页预览）')
-const isCopyComplete = ref(false)
-const copyError = ref('')
-const appVersion = packageInfo.version
-const copyrightYear = new Date().getFullYear()
-const environment = computed(() => isTauri() ? 'Tauri 桌面应用' : '浏览器预览')
-const systemPlatform = navigator.platform || '未知'
-const browserInfo = navigator.userAgent
-const screenSize = `${window.screen.width} × ${window.screen.height}`
+const isDiagnosticsOpen = ref(false);
+const isGitCommitLoaded = ref(!isTauri());
+const gitCommit = ref(isTauri() ? "读取中" : "不可用（网页预览）");
+const isCopyComplete = ref(false);
+const copyError = ref("");
+const appVersion = packageInfo.version;
+const copyrightYear = new Date().getFullYear();
+const environment = computed(() =>
+  isTauri() ? "Tauri 桌面应用" : "浏览器预览",
+);
+const systemPlatform = navigator.platform || "未知";
+const browserInfo = navigator.userAgent;
+const screenSize = `${window.screen.width} × ${window.screen.height}`;
 const openSourceProjects = [
-  { name: 'Vue', url: 'https://github.com/vuejs/core' },
-  { name: 'Vuetify', url: 'https://github.com/vuetifyjs/vuetify' },
-  { name: 'Tauri', url: 'https://github.com/tauri-apps/tauri' },
-  { name: 'ProseKit', url: 'https://github.com/ocavue/prosekit' },
-  { name: 'ProseMirror', url: 'https://github.com/ProseMirror/prosemirror' },
-  { name: 'KaTeX', url: 'https://github.com/KaTeX/KaTeX' },
-  { name: 'highlight.js', url: 'https://github.com/highlightjs/highlight.js' },
-]
+  { name: "Vue", url: "https://github.com/vuejs/core" },
+  { name: "Vuetify", url: "https://github.com/vuetifyjs/vuetify" },
+  { name: "Tauri", url: "https://github.com/tauri-apps/tauri" },
+  { name: "ProseKit", url: "https://github.com/ocavue/prosekit" },
+  { name: "ProseMirror", url: "https://github.com/ProseMirror/prosemirror" },
+  { name: "KaTeX", url: "https://github.com/KaTeX/KaTeX" },
+  { name: "highlight.js", url: "https://github.com/highlightjs/highlight.js" },
+];
 const diagnostics = computed(() => [
-  { title: '应用版本', value: appVersion },
-  { title: 'Git 提交', value: gitCommit.value },
-  { title: '运行环境', value: environment.value },
-  { title: '系统平台', value: systemPlatform },
-  { title: '浏览器', value: browserInfo },
-  { title: '屏幕尺寸', value: screenSize },
-  { title: '语言', value: navigator.language },
-])
-const diagnosticText = computed(() => [
-  `应用版本：${appVersion}`,
-  `Git 提交：${gitCommit.value}`,
-  `运行环境：${environment.value}`,
-  `系统平台：${systemPlatform}`,
-  `浏览器：${browserInfo}`,
-  `屏幕尺寸：${screenSize}`,
-  `语言：${navigator.language}`,
-].join('\n'))
+  { title: "应用版本", value: appVersion },
+  { title: "Git 提交", value: gitCommit.value },
+  { title: "运行环境", value: environment.value },
+  { title: "系统平台", value: systemPlatform },
+  { title: "浏览器", value: browserInfo },
+  { title: "屏幕尺寸", value: screenSize },
+  { title: "语言", value: navigator.language },
+]);
+const diagnosticText = computed(() =>
+  [
+    `应用版本：${appVersion}`,
+    `Git 提交：${gitCommit.value}`,
+    `运行环境：${environment.value}`,
+    `系统平台：${systemPlatform}`,
+    `浏览器：${browserInfo}`,
+    `屏幕尺寸：${screenSize}`,
+    `语言：${navigator.language}`,
+  ].join("\n"),
+);
 
 async function openDiagnostics() {
-  isDiagnosticsOpen.value = true
-  if (!isTauri() || isGitCommitLoaded.value) return
+  isDiagnosticsOpen.value = true;
+  if (!isTauri() || isGitCommitLoaded.value) return;
 
   try {
-    gitCommit.value = await invoke<string>('get_git_commit')
+    gitCommit.value = await invoke<string>("get_git_commit");
   } catch {
-    gitCommit.value = '未知'
+    gitCommit.value = "未知";
   } finally {
-    isGitCommitLoaded.value = true
+    isGitCommitLoaded.value = true;
   }
 }
 
 async function copyDiagnostics() {
   try {
-    await navigator.clipboard.writeText(diagnosticText.value)
-    isCopyComplete.value = true
-    copyError.value = ''
+    await navigator.clipboard.writeText(diagnosticText.value);
+    isCopyComplete.value = true;
+    copyError.value = "";
   } catch {
-    copyError.value = '无法访问剪贴板，请检查系统权限。'
+    copyError.value = "无法访问剪贴板，请检查系统权限。";
   }
 }
 </script>
@@ -80,7 +90,9 @@ async function copyDiagnostics() {
             <img :src="appIconUrl" alt="" width="64" height="64" />
           </v-avatar>
           <div class="about-copy">
-            <div class="about-eyebrow">关于应用 <span>Catch your mind drizzle.</span></div>
+            <div class="about-eyebrow">
+              关于应用 <span>Catch your mind drizzle.</span>
+            </div>
             <h1>Mindrizzle</h1>
             <p>让想法有处可落，让笔记自然成形。</p>
           </div>
@@ -107,13 +119,15 @@ async function copyDiagnostics() {
           rel="noopener noreferrer"
           :prepend-icon="mdiGithub"
           variant="text"
-        >GitHub</v-btn>
+          >GitHub</v-btn
+        >
         <v-btn
           :prepend-icon="mdiInformationOutline"
           color="primary"
           variant="tonal"
           @click="openDiagnostics"
-        >诊断信息</v-btn>
+          >诊断信息</v-btn
+        >
       </div>
     </div>
 
@@ -129,14 +143,23 @@ async function copyDiagnostics() {
           :href="project.url"
           target="_blank"
           rel="noopener noreferrer"
-        >{{ project.name }}</a>
+          >{{ project.name }}</a
+        >
       </div>
       <div class="credits-footer">
         <div class="credits-links">
-          <a href="https://github.com/LogicAurora/Mindrizzle/graphs/contributors" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://github.com/LogicAurora/Mindrizzle/graphs/contributors"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             贡献者
           </a>
-          <a href="https://github.com/LogicAurora/Mindrizzle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://github.com/LogicAurora/Mindrizzle/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             GNU GPL v3.0
           </a>
           <span>在此，特别感谢每一位为Mindrizzle做出贡献的开发者！！！</span>
@@ -149,13 +172,29 @@ async function copyDiagnostics() {
       <v-card>
         <v-card-title class="d-flex align-center justify-space-between">
           <span>诊断信息</span>
-          <v-btn :icon="mdiClose" variant="text" aria-label="关闭" @click="isDiagnosticsOpen = false" />
+          <v-btn
+            :icon="mdiClose"
+            variant="text"
+            aria-label="关闭"
+            @click="isDiagnosticsOpen = false"
+          />
         </v-card-title>
         <v-card-text>
           <v-list density="compact" lines="two">
-            <v-list-item v-for="item in diagnostics" :key="item.title" :title="item.title" :subtitle="item.value" />
+            <v-list-item
+              v-for="item in diagnostics"
+              :key="item.title"
+              :title="item.title"
+              :subtitle="item.value"
+            />
           </v-list>
-          <v-alert v-if="copyError" class="mt-2" density="compact" type="error" variant="tonal">
+          <v-alert
+            v-if="copyError"
+            class="mt-2"
+            density="compact"
+            type="error"
+            variant="tonal"
+          >
             {{ copyError }}
           </v-alert>
         </v-card-text>
@@ -165,7 +204,8 @@ async function copyDiagnostics() {
             :prepend-icon="isCopyComplete ? mdiCheck : mdiContentCopy"
             variant="text"
             @click="copyDiagnostics"
-          >{{ isCopyComplete ? '已复制' : '复制诊断信息' }}</v-btn>
+            >{{ isCopyComplete ? "已复制" : "复制诊断信息" }}</v-btn
+          >
           <v-btn variant="text" @click="isDiagnosticsOpen = false">关闭</v-btn>
         </v-card-actions>
       </v-card>
@@ -185,7 +225,11 @@ async function copyDiagnostics() {
   border-radius: 6px;
   color: rgb(var(--v-theme-on-primary));
   background-color: rgb(var(--v-theme-primary));
-  background-image: linear-gradient(135deg, rgba(var(--v-theme-on-primary), 0.07) 1px, transparent 1px);
+  background-image: linear-gradient(
+    135deg,
+    rgba(var(--v-theme-on-primary), 0.07) 1px,
+    transparent 1px
+  );
   background-size: 22px 22px;
 }
 
@@ -227,7 +271,7 @@ async function copyDiagnostics() {
 
 .about-copy h1 {
   margin-top: 8px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 2.35rem;
   font-weight: 500;
   line-height: 1.1;

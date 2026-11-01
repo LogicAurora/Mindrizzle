@@ -1,24 +1,59 @@
 <template>
   <div ref="rootRef" class="task-view">
-    <input class="task-title" :value="title" placeholder="清单标题" :readonly="readOnly"
-      @input="onTitleInput" @blur="onTitleBlur" />
+    <input
+      class="task-title"
+      :value="title"
+      placeholder="清单标题"
+      :readonly="readOnly"
+      @input="onTitleInput"
+      @blur="onTitleBlur"
+    />
 
     <div class="task-list">
-      <div v-for="(task, index) in tasks" :key="task.id" class="task-row" :class="{ 'is-done': task.done }">
-        <input class="task-check" type="checkbox" :checked="task.done" :disabled="readOnly"
-          @change="onToggle(task, $event)" />
-        <input class="task-text" :value="task.text" :readonly="readOnly" :data-task="task.id"
-          :placeholder="index === 0 ? '要做什么？' : ''" @input="onTextInput(task, $event)"
-          @keydown="onTextKeydown($event, task)" />
-        <button v-if="!readOnly" class="task-remove" type="button" title="删除任务" @click="removeTask(task.id)">
+      <div
+        v-for="(task, index) in tasks"
+        :key="task.id"
+        class="task-row"
+        :class="{ 'is-done': task.done }"
+      >
+        <input
+          class="task-check"
+          type="checkbox"
+          :checked="task.done"
+          :disabled="readOnly"
+          @change="onToggle(task, $event)"
+        />
+        <input
+          class="task-text"
+          :value="task.text"
+          :readonly="readOnly"
+          :data-task="task.id"
+          :placeholder="index === 0 ? '要做什么？' : ''"
+          @input="onTextInput(task, $event)"
+          @keydown="onTextKeydown($event, task)"
+        />
+        <button
+          v-if="!readOnly"
+          class="task-remove"
+          type="button"
+          title="删除任务"
+          @click="removeTask(task.id)"
+        >
           <v-icon :icon="mdiClose" size="14" />
         </button>
       </div>
-      <div v-if="tasks.length === 0" class="task-empty">还没有任务，按下方按钮添加</div>
+      <div v-if="tasks.length === 0" class="task-empty">
+        还没有任务，按下方按钮添加
+      </div>
     </div>
 
     <div class="task-footer">
-      <button v-if="!readOnly" class="task-add" type="button" @click="addTask(true)">
+      <button
+        v-if="!readOnly"
+        class="task-add"
+        type="button"
+        @click="addTask(true)"
+      >
         <v-icon :icon="mdiPlus" size="14" />
         添加任务
       </button>
@@ -28,73 +63,91 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { mdiClose, mdiPlus } from '@mdi/js'
+import { computed, nextTick, ref, watch } from "vue";
+import { mdiClose, mdiPlus } from "@mdi/js";
 
-import type { TaskItem } from '../../Registry/canvasComponents.ts'
-import { createTaskId } from './taskItems.ts'
+import type { TaskItem } from "../../Registry/canvasComponents.ts";
+import { createTaskId } from "./taskItems.ts";
 
 const props = defineProps<{
-  title: string
-  tasks: TaskItem[]
-  readOnly: boolean
-}>()
+  title: string;
+  tasks: TaskItem[];
+  readOnly: boolean;
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:title', title: string): void
-  (e: 'update:tasks', tasks: TaskItem[]): void
-}>()
+  (e: "update:title", title: string): void;
+  (e: "update:tasks", tasks: TaskItem[]): void;
+}>();
 
-const rootRef = ref<HTMLElement | null>(null)
-const draftTitle = ref(props.title)
-const doneCount = computed(() => props.tasks.filter((task) => task.done).length)
+const rootRef = ref<HTMLElement | null>(null);
+const draftTitle = ref(props.title);
+const doneCount = computed(
+  () => props.tasks.filter((task) => task.done).length,
+);
 
-watch(() => props.title, (next) => { draftTitle.value = next })
+watch(
+  () => props.title,
+  (next) => {
+    draftTitle.value = next;
+  },
+);
 
 const focusTask = async (id: string) => {
-  await nextTick()
-  rootRef.value?.querySelector<HTMLInputElement>(`[data-task="${CSS.escape(id)}"]`)?.focus()
-}
+  await nextTick();
+  rootRef.value
+    ?.querySelector<HTMLInputElement>(`[data-task="${CSS.escape(id)}"]`)
+    ?.focus();
+};
 
 const addTask = (shouldFocus = true) => {
-  const task: TaskItem = { id: createTaskId(), text: '', done: false }
-  emit('update:tasks', [...props.tasks, task])
-  if (shouldFocus) void focusTask(task.id)
-}
+  const task: TaskItem = { id: createTaskId(), text: "", done: false };
+  emit("update:tasks", [...props.tasks, task]);
+  if (shouldFocus) void focusTask(task.id);
+};
 
 const removeTask = (id: string) => {
-  emit('update:tasks', props.tasks.filter((task) => task.id !== id))
-}
+  emit(
+    "update:tasks",
+    props.tasks.filter((task) => task.id !== id),
+  );
+};
 
 // 每键更新走受控 value：Vue 对相同值写入不会移动光标，所以不必攒到 blur
 const onTextInput = (task: TaskItem, event: Event) => {
-  const text = (event.target as HTMLInputElement).value
-  emit('update:tasks', props.tasks.map((item) => (item.id === task.id ? { ...item, text } : item)))
-}
+  const text = (event.target as HTMLInputElement).value;
+  emit(
+    "update:tasks",
+    props.tasks.map((item) => (item.id === task.id ? { ...item, text } : item)),
+  );
+};
 
 // Enter 续写下一行，空文本再按 Enter 收尾，连续录入不用离开键盘
 const onTextKeydown = (event: KeyboardEvent, task: TaskItem) => {
-  if (event.key !== 'Enter') return
-  event.preventDefault()
-  if (task.text.trim() === '') {
-    ;(event.target as HTMLInputElement).blur()
-    return
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  if (task.text.trim() === "") {
+    (event.target as HTMLInputElement).blur();
+    return;
   }
-  addTask()
-}
+  addTask();
+};
 
 const onToggle = (task: TaskItem, event: Event) => {
-  const done = (event.target as HTMLInputElement).checked
-  emit('update:tasks', props.tasks.map((item) => (item.id === task.id ? { ...item, done } : item)))
-}
+  const done = (event.target as HTMLInputElement).checked;
+  emit(
+    "update:tasks",
+    props.tasks.map((item) => (item.id === task.id ? { ...item, done } : item)),
+  );
+};
 
 const onTitleInput = (event: Event) => {
-  draftTitle.value = (event.target as HTMLInputElement).value
-}
+  draftTitle.value = (event.target as HTMLInputElement).value;
+};
 
 const onTitleBlur = () => {
-  emit('update:title', draftTitle.value.trim())
-}
+  emit("update:title", draftTitle.value.trim());
+};
 </script>
 
 <style scoped>
