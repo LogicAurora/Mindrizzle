@@ -8,15 +8,16 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
-# 同一时刻只允许一次发布，避免并发推送互相覆盖 Pages 产物
 concurrency:
-  group: cloudflare-pages
+  group: cloudflare-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,11 +43,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Type check (TS7 native)
-        run: bunx tsc --noEmit
+      - name: Type check (TS)
+        run: bun run tsc --noEmit
 
       - name: Type check (Vue SFC)
-        run: bunx vue-tsc --noEmit
+        run: bun run vue-tsc --noEmit
 
       - name: Build
         run: bunx vite build --base=/
