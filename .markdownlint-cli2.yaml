@@ -1,0 +1,18 @@
+globs:
+  - '**/*.md'
+ignores:
+  - 'node_modules/**'
+  - 'dist/**'
+  - 'target/**'
+  - 'src-tauri/target/**'
+  - '.git/**'
+
+config:
+  # 中文文档没有合理的折行宽度
+  MD013: false
+  # issue 模板与流程文档允许内联 HTML（如 <br/>）
+  MD033: false
+  # issue 模板不以标题开头
+  MD041: false
+  # 行为准则等外部文本里的裸 URL 是正文内容
+  MD034: false

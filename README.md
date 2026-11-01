@@ -139,15 +139,15 @@ Mindrizzle 采用 [GNU General Public License v3.0](LICENSE)。
 <h2 align="center">贡献者</h2>
 
 <p align="center">
-	<a href="https://github.com/LogicAurora/Mindrizzle/graphs/contributors">
-		<img src="https://contrib.rocks/image?repo=LogicAurora/Mindrizzle" alt="Mindrizzle contributors" />
-	</a>
+    <a href="https://github.com/LogicAurora/Mindrizzle/graphs/contributors">
+        <img src="https://contrib.rocks/image?repo=LogicAurora/Mindrizzle" alt="Mindrizzle contributors" />
+    </a>
 </p>
 
 <p align="center">
-	<a href="https://github.com/LogicAurora/Mindrizzle">
-		&#9733; 给 Mindrizzle 点个 Star
-	</a>
+    <a href="https://github.com/LogicAurora/Mindrizzle">
+        &#9733; 给 Mindrizzle 点个 Star
+    </a>
 </p>
 
 Copyright (c) 2026 The LogicAurora Authors.

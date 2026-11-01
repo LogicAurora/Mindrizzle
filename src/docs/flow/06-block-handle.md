@@ -75,7 +75,7 @@ flowchart TD
 
 > 四侧桥接区都必须按实测空隙自适应：写死 48px 会盖住紧贴 popup 的文字（左/上/下）或文本右缘的滚动条（右）。
 > 实测（桌面 placement-left，popup 130–184 / 行左缘 194）：桥接 6px 时行内 x=197、x=206 均命中文本，空隙中点仍命中 popup。
-
+>
 > `getClipRect` 先把块内滚动容器的布局矩形经 `layoutToViewportX/Y` 折到视觉空间，再与容器视觉矩形求交；
 > 行高亮层挂在 body、用视觉坐标 `position: fixed`，所以 `getVisibleBlockRectInViewport` 的四个边必须全部乘过 k——
 > 混算两个坐标空间会让 popup 在上/下侧时的行高亮整体偏移（zoom≠1 才暴露）。

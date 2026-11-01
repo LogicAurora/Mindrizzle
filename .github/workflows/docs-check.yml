@@ -1,0 +1,48 @@
+name: Docs Check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - 'scripts/check-mermaid.mjs'
+      - '.markdownlint-cli2.yaml'
+      - '.github/workflows/docs-check.yml'
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'scripts/check-mermaid.mjs'
+      - '.markdownlint-cli2.yaml'
+      - '.github/workflows/docs-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdown:
+    name: Markdown 与 Mermaid 合规
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Lint Markdown
+        run: bunx markdownlint-cli2@0
+
+      - name: Install Mermaid parser
+        # 校验器不属于项目依赖，--no-save 避免污染 package.json 与 bun.lock
+        run: bun add --no-save --dev mermaid jsdom
+
+      - name: Validate Mermaid
+        run: bun scripts/check-mermaid.mjs
