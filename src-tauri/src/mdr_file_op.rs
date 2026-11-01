@@ -178,6 +178,66 @@ tauri_cmd! {
         info!("笔记移动到工作区：{} -> {}", source.note_name, target.display());
         Ok(source.note_name)
     }
+
+    pub fn delete_mdrf_file(
+        file_name: String,
+        dir: Option<String>,
+        file_path: Option<String>
+    ) -> anyhow::Result<()> {
+        let _guard = lock_file_write();
+        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+            .context("校验笔记文件位置")?;
+        require_archive_file(&location)?;
+        fs::remove_file(&location.archive)
+            .with_context(|| format!("删除笔记文件：{}", location.note_name))?;
+        // 解包暂存区按归档路径缓存，文件删除后不清掉会让同名新建读到旧内容
+        invalidate_named(&cache_key_of(&location.archive));
+        info!("删除笔记成功：{}", location.note_name);
+        Ok(())
+    }
+
+    pub fn copy_mdrf_file(
+        file_name: String,
+        new_file_name: String,
+        dir: Option<String>,
+        file_path: Option<String>
+    ) -> anyhow::Result<String> {
+        let _guard = lock_file_write();
+        let source = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+            .context("校验笔记文件位置")?;
+        require_archive_file(&source)?;
+        let (target, note_name) = sibling_archive(&source, &new_file_name)?;
+        if target.exists() {
+            return Err(anyhow::anyhow!("同名文件已存在"));
+        }
+        fs::copy(&source.archive, &target).context("复制笔记文件")?;
+        info!("复制笔记成功：{} -> {}", source.note_name, note_name);
+        Ok(note_name)
+    }
+
+    pub fn rename_mdrf_file(
+        file_name: String,
+        new_file_name: String,
+        dir: Option<String>,
+        file_path: Option<String>
+    ) -> anyhow::Result<String> {
+        let _guard = lock_file_write();
+        let source = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+            .context("校验笔记文件位置")?;
+        require_archive_file(&source)?;
+        let (target, note_name) = sibling_archive(&source, &new_file_name)?;
+        if target == source.archive {
+            return Ok(note_name);
+        }
+        if target.exists() {
+            return Err(anyhow::anyhow!("同名文件已存在"));
+        }
+        move_archive_file(&source.archive, &target)?;
+        invalidate_named(&cache_key_of(&source.archive));
+        invalidate_named(&cache_key_of(&target));
+        info!("重命名笔记成功：{} -> {}", source.note_name, note_name);
+        Ok(note_name)
+    }
 }
 
 #[tauri::command]
@@ -397,6 +457,19 @@ fn move_archive_file(source: &Path, target: &Path) -> anyhow::Result<()> {
     fs::copy(source, target).context("复制笔记到目标工作区")?;
     fs::remove_file(source).context("删除原笔记文件")?;
     Ok(())
+}
+
+// 重命名与复制都落在原文件同目录，外部文件不会因此被搬进工作区
+fn sibling_archive(
+    source: &NoteArchiveLocation,
+    new_file_name: &str,
+) -> anyhow::Result<(PathBuf, String)> {
+    let note_name = resolve_mdrf_file_name(new_file_name)?;
+    let directory = source
+        .archive
+        .parent()
+        .context("定位笔记所在目录")?;
+    Ok((directory.join(format!("{note_name}.mdrf")), note_name))
 }
 
 /// 保存正文时整包重写，故 .mdrf 的修改时间即上次编辑时间

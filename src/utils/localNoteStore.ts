@@ -464,6 +464,57 @@ export const moveLocalNoteToWorkspace = async (
   await writeFileIndex([...fileNames, resolved]);
 };
 
+// 组件数据的键里嵌着笔记名，改名/复制必须连同这些键一起搬走
+const componentKeyPrefixOf = (fileName: string): string =>
+  `${COMPONENT_DATA_KEY_PREFIX}${fileName}:`;
+
+const staleComponentKeysOf = async (fileName: string): Promise<IDBValidKey[]> => {
+  const prefix = componentKeyPrefixOf(fileName);
+  const keys = await runReadKeys();
+  return keys.filter(
+    (key) => typeof key === "string" && key.startsWith(prefix),
+  );
+};
+
+const transferNote = async (
+  source: string,
+  target: string,
+  isMove: boolean,
+): Promise<void> => {
+  const { note } = await requireNote(source);
+  if (await readNote(target)) throw new Error("同名文件已存在");
+  const componentData = await readComponentData(source);
+  const fileNames = await readFileIndex();
+  const staleKeys = await staleComponentKeysOf(source);
+  await runWrite((store) => {
+    store.put(note, noteKeyOf(target));
+    Object.entries(componentData).forEach(([uuid, files]) =>
+      store.put(files, `${componentKeyPrefixOf(target)}${uuid}`),
+    );
+    if (!isMove) return;
+    store.delete(noteKeyOf(source));
+    staleKeys.forEach((key) => store.delete(key));
+  });
+  if (!fileNames.includes(source)) return;
+  await writeFileIndex(
+    isMove
+      ? fileNames.map((name) => (name === source ? target : name))
+      : [...fileNames, target],
+  );
+};
+
+const deleteLocalNoteFile = async (fileName: string): Promise<void> => {
+  const { resolved } = await requireNote(fileName);
+  const staleKeys = await staleComponentKeysOf(resolved);
+  await runWrite((store) => {
+    store.delete(noteKeyOf(resolved));
+    staleKeys.forEach((key) => store.delete(key));
+  });
+  await writeFileIndex(
+    (await readFileIndex()).filter((name) => name !== resolved),
+  );
+};
+
 const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {
   fetch_file_list: () => fetchFileList(),
   is_file_name_valid: (args) => isFileNameValid(String(args.fileName)),
@@ -478,6 +529,19 @@ const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {
   },
   create_mdr_file: (args) =>
     createFile(args.mdrFileInfo as NoteMeta, String(args.fileName)),
+  delete_mdrf_file: (args) => deleteLocalNoteFile(String(args.fileName)),
+  copy_mdrf_file: async (args) => {
+    const target = resolveFileName(String(args.newFileName));
+    await transferNote(resolveFileName(String(args.fileName)), target, false);
+    return target;
+  },
+  rename_mdrf_file: async (args) => {
+    const source = resolveFileName(String(args.fileName));
+    const target = resolveFileName(String(args.newFileName));
+    if (target === source) return target;
+    await transferNote(source, target, true);
+    return target;
+  },
   list_component_data_files: listComponentFiles,
   read_component_data_file: readComponentFile,
   write_component_data_file: writeComponentFile,

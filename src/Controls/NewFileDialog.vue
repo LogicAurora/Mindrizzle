@@ -2,6 +2,10 @@
 import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { invokeCommand } from "../utils/invoke";
+import {
+  isValidNoteFileName,
+  NOTE_FILE_NAME_RULE_HINT,
+} from "../utils/noteFileName";
 import { invalidateNoteSetEntries } from "../utils/noteSetStore";
 import { error as LogError } from "@tauri-apps/plugin-log";
 
@@ -41,40 +45,6 @@ const longRules = [
   (v: string) => v.length <= 1000 || "太长了",
 ];
 
-function isValidFileName(name: string): boolean {
-  if (!name || name.length > 50) return false;
-  // 正则命中即非法：禁含 \ / : * ? " < > | 等字符
-  if (/[\\/:*?"<>|]/.test(name)) return false;
-  // 不允许以空格开头、以空格或点结尾
-  if (/^\s|[\s.]$/.test(name)) return false;
-  const reserved = [
-    "CON",
-    "PRN",
-    "AUX",
-    "NUL",
-    "COM1",
-    "COM2",
-    "COM3",
-    "COM4",
-    "COM5",
-    "COM6",
-    "COM7",
-    "COM8",
-    "COM9",
-    "LPT1",
-    "LPT2",
-    "LPT3",
-    "LPT4",
-    "LPT5",
-    "LPT6",
-    "LPT7",
-    "LPT8",
-    "LPT9",
-  ];
-  if (reserved.includes(name.toUpperCase())) return false;
-  return true;
-}
-
 const fileNameAsyncError = ref<true | string>(true);
 
 let debounceTimer: number | null = null;
@@ -85,9 +55,8 @@ const debouncedCheck = (name: string) => {
       fileNameAsyncError.value = true;
       return;
     }
-    if (!isValidFileName(name)) {
-      fileNameAsyncError.value =
-        '文件名必须长度≤50、不含 \ / : * ? " < > |，不以空格开头或空格/点结尾，且不能是 Windows 保留设备名（如 CON、NUL 等，不区分大小写）。';
+    if (!isValidNoteFileName(name)) {
+      fileNameAsyncError.value = NOTE_FILE_NAME_RULE_HINT;
       return;
     }
     try {

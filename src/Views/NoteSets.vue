@@ -9,7 +9,13 @@ import {
   watch,
 } from "vue";
 import {
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMarked,
+  mdiCheckboxMultipleOutline,
   mdiClose,
+  mdiContentCopy,
+  mdiDeleteOutline,
+  mdiDotsVertical,
   mdiDownload,
   mdiFileDocumentOutline,
   mdiFolderMove,
@@ -17,6 +23,8 @@ import {
   mdiNoteOffOutline,
   mdiPencil,
   mdiPlus,
+  mdiRenameBox,
+  mdiSelectAll,
   mdiUpload,
 } from "@mdi/js";
 import { isTauri } from "@tauri-apps/api/core";
@@ -38,6 +46,11 @@ import {
 } from "../utils/editorRoute";
 import { getErrorMessage } from "../utils/getErrorMessage";
 import { invokeCommand } from "../utils/invoke";
+import {
+  isValidNoteFileName,
+  NOTE_FILE_NAME_MAX_LEN,
+  NOTE_FILE_NAME_RULE_HINT,
+} from "../utils/noteFileName";
 import {
   exportLocalNoteMdrf,
   importLocalNoteMdrf,
@@ -187,6 +200,9 @@ const activeSection = computed(
     sections.value[0],
 );
 const activeDir = computed(() => activeSection.value.dir);
+const isExternalSection = computed(
+  () => activeSection.value.kind === "external",
+);
 const INITIAL_VISIBLE_COUNT = 12;
 const VISIBLE_BATCH_SIZE = 12;
 const SKELETON_COUNT = 6;
@@ -203,12 +219,9 @@ const visibleNoteSets = computed(() =>
   noteSets.value.slice(0, visibleCount.value),
 );
 
-// 一次性建几百张卡片会把首屏主线程占满，所以按需追加
+// 一次性建几百张卡片会把首屏主线程占满，所以按需追加；不能按条数夹取，否则复制/导入后新增的卡片会被截在可见区外
 function growVisibleNoteSets() {
-  visibleCount.value = Math.min(
-    visibleCount.value + VISIBLE_BATCH_SIZE,
-    noteSets.value.length,
-  );
+  visibleCount.value += VISIBLE_BATCH_SIZE;
 }
 
 let listObserver: IntersectionObserver | null = null;
@@ -273,6 +286,7 @@ async function loadActiveSection() {
 
 watch(activeSectionId, () => {
   visibleCount.value = INITIAL_VISIBLE_COUNT;
+  exitSelectMode();
   void loadActiveSection();
 });
 
@@ -376,6 +390,280 @@ async function removeExternalNote(noteSet: NoteSetItem) {
   if (!key) return;
   await forgetExternalNote(key);
   await loadActiveSection();
+}
+
+const COPY_NAME_SUFFIX = "_副本";
+const COPY_NAME_MAX_ATTEMPTS = 100;
+const FILE_NAME_IN_PATH = /[^\\/]*$/;
+
+const isSelectMode = ref(false);
+const selectedKeys = ref<string[]>([]);
+const selectedCount = computed(() => selectedKeys.value.length);
+
+const noteSetKeyOf = (item: NoteSetItem): string =>
+  `${item.dir ?? ""}|${item.filePath ?? ""}|${item.fileName}`;
+
+const selectedItems = computed(() =>
+  noteSets.value.filter((item) =>
+    selectedKeys.value.includes(noteSetKeyOf(item)),
+  ),
+);
+
+const noteSetArgsOf = (item: NoteSetItem) => ({
+  fileName: item.fileName,
+  ...(item.dir ? { dir: item.dir } : {}),
+  ...(item.filePath ? { filePath: item.filePath } : {}),
+});
+
+// 外部文件改名后路径跟着变，否则卡片仍指向旧文件
+const renamePathFileName = (path: string, name: string): string =>
+  path.replace(FILE_NAME_IN_PATH, `${name}.mdrf`);
+
+function isSelected(item: NoteSetItem): boolean {
+  return selectedKeys.value.includes(noteSetKeyOf(item));
+}
+
+function toggleSelect(item: NoteSetItem) {
+  const key = noteSetKeyOf(item);
+  selectedKeys.value = isSelected(item)
+    ? selectedKeys.value.filter((itemKey) => itemKey !== key)
+    : [...selectedKeys.value, key];
+}
+
+function enterSelectMode() {
+  isSelectMode.value = true;
+}
+
+// 退出时一律清空，避免切工作区或误触后残留的选中项被批量删除
+function exitSelectMode() {
+  isSelectMode.value = false;
+  selectedKeys.value = [];
+}
+
+function toggleSelectAll() {
+  selectedKeys.value =
+    selectedKeys.value.length === noteSets.value.length
+      ? []
+      : noteSets.value.map(noteSetKeyOf);
+}
+
+function onCardClick(item: NoteSetItem) {
+  if (isSelectMode.value) toggleSelect(item);
+}
+
+interface BatchOutcome {
+  succeeded: number;
+  failed: number;
+  firstError: string;
+}
+
+async function runOnItems(
+  items: NoteSetItem[],
+  action: (item: NoteSetItem) => Promise<void>,
+): Promise<BatchOutcome> {
+  const outcome: BatchOutcome = { succeeded: 0, failed: 0, firstError: "" };
+  for (const item of items) {
+    try {
+      await action(item);
+      outcome.succeeded += 1;
+    } catch (error) {
+      outcome.failed += 1;
+      outcome.firstError ||= getErrorMessage(error);
+    }
+  }
+  return outcome;
+}
+
+function reportBatch(label: string, outcome: BatchOutcome) {
+  showHint(
+    outcome.failed
+      ? `${label}成功 ${outcome.succeeded} 份，失败 ${outcome.failed} 份：${outcome.firstError}`
+      : `${label}成功 ${outcome.succeeded} 份`,
+  );
+}
+
+async function isNameAvailable(
+  item: NoteSetItem,
+  name: string,
+): Promise<boolean> {
+  if (!item.filePath)
+    return invokeCommand<boolean>("is_file_name_valid", {
+      fileName: name,
+      dir: item.dir,
+    });
+  try {
+    await invokeCommand("get_mdr_file_meta", {
+      fileName: name,
+      filePath: renamePathFileName(item.filePath, name),
+    });
+    return false;
+  } catch {
+    // 读不到元信息说明该路径没有归档；真冲突时复制命令还会再拦一次
+    return true;
+  }
+}
+
+async function allocateCopyName(item: NoteSetItem): Promise<string> {
+  const base = `${item.fileName}${COPY_NAME_SUFFIX}`.slice(
+    0,
+    NOTE_FILE_NAME_MAX_LEN,
+  );
+  for (let attempt = 1; attempt <= COPY_NAME_MAX_ATTEMPTS; attempt += 1) {
+    const suffix = attempt === 1 ? "" : String(attempt);
+    const candidate = `${base.slice(0, NOTE_FILE_NAME_MAX_LEN - suffix.length)}${suffix}`;
+    if (await isNameAvailable(item, candidate)) return candidate;
+  }
+  throw new Error("同名副本过多");
+}
+
+const externalRecordOf = (item: NoteSetItem, fileName: string) => ({
+  ...(item.filePath
+    ? { path: renamePathFileName(item.filePath, fileName) }
+    : {}),
+  ...(item.localName ? { localName: fileName } : {}),
+  fileName,
+  name: fileName,
+  updatedAt: Date.now(),
+});
+
+async function copyNoteSet(item: NoteSetItem): Promise<void> {
+  const newName = await allocateCopyName(item);
+  const copied = await invokeCommand<string>("copy_mdrf_file", {
+    ...noteSetArgsOf(item),
+    newFileName: newName,
+  });
+  invalidateNoteSetEntries();
+  if (isExternalSection.value) {
+    await rememberExternalNote(externalRecordOf(item, copied));
+    return;
+  }
+  const entry = await fetchNoteSetEntry(copied, item.dir);
+  noteSets.value = [{ ...entry, loading: false }, ...noteSets.value];
+}
+
+async function copyFromCard(item: NoteSetItem) {
+  try {
+    await copyNoteSet(item);
+    if (isExternalSection.value) await loadActiveSection();
+    showHint("已创建副本");
+  } catch (error) {
+    showHint(`复制失败：${getErrorMessage(error)}`);
+  }
+}
+
+async function copySelected() {
+  const items = [...selectedItems.value];
+  exitSelectMode();
+  const outcome = await runOnItems(items, copyNoteSet);
+  if (isExternalSection.value && outcome.succeeded) await loadActiveSection();
+  reportBatch("复制", outcome);
+}
+
+async function deleteNoteSet(item: NoteSetItem): Promise<void> {
+  await invokeCommand("delete_mdrf_file", noteSetArgsOf(item));
+  invalidateNoteSetEntries();
+  if (isExternalSection.value) {
+    const key = item.filePath ?? item.localName;
+    if (key) await forgetExternalNote(key);
+    return;
+  }
+  noteSets.value = noteSets.value.filter((entry) => entry !== item);
+}
+
+const deleteTargets = ref<NoteSetItem[]>([]);
+const isDeleteOpen = ref(false);
+
+function askDelete(items: NoteSetItem[]) {
+  deleteTargets.value = [...items];
+  isDeleteOpen.value = true;
+}
+
+function askDeleteSelected() {
+  askDelete(selectedItems.value);
+}
+
+async function confirmDelete() {
+  const items = deleteTargets.value;
+  isDeleteOpen.value = false;
+  exitSelectMode();
+  const outcome = await runOnItems(items, deleteNoteSet);
+  if (isExternalSection.value && outcome.succeeded) await loadActiveSection();
+  reportBatch("删除", outcome);
+  deleteTargets.value = [];
+}
+
+const isRenameNoteOpen = ref(false);
+const renameNoteTarget = ref<NoteSetItem | null>(null);
+const renameNoteDraft = ref("");
+const renameNoteError = ref("");
+
+function openRenameNote(item: NoteSetItem) {
+  renameNoteTarget.value = item;
+  renameNoteDraft.value = item.fileName;
+  renameNoteError.value = "";
+  isRenameNoteOpen.value = true;
+}
+
+async function submitRenameNote() {
+  const item = renameNoteTarget.value;
+  if (!item) return;
+  const name = renameNoteDraft.value.trim();
+  if (!isValidNoteFileName(name)) {
+    renameNoteError.value = NOTE_FILE_NAME_RULE_HINT;
+    return;
+  }
+  if (name === item.fileName) {
+    isRenameNoteOpen.value = false;
+    return;
+  }
+  try {
+    await renameNoteSet(item, name);
+    isRenameNoteOpen.value = false;
+    showHint("已重命名");
+  } catch (error) {
+    renameNoteError.value = getErrorMessage(error);
+  }
+}
+
+// 卡片标题取自归档 meta，只改文件名用户看不出差别，所以标题一起改
+async function renameNoteSet(
+  item: NoteSetItem,
+  newName: string,
+): Promise<void> {
+  const renamed = await invokeCommand<string>("rename_mdrf_file", {
+    ...noteSetArgsOf(item),
+    newFileName: newName,
+  });
+  await invokeCommand("set_mdr_file_meta", {
+    fileName: renamed,
+    ...(item.dir ? { dir: item.dir } : {}),
+    ...(item.filePath
+      ? { filePath: renamePathFileName(item.filePath, renamed) }
+      : {}),
+    mdrFileInfo: {
+      title: renamed,
+      description: item.description,
+      tag: item.tag,
+    },
+  });
+  invalidateNoteSetEntries();
+  await applyRenamedNoteSet(item, renamed);
+}
+
+async function applyRenamedNoteSet(item: NoteSetItem, fileName: string) {
+  if (isExternalSection.value) {
+    const key = item.filePath ?? item.localName;
+    if (key) await forgetExternalNote(key);
+    await rememberExternalNote(externalRecordOf(item, fileName));
+    await loadActiveSection();
+    return;
+  }
+  item.fileName = fileName;
+  item.filePath = item.filePath
+    ? renamePathFileName(item.filePath, fileName)
+    : undefined;
+  item.name = fileName;
+  item.updatedAt = Date.now();
 }
 
 const workspaceTargets = computed(() => [
@@ -531,17 +819,59 @@ function formatUpdatedAt(timestamp: number): string {
 <template>
   <v-sheet class="note-sets-page" elevation="0">
     <Teleport to="#toolbar-actions" defer>
-      <WorkspaceSwitcher
-        :model-value="activeSectionId"
-        :options="sections"
-        :can-add-workspace="!isWebEnv"
-        @update:model-value="activeSectionId = $event"
-        @add-workspace="pickWorkspaceDirectory"
-        @rename-workspace="openRenameWorkspace"
-        @move-workspace="moveWorkspace"
-        @remove-workspace="removeWorkspace"
-      />
-      <TagLibraryMenu @changed="onTagLibraryChanged" />
+      <template v-if="isSelectMode">
+        <span class="selection-count">已选 {{ selectedCount }} 份</span>
+        <v-btn
+          :icon="mdiSelectAll"
+          color="white"
+          title="全选 / 取消全选"
+          variant="text"
+          @click="toggleSelectAll"
+        />
+        <v-btn
+          :disabled="selectedCount === 0"
+          :icon="mdiContentCopy"
+          color="white"
+          title="复制选中"
+          variant="text"
+          @click="copySelected"
+        />
+        <v-btn
+          :disabled="selectedCount === 0"
+          :icon="mdiDeleteOutline"
+          color="white"
+          title="删除选中"
+          variant="text"
+          @click="askDeleteSelected"
+        />
+        <v-btn
+          :icon="mdiClose"
+          color="white"
+          title="退出多选"
+          variant="text"
+          @click="exitSelectMode"
+        />
+      </template>
+      <template v-else>
+        <WorkspaceSwitcher
+          :model-value="activeSectionId"
+          :options="sections"
+          :can-add-workspace="!isWebEnv"
+          @update:model-value="activeSectionId = $event"
+          @add-workspace="pickWorkspaceDirectory"
+          @rename-workspace="openRenameWorkspace"
+          @move-workspace="moveWorkspace"
+          @remove-workspace="removeWorkspace"
+        />
+        <TagLibraryMenu @changed="onTagLibraryChanged" />
+        <v-btn
+          :icon="mdiCheckboxMultipleOutline"
+          color="white"
+          title="多选"
+          variant="text"
+          @click="enterSelectMode"
+        />
+      </template>
     </Teleport>
     <v-snackbar v-model="isError" timeout="2000">
       Oh no!便签怎么皱成一团了！
@@ -578,14 +908,30 @@ function formatUpdatedAt(timestamp: number): string {
       <div v-else class="note-sets-grid">
         <v-card
           v-for="noteSet in visibleNoteSets"
-          :key="`${noteSet.dir ?? ''}|${noteSet.filePath ?? ''}|${noteSet.fileName}`"
+          :key="noteSetKeyOf(noteSet)"
           class="note-sets-card"
+          :class="{
+            'note-sets-card--selecting': isSelectMode,
+            'note-sets-card--selected': isSelected(noteSet),
+          }"
+          @click="onCardClick(noteSet)"
         >
-          <v-card-title>
+          <v-card-title class="d-flex align-center">
+            <v-icon
+              v-if="isSelectMode"
+              :icon="
+                isSelected(noteSet)
+                  ? mdiCheckboxMarked
+                  : mdiCheckboxBlankOutline
+              "
+              :color="isSelected(noteSet) ? 'primary' : undefined"
+              class="me-2"
+              size="small"
+            />
             {{ noteSet.name }}
           </v-card-title>
           <v-card-subtitle>
-            上次编辑：{{ formatUpdatedAt(noteSet.updatedAt) }}
+            上次编辑：{{ formatUpdatedAt(noteSet.updatedAt) }} 文件名：{{ noteSet.fileName }}.mdrf
           </v-card-subtitle>
           <v-card-text>
             {{ noteSet.description }}
@@ -602,7 +948,7 @@ function formatUpdatedAt(timestamp: number): string {
               </v-chip>
             </div>
           </v-card-text>
-          <v-card-actions>
+          <v-card-actions v-if="!isSelectMode">
             <v-btn
               @click="openDetail(noteSet)"
               :icon="mdiInformationOutline"
@@ -651,6 +997,38 @@ function formatUpdatedAt(timestamp: number): string {
               :icon="mdiClose"
               variant="text"
             ></v-btn>
+            <v-spacer />
+            <v-menu location="bottom end">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  :icon="mdiDotsVertical"
+                  title="更多操作"
+                  variant="text"
+                />
+              </template>
+              <v-list density="compact" min-width="160">
+                <v-list-item @click="openRenameNote(noteSet)">
+                  <template #prepend>
+                    <v-icon :icon="mdiRenameBox" size="small" />
+                  </template>
+                  <v-list-item-title>重命名</v-list-item-title>
+                </v-list-item>
+                <v-list-item @click="copyFromCard(noteSet)">
+                  <template #prepend>
+                    <v-icon :icon="mdiContentCopy" size="small" />
+                  </template>
+                  <v-list-item-title>创建副本</v-list-item-title>
+                </v-list-item>
+                <v-divider class="my-1" />
+                <v-list-item @click="askDelete([noteSet])">
+                  <template #prepend>
+                    <v-icon :icon="mdiDeleteOutline" size="small" />
+                  </template>
+                  <v-list-item-title>删除</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
           </v-card-actions>
         </v-card>
         <div ref="listSentinel" class="note-sets-grid__sentinel" />
@@ -731,6 +1109,49 @@ function formatUpdatedAt(timestamp: number): string {
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <v-dialog v-model="isRenameNoteOpen" max-width="420">
+      <v-card>
+        <v-card-title>重命名笔记</v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-model="renameNoteDraft"
+            label="文件名"
+            :counter="NOTE_FILE_NAME_MAX_LEN"
+            :error-messages="renameNoteError"
+            :maxlength="NOTE_FILE_NAME_MAX_LEN"
+            autofocus
+            @keyup.enter="submitRenameNote"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn
+            color="error"
+            variant="text"
+            @click="isRenameNoteOpen = false"
+            >取消</v-btn
+          >
+          <v-spacer />
+          <v-btn color="primary" variant="text" @click="submitRenameNote"
+            >保存</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="isDeleteOpen" max-width="420">
+      <v-card>
+        <v-card-title>删除 {{ deleteTargets.length }} 份笔记？</v-card-title>
+        <v-card-text>文件会从磁盘移除，此操作无法撤销。</v-card-text>
+        <v-card-actions>
+          <v-btn color="primary" variant="text" @click="isDeleteOpen = false"
+            >取消</v-btn
+          >
+          <v-spacer />
+          <v-btn color="error" variant="text" @click="confirmDelete"
+            >删除</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
@@ -785,6 +1206,25 @@ function formatUpdatedAt(timestamp: number): string {
 .note-sets-card {
   display: flex;
   flex-direction: column;
+}
+
+/* 多选时整卡是热区，要挡住文本选择让点击稳定落成切换 */
+.note-sets-card--selecting {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 用 outline 而非 border：卡片尺寸不变，网格不会因选中而抖动 */
+.note-sets-card--selected {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
+}
+
+.selection-count {
+  margin-inline: 8px;
+  color: #fff;
+  font-size: 0.875rem;
+  white-space: nowrap;
 }
 
 .note-sets-card :deep(.v-card-text) {
