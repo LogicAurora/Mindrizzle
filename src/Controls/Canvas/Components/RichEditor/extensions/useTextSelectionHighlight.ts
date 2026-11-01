@@ -2,7 +2,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import type { Ref } from 'vue'
 import type { Editor } from '@prosekit/core'
 
-import { getView, viewportToLayout } from './blockHandleUtils'
+import { getView, layoutToCanvasCss } from './blockHandleUtils'
 import { uniqueClientRects } from './textSelectionRects'
 import type { TextRect } from './textSelectionRects'
 
@@ -38,13 +38,13 @@ export function useTextSelectionHighlight(options: TextSelectionHighlightOptions
       if (rects.value.length) rects.value = []
       return
     }
-    // 客户端矩形是视觉像素，高亮层在 .canvas 的 zoom 空间内，所以统一折回布局像素
+    // 矩形与滚动原点同在 BCR 布局空间，而高亮层在 .canvas 的 zoom 空间内，所以按 zoom 折成层内 CSS 长度
     const origin = scroll.getBoundingClientRect()
     rects.value = uniqueClientRects(range).map((rect) => ({
-      left: viewportToLayout(view, rect.left - origin.left),
-      top: viewportToLayout(view, rect.top - origin.top),
-      width: viewportToLayout(view, rect.width),
-      height: viewportToLayout(view, rect.height),
+      left: layoutToCanvasCss(view, rect.left - origin.left),
+      top: layoutToCanvasCss(view, rect.top - origin.top),
+      width: layoutToCanvasCss(view, rect.width),
+      height: layoutToCanvasCss(view, rect.height),
     }))
   }
 

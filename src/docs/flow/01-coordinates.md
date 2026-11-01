@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-11-01 -->
 # 01 坐标系
 
 ## 三句话
@@ -29,8 +29,13 @@ flowchart LR
     K -.-> L
   end
 
+  subgraph CSS[".canvas 内元素的 CSS 长度"]
+    LW["层内 CSS = 视觉 ÷ zoom<br/>= layout × k ÷ zoom"]
+  end
+
   S <-.->|"同一物"| VP
   C -.->|"经 .drag-wrapper[data-uuid]<br/>与块 DOM 对齐"| L
+  L -->|"layoutToCanvasCss"| LW
 ```
 
 ## 图 1.2 getCanvasScale 系数推导
@@ -64,6 +69,7 @@ flowchart LR
   subgraph 编辑器侧["blockHandleUtils.ts"]
     B1["layoutToViewportX/Y/Size"]
     B2["viewportToLayout"]
+    B3["layoutToCanvasCss"]
   end
   subgraph MdrCanvas["MdrCanvas.vue"]
     C1["roundToPx = roundToVisual(zoom, v)"]
@@ -80,7 +86,7 @@ flowchart LR
 
 - `contentToScreen` / `screenToContent`
 - `roundToPx` / `roundToVisual` / `visualY`
-- `layoutToViewportX/Y/Size` / `viewportToLayout`
+- `layoutToViewportX/Y/Size` / `viewportToLayout` / `layoutToCanvasCss`
 
 说不出，说明还没读懂。
 

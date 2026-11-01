@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-11-01 -->
 # 10 工具函数索引
 
 ## 图 10.1 blockHandleUtils 函数分类
@@ -22,8 +22,9 @@ flowchart TB
   subgraph 坐标换算
     C1["layoutToViewportX/Y/Size"]
     C2["viewportToLayout"]
-    C3["getCanvasScale（内部）"]
+    C3["getCanvasMetrics（内部，含 scale 与 zoom）"]
     C4["invalidateCanvasScaleCache"]
+    C5["layoutToCanvasCss（BCR 布局 → zoom 空间 CSS 长度）"]
   end
   subgraph 指针与 hover
     D1["getRealPointer()"]
@@ -37,6 +38,8 @@ flowchart TB
     E4["isCompactView(view)"]
   end
 ```
+
+> `getClipRect` 的输入横跨两个坐标空间：容器 BCR 是视觉坐标、块内滚动容器 BCR 在 `.canvas` 的 zoom 空间内，所以先经 `layoutToViewportX/Y` 折到视觉再求交；自绘高亮层（富文本选区、代码块选区）在 zoom 空间内，量到的 BCR 差值须走 `layoutToCanvasCss` 才落到层内 CSS 长度。
 
 ## 图 10.2 canvasCoords 函数
 

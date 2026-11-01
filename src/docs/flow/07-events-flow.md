@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-30 -->
+<!-- 最后验证: 2026-11-01 -->
 # 07 事件连锁反应
 
 > 事件契约见 02-contracts.md，本文件回答"派发之后发生了什么"。
@@ -107,7 +107,7 @@ flowchart TD
   O --> P["selectionStyles.css 画块间隙光标<br/>（不带样式时完全不可见）"]
   O --> Q["可打印字符 → caretFromGap<br/>补空段落把光标接进去"]
 
-  R["鼠标拖拽选中文字<br/>selectionchange / 滚动 / 内容尺寸变化"] --> S["useTextSelectionHighlight：按行取 getClientRects<br/>折回布局像素 → .text-selection-highlight-rect"]
+  R["鼠标拖拽选中文字<br/>selectionchange / 滚动 / 内容尺寸变化"] --> S["useTextSelectionHighlight：按行取 getClientRects<br/>减滚动原点后经 layoutToCanvasCss 折成层内 CSS 长度"]
   S --> T["原生 .ProseMirror ::selection 置透明<br/>嵌入块内部仍用浏览器原生高亮"]
 
   U["代码块 textarea 选区<br/>pointerdown 拖拽 / select / keyup / scroll"] --> V["selectionStart/End 在高亮层上取 Range<br/>拖拽期 rAF 合并量算，自绘 .selection-rect"]
@@ -117,7 +117,7 @@ flowchart TD
 >
 > 原子块以 `inline-flex` 参与行内排版，块左右会留出可点击的空隙，PM 在那里只能放 GapCursor，而 `defineGapCursor()` 只带插件不带样式（`::selection`/`.ProseMirror-selectednode` 默认值也不随主题），三类选区样式统一收在 `selectionStyles.css`，它由 `RichTextEditor.vue` 随懒加载块一同引入。
 >
-> 文字选区要圆角只能自绘：`::selection` 不支持圆角，所以原生高亮置透明、按行铺圆角块；高亮层在 `.editor-scroll-shell` 里（不在 `.ProseMirror` 内，否则会被当成文档变更），坐标是布局像素，随 `.canvas` 的 zoom 自动缩放。
+> 文字选区要圆角只能自绘：`::selection` 不支持圆角，所以原生高亮置透明、按行铺圆角块；高亮层在 `.editor-scroll-shell` 里（不在 `.ProseMirror` 内，否则会被当成文档变更），坐标是 `.canvas` zoom 空间内的 CSS 长度，所以量到的 BCR 差值需先折回视觉、再除以 zoom（`layoutToCanvasCss`）。
 >
 > 嵌入块自己要接管选区时，用比 `:where(.editor-mount.ProseMirror) ::selection` 更高的优先级把原生高亮关掉：代码块就是按 `selectionStart/End` 在高亮层 `code` 上取 Range，再画到 textarea 上的 `.selection-layer`（两层同字体、滚动同步，坐标同样折回布局像素）。
 

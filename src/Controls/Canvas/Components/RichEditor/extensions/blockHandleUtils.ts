@@ -45,11 +45,12 @@ export function getClipRect(view: any): DOMRect {
   const containerRect = getCanvasViewportRect(view)
   const scroll = getScrollEl(view)
   if (!scroll) return containerRect
+  // 滚动容器在 .canvas 的 zoom 空间内（BCR 是布局坐标）、容器在 zoom 外（视觉坐标），所以先把滚动矩形折到视觉空间再求交
   const scrollRect = scroll.getBoundingClientRect()
-  const left = Math.max(containerRect.left, scrollRect.left)
-  const top = Math.max(containerRect.top, scrollRect.top)
-  const right = Math.min(containerRect.right, scrollRect.right)
-  const bottom = Math.min(containerRect.bottom, scrollRect.bottom)
+  const left = Math.max(containerRect.left, layoutToViewportX(scroll, scrollRect.left))
+  const top = Math.max(containerRect.top, layoutToViewportY(scroll, scrollRect.top))
+  const right = Math.min(containerRect.right, layoutToViewportX(scroll, scrollRect.right))
+  const bottom = Math.min(containerRect.bottom, layoutToViewportY(scroll, scrollRect.bottom))
   return new DOMRect(left, top, Math.max(right - left, 0), Math.max(bottom - top, 0))
 }
 
@@ -136,13 +137,16 @@ export function isFullyVisibleInCanvas(el: HTMLElement | null): boolean {
 
 // 画布 CSS zoom 下：视觉 = 布局 × k，k = zoom / domScale（domScale = canvas/容器宽比 × zoom，兼容 BCR 已含 zoom 的浏览器）。
 // 入参可为 view 或元素本身，若只认 view 会让传元素的调用静默拿到 1、zoom≠1 时换算恒错
-interface CanvasScaleEntry {
+interface CanvasMetrics {
   epoch: number
-  value: number
+  scale: number
+  zoom: number
 }
 
+const NO_CANVAS_METRICS: CanvasMetrics = { epoch: -1, scale: 1, zoom: 1 }
+
 // 逐帧路径反复调用且 getComputedStyle 会触发强制样式重算，所以按 .canvas 元素缓存系数
-const canvasScaleCache = new WeakMap<HTMLElement, CanvasScaleEntry>()
+const canvasMetricsCache = new WeakMap<HTMLElement, CanvasMetrics>()
 let canvasScaleEpoch = 0
 
 // pan/zoom 或容器尺寸变化会改变系数，所以变换落定后须失效缓存
@@ -150,20 +154,24 @@ export function invalidateCanvasScaleCache(): void {
   canvasScaleEpoch += 1
 }
 
-function getCanvasScale(view: any): number {
+function getCanvasMetrics(view: any): CanvasMetrics {
   const dom = (view?.dom ?? view) as HTMLElement | null
   const canvasEl = dom?.closest?.('.canvas') as HTMLElement | null
   const container = dom?.closest?.('.canvas-container') as HTMLElement | null
-  if (!canvasEl || !container) return 1
-  const cached = canvasScaleCache.get(canvasEl)
-  if (cached && cached.epoch === canvasScaleEpoch) return cached.value
+  if (!canvasEl || !container) return NO_CANVAS_METRICS
+  const cached = canvasMetricsCache.get(canvasEl)
+  if (cached && cached.epoch === canvasScaleEpoch) return cached
   const zoom = Number.parseFloat(getComputedStyle(canvasEl).zoom) || 1
   const cr = container.getBoundingClientRect()
   const wr = canvasEl.getBoundingClientRect()
   const domScale = cr.width > 0 ? (wr.width / cr.width) * zoom : 1
-  const value = domScale > 0 ? zoom / domScale : 1
-  canvasScaleCache.set(canvasEl, { epoch: canvasScaleEpoch, value })
-  return value
+  const metrics: CanvasMetrics = { epoch: canvasScaleEpoch, scale: domScale > 0 ? zoom / domScale : 1, zoom }
+  canvasMetricsCache.set(canvasEl, metrics)
+  return metrics
+}
+
+function getCanvasScale(view: any): number {
+  return getCanvasMetrics(view).scale
 }
 
 // 编辑器内部布局坐标/长度 → 视口视觉坐标/长度（x、y 同系数）
@@ -183,6 +191,13 @@ export function layoutToViewportSize(view: any, size: number): number {
 export function viewportToLayout(view: any, value: number): number {
   const k = getCanvasScale(view)
   return k > 0 ? value / k : value
+}
+
+// 布局坐标/长度 → .canvas 内元素的 CSS 坐标/长度：先折回视觉、再按 zoom 折回层内（自绘高亮层与文本同在 zoom 空间）
+export function layoutToCanvasCss(view: any, layoutValue: number): number {
+  const { scale, zoom } = getCanvasMetrics(view)
+  const visual = layoutValue * scale
+  return zoom > 0 ? visual / zoom : visual
 }
 
 function popupElOf(view: any): HTMLElement | null {

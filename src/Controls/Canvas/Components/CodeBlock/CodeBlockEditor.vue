@@ -57,7 +57,7 @@ import ruby from 'highlight.js/lib/languages/ruby'
 import swift from 'highlight.js/lib/languages/swift'
 import kotlin from 'highlight.js/lib/languages/kotlin'
 
-import { viewportToLayout } from '../RichEditor/extensions/blockHandleUtils.ts'
+import { layoutToCanvasCss } from '../RichEditor/extensions/blockHandleUtils.ts'
 import { uniqueClientRects } from '../RichEditor/extensions/textSelectionRects.ts'
 import type { TextRect } from '../RichEditor/extensions/textSelectionRects.ts'
 
@@ -202,13 +202,13 @@ const updateSelectionRects = () => {
     return
   }
   measuredKey = key
-  // 两层滚动同步、字体一致，所以客户端矩形减去 textarea 原点即覆盖层坐标；zoom 下须折回布局像素
+  // 两层滚动同步、字体一致，所以客户端矩形减去 textarea 原点即覆盖层坐标；覆盖层在 .canvas 的 zoom 空间内，须按 zoom 折算
   const origin = textarea.getBoundingClientRect()
   selectionRects.value = uniqueClientRects(range).map((rect) => ({
-    left: viewportToLayout(textarea, rect.left - origin.left),
-    top: viewportToLayout(textarea, rect.top - origin.top),
-    width: viewportToLayout(textarea, rect.width),
-    height: viewportToLayout(textarea, rect.height),
+    left: layoutToCanvasCss(textarea, rect.left - origin.left),
+    top: layoutToCanvasCss(textarea, rect.top - origin.top),
+    width: layoutToCanvasCss(textarea, rect.width),
+    height: layoutToCanvasCss(textarea, rect.height),
   }))
 }
 
