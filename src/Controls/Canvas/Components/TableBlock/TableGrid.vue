@@ -78,6 +78,7 @@ import {
 } from "vue";
 import { useTheme } from "vuetify";
 import { VxeUI } from "@vxe-ui/core";
+import type { VxeTablePropTypes } from "vxe-pc-ui/types/components/table";
 import { VxeColumn, VxeTable } from "vxe-table/es/components";
 import "vxe-table/lib/style.css";
 
@@ -224,6 +225,19 @@ const rangeOf = (first: CellPoint, second: CellPoint): TableSelection => ({
   left: Math.min(first.col, second.col),
   right: Math.max(first.col, second.col),
 });
+type CellClassParams =
+  Exclude<VxeTablePropTypes.CellClassName, string> extends (
+    params: infer P,
+  ) => unknown
+    ? P
+    : never;
+type HeaderCellClassParams =
+  Exclude<VxeTablePropTypes.HeaderRowClassName, string> extends (
+    params: infer P,
+  ) => unknown
+    ? P & { columnIndex?: number }
+    : never;
+
 const isMultiCell = (range: TableSelection) =>
   range.top !== range.bottom || range.left !== range.right;
 const isSelectedCell = (row: number, col: number): boolean => {
@@ -237,21 +251,17 @@ const isSelectedCell = (row: number, col: number): boolean => {
   );
 };
 
-const cellClassOf = ({
-  row,
-  rowIndex = 0,
-  columnIndex = 0,
-}: {
-  row?: BodyRow;
-  rowIndex?: number;
-  columnIndex?: number;
-}) => {
-  const absoluteRow = row?.rowIndex ?? rowIndex + (props.header ? 1 : 0);
+// 参数类型直接取 vxe 的回调签名，自己另写窄类型会让整个函数对不上 prop 类型
+const cellClassOf = ({ row, rowIndex, columnIndex }: CellClassParams) => {
+  const absoluteRow =
+    (row as Partial<BodyRow>).rowIndex ?? rowIndex + (props.header ? 1 : 0);
   return isSelectedCell(absoluteRow, columnIndex - seqOffset.value)
     ? "is-selected"
     : "";
 };
-const headerCellClassOf = ({ columnIndex = 0 }: { columnIndex?: number }) =>
+
+// vxe 的 HeaderRowClassName 签名漏了 columnIndex，运行时却会传，只能自己补上
+const headerCellClassOf = ({ columnIndex = 0 }: HeaderCellClassParams) =>
   isSelectedCell(0, columnIndex - seqOffset.value) ? "is-selected" : "";
 
 let anchorCell: CellPoint | null = null;
