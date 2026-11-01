@@ -68,7 +68,7 @@ const ctx = useBlockContext<{ text: string }>()
 | `ImageBlock` | 图片 | `config.path` + `ctx.files` | 平铺与自动尺寸 |
 | `FileBlock` | 附件 | `config.name` / `mime` / `size` + `ctx.files` | 归档内固定 `file.bin`；图片内联预览，桌面端可另存 |
 | `LinkBlock` | 链接 | `config.url` / `title` / `description` / `imageUrl` | 前端抓 og 标签，跨域失败退回手填 |
-| `TableBlock` | 表格 | `config.rows` / `header` | 矩形保证；Enter 沿列下移；可拖入富文本 |
+| `TableBlock` | 表格 | `config.rows` / `header` / `stripe` / `showIndex` / `fitHeight` / `merges` | vxe-table 渲染（关闭虚拟滚动，走原生滚动条）；选中时右侧工具栏放行/列/表头/合并；设置面板只有「高度适应内容」（开启后按实测内容高自动同步）；行号按数据行绝对编号；Enter 沿列下移；列宽可拖；拖选可复制/粘贴 TSV；可拖入富文本 |
 | `TaskListBlock` | 任务 | `config.title` / `tasks` | 勾选、续写、进度 |
 | `CanvasTestBench` | 测试台 | — | 调试用，`order: 90` 排在最后 |
 

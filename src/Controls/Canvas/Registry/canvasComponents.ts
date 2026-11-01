@@ -52,9 +52,15 @@ export type LinkBlockConfig = WidgetConfig & {
   imageUrl: string
 }
 
+import type { TableMerge } from '../Components/TableBlock/tableRows.ts'
+
 export type TableBlockConfig = WidgetConfig & {
   rows: string[][]
   header: boolean
+  stripe?: boolean
+  showIndex?: boolean
+  fitHeight?: boolean
+  merges?: TableMerge[]
 }
 
 export interface TaskItem {

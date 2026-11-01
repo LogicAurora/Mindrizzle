@@ -27,6 +27,10 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  resolve: {
+    // bun 把依赖 realpath 到缓存目录，包内引用的同级依赖会解析失败，这里强制从项目 node_modules 取
+    dedupe: ['vxe-table', '@vxe-ui/core', 'xe-utils', 'dom-zindex'],
+  },
   build: {
     // Tauri 各平台 WebView 均为现代内核，无需为旧浏览器降级转译
     target: 'esnext',

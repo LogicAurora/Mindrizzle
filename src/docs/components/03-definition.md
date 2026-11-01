@@ -62,8 +62,26 @@ iconOf: (config) => (config.kind === 'alert' ? mdiAlert : mdiNote),
 embed: {
   nodeName: 'TableBlock',
   component: TableBlockEmbed,
-  toProps: (config) => ({ rows: config.rows, header: config.header !== false }),
-  fromProps: (props) => ({ rows: normalizeTableRows(props.rows), header: props.header !== false }),
+  toProps: (config) => ({
+    rows: config.rows,
+    header: config.header !== false,
+    stripe: config.stripe === true,
+    showIndex: config.showIndex === true,
+    fitHeight: config.fitHeight === true,
+    merges: config.merges ?? [],
+  }),
+  fromProps: (props) => {
+    const rows = normalizeTableRows(props.rows)
+    const header = props.header !== false
+    return {
+      rows,
+      header,
+      stripe: props.stripe === true,
+      showIndex: props.showIndex === true,
+      fitHeight: props.fitHeight === true,
+      merges: normalizeTableMerges(props.merges, bodyRowCountOf(rows, header), columnCountOf(rows)),
+    }
+  },
 }
 ```
 

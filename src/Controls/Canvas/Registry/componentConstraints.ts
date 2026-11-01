@@ -45,7 +45,8 @@ export const LINK_BLOCK_CONSTRAINTS: ResizeConstraints = {
 export const TABLE_BLOCK_CONSTRAINTS: ResizeConstraints = {
   minWidth: 260,
   maxWidth: null,
-  minHeight: 140,
+  // 自动大小时 2 行表格约 110px，下限不能再高
+  minHeight: 110,
   maxHeight: null,
 }
 

@@ -6,7 +6,12 @@ import type { TableBlockConfig } from '../Registry/canvasComponents.ts'
 import { defineBlock } from '../Sdk/defineBlock.ts'
 import TableBlockEmbed from './TableBlock/TableBlockEmbed.vue'
 import TableSettings from './TableBlock/TableSettings.vue'
-import { normalizeTableRows } from './TableBlock/tableRows.ts'
+import {
+  bodyRowCountOf,
+  columnCountOf,
+  normalizeTableMerges,
+  normalizeTableRows,
+} from './TableBlock/tableRows.ts'
 
 const CELL_BASE = 'border:1px solid rgba(128,128,128,.32);padding:6px 8px;overflow:hidden;text-overflow:ellipsis'
 const HEADER_CELL = `${CELL_BASE};font-weight:600;background:rgba(128,128,128,.08)`
@@ -27,14 +32,38 @@ export default defineBlock<TableBlockConfig>({
       ['', '', ''],
     ],
     header: true,
+    stripe: false,
+    showIndex: false,
+    fitHeight: false,
+    merges: [],
   }),
   defaultSize: { w: 420, h: 240 },
+  // 高度跟行数同步时不能再手动拉高度，否则两边互相覆盖
+  heightChangableOf: (config) => config.fitHeight !== true,
   settings: TableSettings,
   embed: {
     nodeName: 'TableBlock',
     component: TableBlockEmbed,
-    toProps: (config) => ({ rows: config.rows, header: config.header !== false }),
-    fromProps: (props) => ({ rows: normalizeTableRows(props.rows), header: props.header !== false }),
+    toProps: (config) => ({
+      rows: config.rows,
+      header: config.header !== false,
+      stripe: config.stripe === true,
+      showIndex: config.showIndex === true,
+      fitHeight: config.fitHeight === true,
+      merges: config.merges ?? [],
+    }),
+    fromProps: (props) => {
+      const rows = normalizeTableRows(props.rows)
+      const header = props.header !== false
+      return {
+        rows,
+        header,
+        stripe: props.stripe === true,
+        showIndex: props.showIndex === true,
+        fitHeight: props.fitHeight === true,
+        merges: normalizeTableMerges(props.merges, bodyRowCountOf(rows, header), columnCountOf(rows)),
+      }
+    },
   },
   snapshot: (config) => {
     const rows = Array.isArray(config.rows) ? config.rows : []
