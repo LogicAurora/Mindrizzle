@@ -20,7 +20,7 @@
       </v-btn>
     </div>
 
-    <div v-if="notice" class="link-notice">{{ notice }}</div>
+    <div v-if="notice" class="link-notice text-break">{{ notice }}</div>
   </div>
 </template>
 
@@ -31,6 +31,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { mdiLinkVariant } from '@mdi/js'
 
 import { getErrorMessage } from '../../../../utils/getErrorMessage.ts'
+import { useAutoHideNotice } from '../../../../utils/useAutoHideNotice.ts'
 import { fetchLinkMeta, parseHttpUrl, resolveUrl } from './linkMeta.ts'
 
 const FETCH_TIMEOUT_MS = 8000
@@ -47,7 +48,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update', patch: Record<string, unknown>): void }>()
 
 const draftUrl = ref('')
-const notice = ref('')
+const { notice, showNotice, clearNotice } = useAutoHideNotice()
 const isFetching = ref(false)
 const coverFailed = ref(false)
 let abortController: AbortController | null = null
@@ -69,7 +70,7 @@ const fetchPreview = async (target?: string) => {
   const controller = new AbortController()
   abortController = controller
   isFetching.value = true
-  notice.value = ''
+  clearNotice()
   const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
     const meta = await fetchLinkMeta(url, controller.signal)
@@ -79,9 +80,9 @@ const fetchPreview = async (target?: string) => {
       siteName: meta.siteName || props.siteName,
       imageUrl: meta.imageUrl || props.imageUrl,
     })
-    if (!meta.title && !meta.description) notice.value = '没有读到标题或描述，可以手动填写'
+    if (!meta.title && !meta.description) showNotice('没有读到标题或描述，可以手动填写')
   } catch (cause) {
-    notice.value = `读取失败，请手动填写标题（${getErrorMessage(cause)}）`
+    showNotice(`读取失败，请手动填写标题（${getErrorMessage(cause)}）`)
   } finally {
     window.clearTimeout(timer)
     if (abortController === controller) abortController = null
@@ -92,12 +93,12 @@ const fetchPreview = async (target?: string) => {
 const applyDraft = async () => {
   const url = parseHttpUrl(draftUrl.value)
   if (!url) {
-    notice.value = '网址无效，需要 http 或 https 开头'
+    showNotice('网址无效，需要 http 或 https 开头')
     return
   }
   emit('update', { url: url.href })
   draftUrl.value = ''
-  notice.value = ''
+  clearNotice()
   await fetchPreview(url.href)
 }
 
@@ -188,7 +189,9 @@ const openLink = () => {
 }
 
 .link-empty .v-text-field {
-  max-width: 260px;
+  /* 父级 align-items:center 会让输入框缩到内容宽，铺满块宽才够贴整条网址 */
+  width: 100%;
+  max-width: 480px;
 }
 
 .link-notice {

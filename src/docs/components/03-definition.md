@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-25 -->
+<!-- 最后验证: 2026-11-01 -->
 # 03 块定义
 
 每个块在 `Components/` 下有一个同名定义文件 `Xxx.block.ts`，默认导出一个 `defineBlock({...})`。
@@ -19,6 +19,7 @@
 | `widthChangableOf` / `heightChangableOf` | 否 | `(config, env) => boolean`，`env` 含 `isCompact` / `isReadOnly` |
 | `snapshot` | 否 | 视口外显示什么，默认 `'html'`，见 [04 生命周期](04-lifecycle.md) |
 | `settings` | 否 | 嵌入富文本时的设置面板组件（props + `update` 事件），块与插入块共用 |
+| `settingsWidth` | 否 | 画布设置面板宽度（px），缺省 240；网址等长文本面板可加宽 |
 | `embed` | 否 | 块 ↔ 富文本双向映射 |
 
 ## 尺寸约束

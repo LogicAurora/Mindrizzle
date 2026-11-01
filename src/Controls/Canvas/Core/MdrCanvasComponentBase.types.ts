@@ -29,6 +29,8 @@ export interface MdrCanvasComponentBaseProps {
   showSettings?: boolean
   // 带默认插槽的宿主恒有 settings 插槽，需显式告知是否真有内容
   settingsAvailable?: boolean
+  // 设置面板宽度（px），缺省 240；长文本类设置需要更宽
+  settingsWidth?: number
   handles?: string[]
   zIndex?: number
   zoom?: number

@@ -14,6 +14,7 @@ export interface BlockShellProvide {
   readonly heightChangable: boolean
   readonly virtualized: boolean
   readonly snapshot: string
+  readonly settingsWidth?: number
 }
 
 export const useBlockContext = <TConfig extends Record<string, unknown> = Record<string, unknown>>(): BlockContext<TConfig> => {

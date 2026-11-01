@@ -90,6 +90,8 @@ export interface BlockDefinition<TConfig extends Record<string, unknown> = Recor
   heightChangableOf?: (config: TConfig, env: BlockEnv) => boolean
   /** 块主体组件：用 useBlockContext() 取 ctx，用 <BlockSettings> 写设置面板 */
   component?: Component
+  /** 设置面板宽度（px），缺省 240 */
+  settingsWidth?: number
   /** 嵌入富文本时的设置面板（props + update 事件），块组件与插入块共用 */
   settings?: Component
   embed?: BlockEmbed<TConfig>

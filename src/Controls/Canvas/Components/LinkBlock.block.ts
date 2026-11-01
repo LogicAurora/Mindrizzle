@@ -19,6 +19,8 @@ export default defineBlock<LinkBlockConfig>({
   // 拖拽栏显示站点名比 url 更好认
   titleOf: (config) => (config.siteName ? `链接 : ${config.siteName}` : '链接'),
   settings: LinkSettings,
+  // 网址/封面地址都很长，窄面板里会被截成看不出区别
+  settingsWidth: 320,
   embed: {
     nodeName: 'LinkBlock',
     component: LinkBlockEmbed,

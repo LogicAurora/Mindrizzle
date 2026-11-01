@@ -103,6 +103,9 @@ const shell: BlockShellProvide = {
   get snapshot() {
     return props.snapshot ?? ''
   },
+  get settingsWidth() {
+    return props.definition.settingsWidth
+  },
 }
 
 provide(BLOCK_CONTEXT_KEY, ctx)

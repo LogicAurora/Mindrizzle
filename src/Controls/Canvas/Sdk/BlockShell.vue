@@ -2,7 +2,8 @@
   <!-- 根直接是块壳：几何、手柄、拖拽栏、设置菜单、虚拟化都由它接管 -->
   <MdrCanvasComponentBase v-bind="shell.base" :icon="shell.icon" :title="shell.title"
     :width-changable="shell.widthChangable" :height-changable="shell.heightChangable"
-    :settings-available="hasSettings" :virtualized="shell.virtualized" :snapshot="shell.snapshot">
+    :settings-available="hasSettings" :settings-width="shell.settingsWidth" :virtualized="shell.virtualized"
+    :snapshot="shell.snapshot">
     <slot />
     <template v-if="hasSettings" #settings>
       <slot name="settings" />

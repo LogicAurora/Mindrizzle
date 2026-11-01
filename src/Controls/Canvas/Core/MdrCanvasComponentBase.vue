@@ -73,6 +73,10 @@ import {
   type SizeChangeable,
 } from './canvasComponentControllers.ts'
 
+const SETTINGS_MENU_WIDTH = 240
+const SETTINGS_MENU_GAP = 6
+const SETTINGS_MENU_MARGIN = 8
+
 const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   minWidth: 0,
   minHeight: 0,
@@ -88,6 +92,7 @@ const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   showHandle: false,
   showSettings: false,
   settingsAvailable: true,
+  settingsWidth: SETTINGS_MENU_WIDTH,
   handles: () => ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'],
   zIndex: 0,
   zoom: 1,
@@ -138,10 +143,6 @@ const showFloatingSettings = computed(() =>
   props.settingsAvailable && !!slots.settings)
 
 // 菜单挂在 body，须与按钮同处视觉坐标；`.canvas` 的 zoom 会让 BCR 变成布局坐标，所以经工具换算
-const SETTINGS_MENU_WIDTH = 240
-const SETTINGS_MENU_GAP = 6
-const SETTINGS_MENU_MARGIN = 8
-
 const settingsOpen = ref(false)
 const settingsMenuEl = ref<HTMLElement | null>(null)
 const settingsAnchorEl = ref<HTMLElement | null>(null)
@@ -149,7 +150,7 @@ const settingsMenuStyle = ref<CSSProperties>({})
 
 const settingsMenuPosition = (anchor: HTMLElement): CSSProperties => {
   const rect = anchor.getBoundingClientRect()
-  const width = Math.min(SETTINGS_MENU_WIDTH, window.innerWidth - SETTINGS_MENU_MARGIN * 2)
+  const width = Math.min(props.settingsWidth, window.innerWidth - SETTINGS_MENU_MARGIN * 2)
   const left = layoutToViewportX(anchor, rect.left)
   const right = layoutToViewportX(anchor, rect.right)
   const bottom = layoutToViewportY(anchor, rect.bottom)
