@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Local;
-use log::{info, warn};
+use log::info;
 use quick_xml::de::from_str;
 use quick_xml::se::to_string;
 use std::fs::{self, File};
@@ -9,10 +9,13 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, UNIX_EPOCH};
 use tauri::{Emitter, Window};
 
-use crate::mdr_file_cache::{invalidate_named, MindrizzleFileCache};
+use crate::mdr_file_cache::{
+    invalidate_named, named_cache_dir, read_signature, signature_path, write_signature,
+    MindrizzleFileCache,
+};
 use crate::mdr_file_struct::{MindrizzleFileBody, MindrizzleFileMeta, MindrizzleFileMetaView};
 use crate::mdr_file_tar::{
-    extract_meta, extract_to_cache, extract_to_cache_with_progress, is_mdrf_compressed, pack_cache,
+    extract_meta, extract_to_cache_with_progress, is_mdrf_compressed, pack_cache,
 };
 use crate::{mdr_file_dir, tauri_cmd};
 
@@ -57,9 +60,8 @@ tauri_cmd! {
             return Err(anyhow::anyhow!("文件不存在或者是个目录"));
         }
         let compressed = is_mdrf_compressed(&path).context("检测笔记压缩格式")?;
-        let file = File::open(&path)
-            .with_context(|| format!("打开笔记文件：{}", location.note_name))?;
-        let data = extract_meta(file, compressed).context("读取笔记元信息")?;
+        let signature = archive_signature(&path)?;
+        let data = read_note_meta_xml(&path, compressed, &signature)?;
         let xml = String::from_utf8(data).context("转换笔记元信息编码")?;
         let meta = deserialize_mdr_file_meta_xml(&xml).context("解码笔记元信息")?;
         let updated_at = read_file_modified_millis(&path)?;
@@ -77,13 +79,12 @@ tauri_cmd! {
             .context("校验笔记文件位置")?;
         require_archive_file(&location)?;
         let compressed = is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?;
-        let mut cache = prepare_note_cache(&location, compressed, NoteCacheEntry::Body)?;
+        let (cache, _) = open_note_cache(&location.archive, compressed)?;
         let body_xml = serialize_mdr_file_body_xml(MindrizzleFileBody { content })
             .context("编码笔记正文")?;
         cache.write_file("body.json", body_xml.as_bytes()).context("写入笔记正文缓存")?;
         // body 已更新，所以重新打包同步到 .mdrf
-        pack_cache_atomic(&location.archive, cache.path(), compressed).context("保存笔记文件")?;
-        cache.cleanup();
+        flush_note_cache(&location.archive, &cache, compressed).context("保存笔记文件")?;
         info!("保存笔记正文成功：{}", location.note_name);
         Ok(())
     }
@@ -99,11 +100,10 @@ tauri_cmd! {
             .context("校验笔记文件位置")?;
         require_archive_file(&location)?;
         let compressed = is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?;
-        let mut cache = prepare_note_cache(&location, compressed, NoteCacheEntry::Meta)?;
+        let (cache, _) = open_note_cache(&location.archive, compressed)?;
         let meta_xml = serialize_mdr_file_meta_xml(mdr_file_info).context("编码笔记元信息")?;
         cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
-        pack_cache_atomic(&location.archive, cache.path(), compressed).context("保存笔记文件")?;
-        cache.cleanup();
+        flush_note_cache(&location.archive, &cache, compressed).context("保存笔记文件")?;
         info!("保存笔记元信息成功：{}", location.note_name);
         Ok(())
     }
@@ -218,6 +218,7 @@ tauri_cmd! {
     pub fn rename_mdrf_file(
         file_name: String,
         new_file_name: String,
+        mdr_file_info: Option<MindrizzleFileMeta>,
         dir: Option<String>,
         file_path: Option<String>
     ) -> anyhow::Result<String> {
@@ -233,8 +234,12 @@ tauri_cmd! {
             return Err(anyhow::anyhow!("同名文件已存在"));
         }
         move_archive_file(&source.archive, &target)?;
+        move_note_cache(&source.archive, &target)?;
         invalidate_named(&cache_key_of(&source.archive));
-        invalidate_named(&cache_key_of(&target));
+        // 标题要和文件名一起改时才由前端传入，避免纯改名也整包重写
+        if let Some(meta) = mdr_file_info {
+            rewrite_note_meta(&target, meta).context("同步笔记标题")?;
+        }
         info!("重命名笔记成功：{} -> {}", source.note_name, note_name);
         Ok(note_name)
     }
@@ -287,16 +292,13 @@ fn read_mdr_file_body(
         return Err(anyhow::anyhow!("文件不存在或者是个目录"));
     }
     let compressed = detect_file_compression(window, &path, is_debug_progress)?;
-    let mut cache = create_file_cache(window, &cache_key_of(&path), is_debug_progress)?;
-    let file =
-        File::open(&path).with_context(|| format!("打开笔记文件：{}", location.note_name))?;
-    emit_file_load_progress(window, PROGRESS_EXTRACT_START, is_debug_progress);
-    extract_to_cache_with_progress(file, cache.path(), compressed, |value| {
+    emit_file_load_progress(window, PROGRESS_CREATE_CACHE, is_debug_progress);
+    // 缓存已与归档同步时整包解压可以整体跳过，否则大附件笔记每次打开都要重解一遍
+    let (mut cache, _) = open_note_cache_with_progress(&path, compressed, |value| {
         let progress = PROGRESS_EXTRACT_START + value * PROGRESS_EXTRACT_RANGE / PROGRESS_COMPLETE;
         emit_file_load_progress(window, progress, is_debug_progress);
     })
-    .context("解包笔记正文")?;
-    cache.disable_cleanup();
+    .context("准备笔记缓存")?;
     let body = read_cached_mdr_file_body(window, &mut cache, is_debug_progress)?;
     info!("读取笔记正文成功：{}", location.note_name);
     Ok(body)
@@ -309,15 +311,6 @@ fn detect_file_compression(
 ) -> anyhow::Result<bool> {
     emit_file_load_progress(window, PROGRESS_DETECT_FORMAT, is_debug_progress);
     is_mdrf_compressed(path).context("检测笔记压缩格式")
-}
-
-fn create_file_cache(
-    window: &Window,
-    cache_key: &str,
-    is_debug_progress: bool,
-) -> anyhow::Result<MindrizzleFileCache> {
-    emit_file_load_progress(window, PROGRESS_CREATE_CACHE, is_debug_progress);
-    MindrizzleFileCache::new_named(cache_key).with_context(|| format!("创建笔记缓存：{cache_key}"))
 }
 
 fn read_cached_mdr_file_body(
@@ -498,41 +491,98 @@ pub(crate) fn pack_cache_atomic(path: &Path, root: &Path, compressed: bool) -> a
     })
 }
 
-#[derive(Clone, Copy)]
-enum NoteCacheEntry {
-    Meta,
-    Body,
+// 归档整包重写后大小与修改时间都会变，用它判断解包缓存是否还代表磁盘上的最新内容
+fn archive_signature(archive: &Path) -> anyhow::Result<String> {
+    let metadata = fs::metadata(archive)
+        .with_context(|| format!("读取笔记文件属性：{}", archive.display()))?;
+    Ok(format!("{}:{}", metadata.len(), read_file_modified_millis(archive)?))
 }
 
-impl NoteCacheEntry {
-    fn file_name(self) -> &'static str {
-        match self {
-            NoteCacheEntry::Meta => "meta.json",
-            NoteCacheEntry::Body => "body.json",
+pub(crate) fn open_note_cache(
+    archive: &Path,
+    compressed: bool,
+) -> anyhow::Result<(MindrizzleFileCache, bool)> {
+    open_note_cache_with_progress(archive, compressed, |_| {})
+}
+
+/// 缓存命中时不解包，`is_cache_hit` 让调用方决定是否还要上报进度
+pub(crate) fn open_note_cache_with_progress(
+    archive: &Path,
+    compressed: bool,
+    mut progress: impl FnMut(u32),
+) -> anyhow::Result<(MindrizzleFileCache, bool)> {
+    let signature = archive_signature(archive)?;
+    let mut cache = MindrizzleFileCache::new_named(&archive.to_string_lossy())
+        .with_context(|| format!("创建笔记缓存：{}", archive.display()))?;
+    if read_signature(cache.path()).as_deref() == Some(signature.as_str()) {
+        // 缓存要跨调用复用，回收交给 invalidate_named 与启动清扫
+        cache.disable_cleanup();
+        progress(PROGRESS_COMPLETE);
+        return Ok((cache, true));
+    }
+    cache.cleanup();
+    fs::create_dir_all(cache.path()).context("重建笔记缓存目录")?;
+    let file = File::open(archive)
+        .with_context(|| format!("打开笔记文件：{}", archive.display()))?;
+    extract_to_cache_with_progress(file, cache.path(), compressed, &mut progress)
+        .context("解包笔记归档")?;
+    write_signature(cache.path(), &signature).context("写入缓存签名")?;
+    cache.disable_cleanup();
+    Ok((cache, false))
+}
+
+/// 缓存内容就是打包源，所以写完必须刷新签名，否则下次会被误判成过期
+pub(crate) fn flush_note_cache(
+    archive: &Path,
+    cache: &MindrizzleFileCache,
+    compressed: bool,
+) -> anyhow::Result<()> {
+    pack_cache_atomic(archive, cache.path(), compressed)?;
+    write_signature(cache.path(), &archive_signature(archive)?).context("更新缓存签名")
+}
+
+fn rewrite_note_meta(archive: &Path, meta: MindrizzleFileMeta) -> anyhow::Result<()> {
+    let compressed = is_mdrf_compressed(archive).context("检测笔记压缩格式")?;
+    let (cache, _) = open_note_cache(archive, compressed)?;
+    let meta_xml = serialize_mdr_file_meta_xml(meta).context("编码笔记元信息")?;
+    cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
+    flush_note_cache(archive, &cache, compressed)
+}
+
+// 改名只挪文件，缓存目录跟着挪就能继续用，省掉一次整包解压
+fn move_note_cache(source: &Path, target: &Path) -> anyhow::Result<()> {
+    let (Some(source_dir), Some(target_dir)) = (
+        named_cache_dir(&source.to_string_lossy()),
+        named_cache_dir(&target.to_string_lossy()),
+    ) else {
+        return Ok(());
+    };
+    if !source_dir.is_dir() {
+        return Ok(());
+    }
+    invalidate_named(&target.to_string_lossy());
+    fs::rename(&source_dir, &target_dir).context("迁移笔记缓存")?;
+    // 签名只含大小与修改时间，改名不改这两项，跟着挪即可
+    let _ = fs::rename(signature_path(&source_dir), signature_path(&target_dir));
+    Ok(())
+}
+
+// 缓存目录与归档同步时直接读解包结果，列表页就不必为每条笔记重扫一遍 gzip 流
+fn read_note_meta_xml(
+    archive: &Path,
+    compressed: bool,
+    signature: &str,
+) -> anyhow::Result<Vec<u8>> {
+    if let Some(dir) = named_cache_dir(&archive.to_string_lossy()) {
+        if read_signature(&dir).as_deref() == Some(signature) {
+            if let Ok(xml) = fs::read(dir.join("meta.json")) {
+                return Ok(xml);
+            }
         }
     }
-}
-
-// 缓存目录是按需解包出来的，缺目标文件说明此前没走过 get，只能整包重解一次
-fn prepare_note_cache(
-    location: &NoteArchiveLocation,
-    compressed: bool,
-    entry: NoteCacheEntry,
-) -> anyhow::Result<MindrizzleFileCache> {
-    let entry_name = entry.file_name();
-    let cache = MindrizzleFileCache::new_named(&cache_key_of(&location.archive))
-        .with_context(|| format!("创建笔记缓存：{}", location.note_name))?;
-    if cache.path().join(entry_name).is_file() {
-        return Ok(cache);
-    }
-    warn!(
-        "笔记缓存缺少 {entry_name}，重新解包：{}",
-        location.note_name
-    );
-    let file = File::open(&location.archive)
-        .with_context(|| format!("打开笔记文件：{}", location.note_name))?;
-    extract_to_cache(file, cache.path(), compressed).context("补充解包笔记缓存")?;
-    Ok(cache)
+    let file = File::open(archive)
+        .with_context(|| format!("打开笔记文件：{}", archive.display()))?;
+    extract_meta(file, compressed).context("读取笔记元信息")
 }
 
 fn deserialize_mdr_file_meta_xml(xml: &str) -> Result<MindrizzleFileMeta, quick_xml::DeError> {

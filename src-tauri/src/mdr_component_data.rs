@@ -13,9 +13,8 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use tar::Archive;
 
-use crate::mdr_file_cache::{invalidate_named, MindrizzleFileCache};
 use crate::mdr_file_op;
-use crate::mdr_file_tar::{extract_to_cache, is_mdrf_compressed};
+use crate::mdr_file_tar::is_mdrf_compressed;
 use crate::tauri_cmd;
 
 // 归档根下的固定目录；改名会让旧笔记里的组件数据失联
@@ -75,8 +74,6 @@ pub struct ComponentFileExportRequest {
 }
 
 struct ComponentFileTarget {
-    // 缓存失效要用，否则重新打包后同名暂存区还会把旧数据写回去
-    cache_key: String,
     archive: PathBuf,
     uuid: String,
     path: String,
@@ -173,7 +170,6 @@ fn resolve_scope(request: &ComponentScopeRequest) -> Result<ComponentFileTarget>
         return Err(anyhow::anyhow!("文件不存在或者是个目录"));
     }
     Ok(ComponentFileTarget {
-        cache_key: location.archive.to_string_lossy().into_owned(),
         compressed: is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?,
         archive: location.archive,
         uuid: request.uuid.clone(),
@@ -308,8 +304,6 @@ fn write_archive_file(target: &ComponentFileTarget, content: &[u8]) -> Result<()
         }
         fs::write(&file_path, content).context("写入组件数据文件")
     })?;
-    // 同名暂存区里还是加载时的旧 ComponentsData，不删会在下次保存时把旧数据写回归档
-    invalidate_named(&target.cache_key);
     Ok(())
 }
 
@@ -326,8 +320,6 @@ fn delete_archive_file(target: &ComponentFileTarget) -> Result<()> {
         prune_empty_dirs(parent, root);
         Ok(())
     })?;
-    // 同名暂存区里还是加载时的旧 ComponentsData，不删会在下次保存时把旧数据写回归档
-    invalidate_named(&target.cache_key);
     Ok(())
 }
 
@@ -335,14 +327,10 @@ fn edit_archive(
     target: &ComponentFileTarget,
     edit: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
-    // 用独立临时缓存，避免顺手把未保存的 body 或旧缓存打包；原子替换防止留下半个 .mdrf
-    let cache = MindrizzleFileCache::new().context("创建组件数据临时缓存")?;
-    let reader = File::open(&target.archive)
-        .with_context(|| format!("打开笔记文件：{}", target.archive.display()))?;
-    extract_to_cache(reader, cache.path(), target.compressed).context("解包笔记归档")?;
+    // 与正文共用同一份解包缓存：每次写都整包重解的话，上传一批附件就是双倍的全量往返
+    let (cache, _) = mdr_file_op::open_note_cache(&target.archive, target.compressed)?;
     edit(cache.path())?;
-    mdr_file_op::pack_cache_atomic(&target.archive, cache.path(), target.compressed)
-        .context("回写笔记归档")
+    mdr_file_op::flush_note_cache(&target.archive, &cache, target.compressed)
 }
 
 fn prune_empty_dirs(mut dir: PathBuf, stop: &Path) {

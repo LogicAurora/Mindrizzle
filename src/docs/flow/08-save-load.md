@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-31 -->
+<!-- 最后验证: 2026-11-01 -->
 
 # 08 序列化与兼容
 
@@ -61,8 +61,37 @@ flowchart TD
 
 - 归档内固定结构：`meta.json`、`body.json`、`ComponentsData/<组件 UUID>/<相对路径>`，随 `.mdrf` 一起打包。
 - 前端唯一入口 `src/utils/componentDataStore.ts`，URL 形如 `mdrfcd://<笔记名>/<组件 UUID>/<相对路径>`。
-- 写入/删除：解包到临时缓存 → 改文件 → 原子重打包，并失效同名暂存区（否则后续保存会用旧缓存覆盖组件数据）。
+- 写入/删除：与正文共用同一份命名缓存（命中则不解包）→ 改文件 → 原子重打包，不再额外失效暂存区。
 - 读取/list/exists 直接从归档流里找条目，不落盘。
+
+## 图 8.5 归档读写与缓存
+
+```mermaid
+flowchart TD
+  subgraph 读路径
+    L["fetch_file_list（目录扫描）"] --> M["get_mdr_file_meta"]
+    M --> M1{"缓存签名匹配？"}
+    M1 -->|是| M2["直读缓存 meta.json"]
+    M1 -->|否| M3["extract_meta 流式扫描到 meta.json"]
+    D["get_mdr_file_body"] --> D1{"缓存签名匹配？"}
+    D1 -->|是| D2["直读缓存 body.json"]
+    D1 -->|否| D3["整包解包到命名缓存 + 写签名"]
+  end
+  subgraph 写路径
+    W["set_mdr_file_body / set_mdr_file_meta / 组件数据写删"] --> W1["open_note_cache"]
+    W1 --> W2["改缓存内文件"]
+    W2 --> W3["pack_cache_atomic 整包重写"]
+    W3 --> W4["刷新缓存签名"]
+  end
+```
+
+- 缓存目录 `Mindrizzle_<pid>_<归档路径>` 跨调用存活；签名文件 `<目录>.synced` 记录归档大小与 mtime，
+  放在目录外避免被 `pack_cache` 打进 `.mdrf`。归档被外部改写时签名不匹配，自动整包重解。
+- **打包不可省**：`.mdrf` 是整包 tar(+gzip)，任何写入都要全量重写；优化点只在「不重复解包」——
+  打开→保存→关闭→再打开只需一次解包。
+- 失效点：`move_*` / `delete_mdrf_file` 调 `invalidate_named`；`rename_mdrf_file` 把缓存目录一起改名（签名不变，继续可用），
+  需要同时改标题时在改名前后的同一份缓存上再打包一次。
+- 重命名只在「标题 == 旧文件名」时才传 `mdrFileInfo`，用户自定义过标题的笔记纯改名不会整包重写。
 
 ## 笔记定位（工作区 / 外部文件）
 

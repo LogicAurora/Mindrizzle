@@ -13,10 +13,14 @@
 //! ```
 
 use platform_dirs::AppDirs;
+use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+// 签名必须放在缓存目录外，否则会被 pack_cache 当成笔记内容一起打进 .mdrf
+const SIGNATURE_SUFFIX: &str = ".synced";
 
 pub struct MindrizzleFileCache {
     root: PathBuf,
@@ -93,7 +97,29 @@ pub fn invalidate_named(key: &str) {
     let Some(cache_base) = cache_base_dir() else {
         return;
     };
-    remove_cache_dir(&cache_base.join(named_dir_name(key)));
+    let root = cache_base.join(named_dir_name(key));
+    remove_cache_dir(&root);
+    let _ = fs::remove_file(signature_path(&root)); // 忽略清理失败，不影响主流程
+}
+
+/// 命名缓存目录路径，不创建目录：只读命中判断要用它做 stat
+pub fn named_cache_dir(key: &str) -> Option<PathBuf> {
+    cache_base_dir().map(|base| base.join(named_dir_name(key)))
+}
+
+/// 归档签名一致才说明缓存内容与磁盘归档同源，否则必须重新解包
+pub fn read_signature(cache_root: &Path) -> Option<String> {
+    fs::read_to_string(signature_path(cache_root)).ok()
+}
+
+pub fn write_signature(cache_root: &Path, signature: &str) -> io::Result<()> {
+    fs::write(signature_path(cache_root), signature)
+}
+
+pub fn signature_path(cache_root: &Path) -> PathBuf {
+    let mut path = OsString::from(cache_root.as_os_str());
+    path.push(SIGNATURE_SUFFIX);
+    PathBuf::from(path)
 }
 
 fn named_dir_name(key: &str) -> String {
@@ -125,13 +151,16 @@ pub fn cleanup_orphan_caches() {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let is_orphan = path.is_dir()
-            && path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("Mindrizzle_"));
-        if is_orphan {
-            let _ = fs::remove_dir_all(path); // 忽略清理失败，不影响启动
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.starts_with("Mindrizzle_") {
+            continue;
+        }
+        if path.is_dir() {
+            let _ = fs::remove_dir_all(&path); // 忽略清理失败，不影响启动
+        } else if name.ends_with(SIGNATURE_SUFFIX) {
+            let _ = fs::remove_file(&path); // 忽略清理失败，不影响启动
         }
     }
 }

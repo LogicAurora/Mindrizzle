@@ -625,26 +625,25 @@ async function submitRenameNote() {
   }
 }
 
-// 卡片标题取自归档 meta，只改文件名用户看不出差别，所以标题一起改
+// 卡片标题取自归档 meta，只改文件名用户看不出差别，所以标题跟着文件名一起改
 async function renameNoteSet(
   item: NoteSetItem,
   newName: string,
 ): Promise<void> {
+  const isTitleFollowing = item.name === item.fileName;
   const renamed = await invokeCommand<string>("rename_mdrf_file", {
     ...noteSetArgsOf(item),
     newFileName: newName,
-  });
-  await invokeCommand("set_mdr_file_meta", {
-    fileName: renamed,
-    ...(item.dir ? { dir: item.dir } : {}),
-    ...(item.filePath
-      ? { filePath: renamePathFileName(item.filePath, renamed) }
+    // 用户自定义过标题就保持原样，避免纯改名也把整包重写一遍
+    ...(isTitleFollowing
+      ? {
+          mdrFileInfo: {
+            title: newName,
+            description: item.description,
+            tag: item.tag,
+          },
+        }
       : {}),
-    mdrFileInfo: {
-      title: renamed,
-      description: item.description,
-      tag: item.tag,
-    },
   });
   invalidateNoteSetEntries();
   await applyRenamedNoteSet(item, renamed);
@@ -658,11 +657,12 @@ async function applyRenamedNoteSet(item: NoteSetItem, fileName: string) {
     await loadActiveSection();
     return;
   }
+  const isTitleFollowing = item.name === item.fileName;
   item.fileName = fileName;
   item.filePath = item.filePath
     ? renamePathFileName(item.filePath, fileName)
     : undefined;
-  item.name = fileName;
+  if (isTitleFollowing) item.name = fileName;
   item.updatedAt = Date.now();
 }
 
