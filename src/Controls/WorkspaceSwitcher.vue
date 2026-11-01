@@ -56,7 +56,7 @@ const selectOption = (id: string) => emit('update:modelValue', id)
 <template>
   <v-menu location="bottom start" offset="4">
     <template #activator="{ props: activatorProps }">
-      <v-btn v-bind="activatorProps" variant="text" class="workspace-switcher__trigger text-white">
+      <v-btn v-bind="activatorProps" color="white" variant="text" class="workspace-switcher__trigger">
         <v-icon :icon="mdiFolderOutline" start />
         <span class="workspace-switcher__label">{{ activeOption?.name ?? '默认工作区' }}</span>
         <v-icon :icon="mdiChevronDown" end />

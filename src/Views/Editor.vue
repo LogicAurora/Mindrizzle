@@ -1,40 +1,29 @@
 <template>
   <v-sheet class="editor-wrapper">
+    <!-- md3 给 VBtn 默认 color=primary，VToolbar 只清自己子树内的按钮；teleport 出去的得自己写 color -->
     <Teleport to="#toolbar-actions" defer>
-      <v-btn :loading="isSaving" :icon="mdiContentSave" variant="text" @click="save" />
+      <v-btn :loading="isSaving" :icon="mdiContentSave" color="white" variant="text" @click="save" />
     </Teleport>
     <Teleport to="#title-left-actions" defer>
-      <v-btn :icon="mdiExitToApp" variant="text" @click="$router.push('/set')" />
+      <v-btn :icon="mdiExitToApp" color="white" variant="text" @click="$router.push('/set')" />
     </Teleport>
-    <v-container class="toolbar" style="height: 133px;">
-      <!-- <v-btn @click="save">保存</v-btn> -->
-      <!-- <v-btn @click="load">加载</v-btn> -->
-      <v-btn @click="toggleEditMode">
-        {{ MdrCRef?.isEditMode ? '切换到只读' : '切换到编辑' }}
-      </v-btn>
-      <v-btn @click="toggleMobileSim">
-        {{ mobileButtonLabel }}
-      </v-btn>
-      <v-btn color="error" data-test="delete-selected" @click="deleteSelected"
-        :disabled="!MdrCRef?.isEditMode || MdrCRef?.state.selectedIds.size === 0">
-        删除
-      </v-btn>
-      <v-select
-        class="zoom-select"
-        :model-value="MdrCRef?.zoom ?? 1"
-        :items="ZOOM_OPTIONS"
-        label="缩放"
-        item-title="title"
-        item-value="value"
-        density="compact"
-        variant="outlined"
-        hide-details
-        :disabled="MdrCRef?.mobileMode"
-        @update:model-value="setZoom"
-      />
-    </v-container>
-    
+
     <MdrCanvas class="editor-wrapper" ref="MdrCRef"/>
+    <CanvasSideToolbar
+      :is-edit-mode="isEditMode"
+      :mobile-label="mobileButtonLabel"
+      :can-delete="canOperateSelection"
+      :can-copy="canOperateSelection"
+      :can-paste="isEditMode && clipboardEntries.length > 0"
+      :clipboard="clipboardEntries"
+      :zoom="zoom"
+      @toggle-edit="toggleEditMode"
+      @toggle-mobile="toggleMobileSim"
+      @delete="deleteSelected"
+      @copy="copySelectedBlocks"
+      @paste="pasteEntry"
+      @set-zoom="setZoom"
+    />
 
     <AddBlockPicker v-if="!hasSelection && MdrCRef?.isEditMode" :options="ADD_OPTIONS"
       :model-value="addIdx" :visible="true" @update:model-value="onSelectAdd" />
@@ -51,8 +40,10 @@ import { mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { error as logError } from '@tauri-apps/plugin-log'
-import MdrCanvas, { type ComponentController } from '../Controls/Canvas/Core/MdrCanvas.vue'
+import MdrCanvas from '../Controls/Canvas/Core/MdrCanvas.vue'
 import AddBlockPicker from '../Controls/Canvas/AddBlockPicker.vue'
+import CanvasSideToolbar from '../Controls/Canvas/CanvasToolbar.vue'
+import { clipboardEntries, loadClipboardEntries, pushClipboardEntry, type ClipboardEntry } from '../utils/blockClipboard'
 import { CANVAS_COMPONENTS } from '../Controls/Canvas/Registry/canvasComponents.ts'
 import { screenToContent } from '../utils/canvasCoords'
 import { useRoute } from 'vue-router'
@@ -67,13 +58,14 @@ const noteLoadController = inject(noteLoadControllerKey)
 
 const MdrCRef = ref<InstanceType<typeof MdrCanvas> | null>()
 
-const getComponentRefs = (): Record<string, ComponentController | undefined> =>
-  MdrCRef.value!.componentRefs as unknown as Record<string, ComponentController | undefined>
+const isEditMode = computed(() => MdrCRef.value?.isEditMode ?? false)
+const zoom = computed(() => MdrCRef.value?.zoom ?? 1)
+const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0)
+const canOperateSelection = computed(() => isEditMode.value && hasSelection.value)
 
 // 添加类型单源
 const ADD_OPTIONS = CANVAS_COMPONENTS.map(({ key, title, description, icon, addId }) =>
   ({ key, label: title, description, icon, addId }))
-const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0)
 // 添加类型单选索引
 const addIdx = ref(0)
 const onSelectAdd = (index: number | null) => {
@@ -137,8 +129,9 @@ const onMouseUp = (e: MouseEvent) => {
 }
 
 const mobileButtonLabel = computed(() => {
-  if (MdrCRef.value?.forceMobile === null) return '模拟移动端'
-  return MdrCRef.value?.forceMobile ? '强制桌面' : '恢复自动布局'
+  const forced = MdrCRef.value?.forceMobile
+  if (forced === null) return '自动布局'
+  return forced ? '移动端' : '桌面端'
 })
 
 const toggleMobileSim = () => {
@@ -152,17 +145,20 @@ const toggleEditMode = () => {
   MdrCRef.value!.isEditMode = !MdrCRef.value!.isEditMode
 }
 
-const ZOOM_OPTIONS = [
-  { title: '50%', value: 0.5 },
-  { title: '100%', value: 1 },
-  { title: '200%', value: 2 },
-  { title: '300%', value: 3 },
-] as const
-
 // 中转一次，避免模板里写嵌套 ref 赋值
-const setZoom = (v: number | null) => {
-  if (typeof v !== 'number' || v <= 0) return
-  MdrCRef.value!.zoom = v
+const setZoom = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return
+  MdrCRef.value!.zoom = value
+}
+
+const copySelectedBlocks = () => {
+  const snapshot = MdrCRef.value?.copySelection()
+  if (!snapshot) return
+  pushClipboardEntry(snapshot)
+}
+
+const pasteEntry = (entry: ClipboardEntry) => {
+  MdrCRef.value?.pasteBlocks(entry)
 }
 
 const route = useRoute()
@@ -203,12 +199,7 @@ const load = async () => {
 }
 
 const deleteSelected = () => {
-  if (!MdrCRef.value?.isEditMode || MdrCRef.value.state.selectedIds.size === 0) return
-  const ids = Array.from(MdrCRef.value!.state.selectedIds)
-  MdrCRef.value!.state.items = MdrCRef.value!.state.items.filter((it) => !ids.includes(it.uuid))
-  MdrCRef.value!.state.selectedIds = new Set()
-  const refs = getComponentRefs()
-  ids.forEach(id => { delete refs[id] })
+  MdrCRef.value?.deleteSelected()
 }
 
 const initializeEditor = async () => {
@@ -232,6 +223,7 @@ const initializeEditor = async () => {
 }
 
 onMounted(() => {
+  loadClipboardEntries()
   void initializeEditor()
   // 选字可能跨出编辑器，所以挂 window 级 mouseup
   window.addEventListener('mouseup', onMouseUp)
@@ -254,22 +246,4 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.toolbar {
-  flex-shrink: 0;
-  padding: 8px 16px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-}
-
-.zoom-select {
-  width: 110px;
-  margin: 0 8px;
-}
-
-/* 未选中按钮背景与工具栏同色、看不出边界，所以补半透明底色 */
-.v-btn-toggle :deep(.v-btn:not(.v-btn--selected)) {
-  background: rgba(var(--v-theme-on-surface), 0.06);
-}
 </style>

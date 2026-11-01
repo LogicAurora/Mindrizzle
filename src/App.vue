@@ -251,12 +251,15 @@ watch(appTitle, (nextTitle) => {
   titleSwitchTimer = window.setTimeout(() => { displayedTitle.value = nextTitle }, settleDelay)
 })
 
-// 菜单点击要先同步关抽屉，否则路由已经变了才知道要等，退场时刻就晚了
-function navigateFromMenu(path: string) {
-  menuRef.value = false
-  // 侧栏在底部时不跟标题争位置，等它退完反而显得拖
+function setDrawerOpen(open: boolean) {
+  if (menuRef.value === open) return
+  menuRef.value = open
+  if (open) return
   drawerClosedAt = isMobileLayout.value ? 0 : performance.now()
-  // 重复导航只是没跳，不需要打扰用户
+}
+
+function navigateFromMenu(path: string) {
+  setDrawerOpen(false)
   router.push(path).catch(() => undefined)
 }
 </script>
@@ -302,7 +305,7 @@ function navigateFromMenu(path: string) {
     </v-toolbar>
 
 
-    <v-navigation-drawer v-model="menuRef" :location="$vuetify.display.mobile ? 'bottom' : undefined" temporary>
+    <v-navigation-drawer v-model="menuRef" :location="isMobileLayout ? 'bottom' : undefined" temporary>
       <v-list :lines="false" density="compact" nav>
         <v-list-item :prepend-icon="mdiFormatListBulleted" title="便签集" @click="navigateFromMenu('/set')" />
         <v-list-item :prepend-icon="mdiCalendarBlankOutline" title="记事板" @click="navigateFromMenu('/board')" />
@@ -475,6 +478,11 @@ textarea {
 /* tab 行铺在 primary 底上，且 teleport 后拿不到工具栏的 VBtn 默认值，所以文字自己跟标题一样用白色 */
 #toolbar-tabs .v-tab {
   color: #fff;
+}
+
+/* md3 蓝图给 VBtn 默认 primary 底色，切选中时背景走 0.28s 渐变而文字色瞬切，白字会短暂浮在浅底上闪一下 */
+.v-btn-toggle .v-btn {
+  transition-property: box-shadow, transform, opacity, border-radius;
 }
 
 /* border 会撑高 2px 被 #app 裁掉、outline 会被定位子元素盖住，所以用最高层级绝对定位覆盖层画描边 */

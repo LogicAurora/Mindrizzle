@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-30 -->
+<!-- 最后验证: 2026-11-01 -->
 # 02 跨组件契约
 
 > 这个系统真正的接口不是函数签名，而是**事件名和 DOM 选择器**。改任何名字前先查这两张表。
@@ -86,7 +86,7 @@ flowchart LR
 ```mermaid
 flowchart TB
   subgraph 定义方
-    MC["MdrCanvas 定义<br/>.canvas-container<br/>.canvas<br/>.handle-tm<br/>.selected-outline"]
+    MC["MdrCanvas 定义<br/>.canvas-container<br/>.canvas<br/>.handle-tm<br/>.selected-outline<br/>.selected-outline-union<br/>.outline-band-outer<br/>.outline-band-inner"]
     MCB["MdrCanvasComponentBase 定义<br/>.floating-handle<br/>.side-settings<br/>.block-container"]
     RB["ResizeBox 定义<br/>.drag-wrapper[data-uuid]"]
     RTE["RichTextEditor 定义<br/>.editor-wrapper<br/>.editor-scroll<br/>.editor-scroll-shell<br/>.custom-scrollbar"]
@@ -134,6 +134,8 @@ flowchart TB
 | `.block-handle-popup[data-uuid]` | block-handle | block-handle / useBlockDrag |
 | `.block-handle-positioner[data-owner]` | block-handle | blockHandleUtils |
 | `.handle-tm` / `.floating-handle` / `.side-settings` | MdrCanvas（`.handle-tm`）/ MdrCanvasComponentBase（浮层） | useHoverState / useHoverUi |
+| `.selected-outline[data-uuid]` | MdrCanvas | MdrCanvas（单选描边环、拖拽期命令式跟随） |
+| `.selected-outline-union` / `.outline-band-outer` / `.outline-band-inner` | MdrCanvas | MdrCanvas（多选并集轮廓、拖拽期命令式跟随；整层画不出归属块，故 z 恒低于拖拽栏） |
 | `.custom-scrollbar` / `.editor-scroll-shell` | RichTextEditor | block-handle |
 
 ## 维护提示

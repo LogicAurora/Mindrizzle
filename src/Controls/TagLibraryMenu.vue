@@ -145,8 +145,8 @@ function onCustomColor(entry: TagEntry, event: Event) {
       <v-btn
         v-bind="activatorProps"
         aria-label="标签库"
+        color="white"
         :icon="mdiTagMultipleOutline"
-        class="text-white"
         variant="text"
       />
     </template>

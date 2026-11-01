@@ -2,9 +2,15 @@
 import { invokeCommand } from './invoke'
 import { getCurrentNote } from './noteContext'
 
+export interface NoteLocation {
+  fileName: string
+  dir?: string
+  filePath?: string
+}
+
 // 外部文件与自定义工作区靠 dir/filePath 定位，组件数据命令必须带上同一份上下文
-const noteSourceOf = (): { dir?: string; filePath?: string } => {
-  const { dir, filePath } = getCurrentNote()
+const noteSourceOf = (location?: NoteLocation): { dir?: string; filePath?: string } => {
+  const { dir, filePath } = location ?? getCurrentNote()
   return { dir, filePath }
 }
 
@@ -84,10 +90,13 @@ export function parseMdrfcdUrl(url: string): MdrfcdLocation {
 /** 组件私有文件入口：URL 对应 `.mdrf` 归档内 `ComponentsData/<组件 UUID>/<相对路径>`。 */
 export class ComponentDataStore {
   private readonly fileName: string
+  // 跨笔记粘贴要读来源笔记里的资产，缺省沿用当前编辑的笔记
+  private readonly location?: NoteLocation
 
-  constructor(fileName: string = getCurrentNote().fileName) {
+  constructor(fileName: string = getCurrentNote().fileName, location?: NoteLocation) {
     // 缺省绑定编辑页写入的当前笔记，显式传参便于测试或跨笔记操作
     this.fileName = fileName
+    this.location = location
   }
 
   urlOf(uuid: string, path: string): string {
@@ -103,14 +112,16 @@ export class ComponentDataStore {
     validateComponentPath(location.path)
     const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content
     await invokeCommand('write_component_data_file', {
-      request: { ...location, ...noteSourceOf(), contentBase64: encodeBase64(bytes) },
+      request: { ...location, ...noteSourceOf(this.location), contentBase64: encodeBase64(bytes) },
     })
   }
 
   async readFile(url: string): Promise<Uint8Array> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
-    const encoded = await invokeCommand<string>('read_component_data_file', { request: { ...location, ...noteSourceOf() } })
+    const encoded = await invokeCommand<string>('read_component_data_file', {
+      request: { ...location, ...noteSourceOf(this.location) },
+    })
     return decodeBase64(encoded)
   }
 
@@ -123,20 +134,24 @@ export class ComponentDataStore {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
     await invokeCommand('export_component_data_file', {
-      request: { ...location, ...noteSourceOf(), targetPath },
+      request: { ...location, ...noteSourceOf(this.location), targetPath },
     })
   }
 
   async deleteFile(url: string): Promise<void> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
-    await invokeCommand('delete_component_data_file', { request: { ...location, ...noteSourceOf() } })
+    await invokeCommand('delete_component_data_file', {
+      request: { ...location, ...noteSourceOf(this.location) },
+    })
   }
 
   async hasFile(url: string): Promise<boolean> {
     const location = parseMdrfcdUrl(url)
     validateComponentPath(location.path)
-    return invokeCommand<boolean>('component_data_file_exists', { request: { ...location, ...noteSourceOf() } })
+    return invokeCommand<boolean>('component_data_file_exists', {
+      request: { ...location, ...noteSourceOf(this.location) },
+    })
   }
 
   async listFiles(scope: string): Promise<string[]> {
@@ -148,18 +163,23 @@ export class ComponentDataStore {
       throw new Error('组件数据范围非法')
     }
     return invokeCommand<string[]>('list_component_data_files', {
-      request: { fileName: location.fileName, uuid: location.uuid, ...noteSourceOf() },
+      request: { fileName: location.fileName, uuid: location.uuid, ...noteSourceOf(this.location) },
     })
   }
 }
 
-// 富文本嵌入节点拖出成块时要换 uuid，数据目录得跟着搬；抽出是低频操作，逐个写回可接受
-export async function copyComponentFiles(sourceUuid: string, targetUuid: string): Promise<void> {
+// 嵌入节点拖出、跨笔记粘贴都要换 uuid，数据目录得跟着搬；低频操作，逐个写回可接受
+export async function copyComponentFiles(
+  sourceUuid: string,
+  targetUuid: string,
+  source?: NoteLocation,
+): Promise<void> {
   if (!sourceUuid || !targetUuid || sourceUuid === targetUuid) return
-  const store = new ComponentDataStore()
-  const files = await store.listFiles(sourceUuid)
+  const sourceStore = new ComponentDataStore(source?.fileName, source)
+  const targetStore = new ComponentDataStore()
+  const files = await sourceStore.listFiles(sourceUuid)
   for (const path of files) {
-    const bytes = await store.readFile(store.urlOf(sourceUuid, path))
-    await store.writeFile(store.urlOf(targetUuid, path), bytes)
+    const bytes = await sourceStore.readFile(sourceStore.urlOf(sourceUuid, path))
+    await targetStore.writeFile(targetStore.urlOf(targetUuid, path), bytes)
   }
 }

@@ -1,6 +1,7 @@
 import { createVuetify } from 'vuetify'
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 import 'vuetify/styles'
+import { md3 } from 'vuetify/blueprints'
 
 const vuetify = createVuetify({
   theme: {
@@ -13,6 +14,7 @@ const vuetify = createVuetify({
       mdi,
     },
   },
+  blueprint: md3,
   defaults: {
     global: {
       density: 'comfortable',

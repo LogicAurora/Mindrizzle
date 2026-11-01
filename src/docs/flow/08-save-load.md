@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-10-31 -->
 # 08 序列化与兼容
 
 ## 图 8.1 save 数据流
@@ -72,6 +72,29 @@ flowchart TD
 - 网页端上传的 `.mdrf` 解包后只作为**外部文件副本**存进 IndexedDB（不写文件索引），打开与保存都按副本名读写。
 - 「移动到工作区」：桌面端由 `move_mdrf_file` 把归档移进目标目录并从外部列表移除；网页端 `moveLocalNoteToWorkspace` 把副本名补进文件索引。
 
+## 图 8.4 跨画布剪贴板
+
+```mermaid
+flowchart TD
+  A["copySelection()"] --> B["选中块快照 + 选中集内的 links"]
+  B --> C["pushClipboardEntry 补 source/createdAt"]
+  C --> D["localStorage 持久化，最多 20 条"]
+  D --> E["pasteBlocks(entry)"]
+  E --> F{"来源笔记 == 当前笔记？"}
+  F -->|是| G["原坐标起步，与现有块重叠则 +32 递推"]
+  F -->|否| H["落到当前视口中心"]
+  G --> I["新 uuid 建块"]
+  H --> I
+  I --> J["copyComponentFiles 按 source 搬资产"]
+  J --> K["links 映射到新 uuid"]
+  K --> L["选中新块 + recomputeMasks"]
+```
+
+- 剪贴板是应用级共享数据（`src/utils/blockClipboard.ts`），跨便签保留历史；内容相同的复制只刷新时间并提到最前。
+- 块只看 `config` / `layout` / `arranged`，不依赖原块实例；粘贴后原块再改不会影响已复制内容。
+- 资产文件按 `source`（fileName + dir/filePath）定位：`ComponentDataStore` 支持显式传入来源笔记，`copyComponentFiles` 从源笔记读、写入当前笔记。
+- 移动端粘贴 x 恒 0，不做横向偏移与重叠避让。
+
 ## 兼容规则速查
 - 块标识字段为 `uuid`（放置时生成、持久化），不做旧 `id` 字段兼容
 - 旧扁平格式（`it.x/y/w/h`）→ 转为 `layout.desktop`
@@ -83,3 +106,4 @@ flowchart TD
 
 - 新增字段 → 更新图 8.1、8.3
 - 改兼容规则 → 更新图 8.3 + 加测试
+- 改复制/粘贴语义 → 更新图 8.4

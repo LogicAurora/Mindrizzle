@@ -468,15 +468,15 @@ function formatUpdatedAt(timestamp: number): string {
       {{ hint }}
     </v-snackbar>
     <div class="note-sets-scroll pa-4">
-      <template v-if="isLoading">
-        <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" class="mb-4" />
-      </template>
+      <div v-if="isLoading" class="note-sets-grid">
+        <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" />
+      </div>
       <v-empty-state v-else-if="noteSets.length === 0"
         :icon="activeSection.kind === 'external' ? mdiFileDocumentOutline : mdiNoteOffOutline"
         :title="activeSection.kind === 'external' ? '还没有打开过外部文件' : '还没有便签……'"
         :text="activeSection.kind === 'external' ? '点击右下角按钮打开 .mdrf 文件' : '点击右下角的按钮创建新的便签集'" />
-      <v-list v-else class="overflow-visible">
-        <v-card v-for="noteSet in visibleNoteSets" :key="`${noteSet.dir ?? ''}|${noteSet.filePath ?? ''}|${noteSet.fileName}`" class="mb-4">
+      <div v-else class="note-sets-grid">
+        <v-card v-for="noteSet in visibleNoteSets" :key="`${noteSet.dir ?? ''}|${noteSet.filePath ?? ''}|${noteSet.fileName}`" class="note-sets-card">
           <v-card-title>
             {{ noteSet.name }}
           </v-card-title>
@@ -542,8 +542,8 @@ function formatUpdatedAt(timestamp: number): string {
             ></v-btn>
           </v-card-actions>
         </v-card>
-        <div ref="listSentinel" />
-      </v-list>
+        <div ref="listSentinel" class="note-sets-grid__sentinel" />
+      </div>
     </div>
     <input ref="uploadInput" type="file" accept=".mdrf" class="d-none" @change="onUploadSelected" />
     <div class="speed-dial-anchor">
@@ -592,8 +592,16 @@ function formatUpdatedAt(timestamp: number): string {
 </template>
 
 <style scoped>
+/* 便签纸质感：细横线 + 一条页边线 + 主题柔光，避免冷硬的工程网格 */
 .note-sets-page {
   height: 100%;
+  background-image:
+    radial-gradient(1200px 600px at 88% -10%, rgba(var(--v-theme-primary), 0.1), transparent 70%),
+    linear-gradient(90deg, rgba(var(--v-theme-primary), 0.14) 0 1px, transparent 1px),
+    repeating-linear-gradient(180deg, transparent 0 27px, rgba(var(--v-theme-primary), 0.09) 27px 28px);
+  background-position: 0 0, 40px 0, 0 0;
+  background-repeat: no-repeat, repeat-y, repeat;
+  background-size: auto, 100% 100%, 100% 28px;
 }
 
 /* VFab 的 app 定位在 speed dial 的 activator 插槽里拿不到 VApp 布局上下文，所以自己固定在右下角 */
@@ -602,6 +610,29 @@ function formatUpdatedAt(timestamp: number): string {
   right: 16px;
   bottom: 16px;
   z-index: 1005;
+}
+
+/* 列宽随内容区自适应，窗口变窄时自然减少列数而不是把卡片挤瘦 */
+.note-sets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* 同行卡片由 grid 拉齐，描述区吃满剩余高度，操作栏统一贴底 */
+.note-sets-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.note-sets-card :deep(.v-card-text) {
+  flex: 1 1 auto;
+}
+
+/* 哨兵不占列位，否则会白白多出一格 */
+.note-sets-grid__sentinel {
+  grid-column: 1 / -1;
 }
 
 /* 滚动交给列表自身：页面容器留在原位，FAB 与路由内容不随滚动移位 */
@@ -624,5 +655,11 @@ function formatUpdatedAt(timestamp: number): string {
 
 .note-sets-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@media (max-width: 599px) {
+  .note-sets-grid {
+    gap: 12px;
+  }
 }
 </style>

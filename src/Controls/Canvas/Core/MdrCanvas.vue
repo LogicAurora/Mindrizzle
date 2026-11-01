@@ -25,11 +25,31 @@
       </v-fade-transition>
 
       <!-- 描边需在拖拽栏之上保持连贯，所以用独立高层 overlay 渲染（data-uuid 供拖拽期命令式跟随） -->
-      <template v-for="item in selectedOutlineItems" :key="`outline-${item.uuid}`">
+      <template v-for="item in outlineRingItems" :key="`outline-${item.uuid}`">
         <v-fade-transition :duration="120">
           <div class="selected-outline" :data-uuid="item.uuid" :style="selectedOutlineStyle(item)" />
         </v-fade-transition>
       </template>
+
+      <!-- 多块贴合时各自外扩 2px 会在接触边叠成 4px 粗线，所以改为并集轮廓：外扩矩形盖白、块矩形挖黑 -->
+      <!-- 并集是一整层画不出归属块，若取 outline 会盖住多选时悬停出的拖拽栏，所以降到拖拽栏下一层 -->
+      <v-fade-transition :duration="120">
+        <svg v-if="outlineBands.length" class="selected-outline-union" :style="{ zIndex: Z_LAYER.dragHandle - 1 }" aria-hidden="true">
+          <defs>
+            <mask :id="outlineMaskId" maskUnits="userSpaceOnUse" :x="outlineBounds.x" :y="outlineBounds.y"
+              :width="outlineBounds.w" :height="outlineBounds.h">
+              <rect v-for="band in outlineBands" :key="`outer-${band.uuid}`" class="outline-band-outer"
+                :data-uuid="band.uuid" :x="band.outer.x" :y="band.outer.y" :width="band.outer.w" :height="band.outer.h"
+                :rx="OUTLINE_RADIUS" fill="#fff" />
+              <rect v-for="band in outlineBands" :key="`inner-${band.uuid}`" class="outline-band-inner"
+                :data-uuid="band.uuid" :x="band.inner.x" :y="band.inner.y" :width="band.inner.w" :height="band.inner.h"
+                :rx="ROUNDED" fill="#000" />
+            </mask>
+          </defs>
+          <rect class="selected-outline-union-fill" :x="outlineBounds.x" :y="outlineBounds.y" :width="outlineBounds.w"
+            :height="outlineBounds.h" :mask="`url(#${outlineMaskId})`" />
+        </svg>
+      </v-fade-transition>
 
       <div v-if="richTextDropTargetId" class="rich-text-drop-target"
         :style="richTextDropTargetStyle" aria-hidden="true" />
@@ -69,7 +89,7 @@ export type {
 </script>
 
 <script setup lang="ts">
-import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, watch, markRaw, type Component, type CSSProperties } from 'vue'
+import { reactive, ref, shallowRef, nextTick, onMounted, onUnmounted, computed, watch, markRaw, useId, type Component, type CSSProperties } from 'vue'
 
 import { mdiPaperclip, mdiArrowUp } from '@mdi/js'
 import {
@@ -106,8 +126,15 @@ import { isTauri } from '@tauri-apps/api/core'
 import { error as logError } from '@tauri-apps/plugin-log'
 import { roundToVisual, contentToScreen, screenToContent, contentToVisual, type CanvasTransform, type Point, type ViewportOrigin } from '../../../utils/canvasCoords.ts'
 import { generateBlockUuid } from '../../../utils/blockUuid.ts'
+import type {
+  ClipboardBlock,
+  ClipboardEntry,
+  ClipboardSnapshot,
+  ClipboardSource,
+} from '../../../utils/blockClipboard.ts'
 import { copyComponentFiles } from '../../../utils/componentDataStore.ts'
 import { getErrorMessage } from '../../../utils/getErrorMessage.ts'
+import { getCurrentNote } from '../../../utils/noteContext.ts'
 import { getVisibleBlockRect, isFullyVisibleInCanvas, invalidateCanvasScaleCache } from '../Components/RichEditor/extensions/blockHandleUtils.ts'
 
 import { useDisplay } from 'vuetify'
@@ -995,6 +1022,13 @@ interface DragDomEntry {
 let dragDom = new Map<string, DragDomEntry>()
 let dragHandleEl: HTMLElement | null = null
 let dragSettingsEl: HTMLElement | null = null
+interface UnionOutlineDom {
+  mask: SVGMaskElement | null
+  fill: SVGRectElement | null
+  outers: Map<string, SVGRectElement>
+  inners: Map<string, SVGRectElement>
+}
+let unionOutlineDom: UnionOutlineDom | null = null
 // 联结线等由 layout 推导的浮层只走响应式路径，所以存在链接时退回逐帧重渲染
 let dragNeedsRender = false
 
@@ -1012,11 +1046,32 @@ const indexByUuid = (root: HTMLElement, selector: string) => {
   return map
 }
 
+const indexBands = (root: Element, selector: string) => {
+  const map = new Map<string, SVGRectElement>()
+  root.querySelectorAll<SVGRectElement>(selector).forEach((el) => {
+    const uuid = el.dataset.uuid
+    if (uuid) map.set(uuid, el)
+  })
+  return map
+}
+
+const cacheUnionOutlineDom = (canvas: HTMLElement) => {
+  const svg = canvas.querySelector<SVGSVGElement>('.selected-outline-union')
+  if (!svg) return null
+  return {
+    mask: svg.querySelector('mask'),
+    fill: svg.querySelector<SVGRectElement>('.selected-outline-union-fill'),
+    outers: indexBands(svg, '.outline-band-outer'),
+    inners: indexBands(svg, '.outline-band-inner'),
+  }
+}
+
 const cacheDragDom = () => {
   const canvas = canvasRef.value
   dragDom = new Map()
   dragHandleEl = null
   dragSettingsEl = null
+  unionOutlineDom = null
   if (!canvas) return
   const wrappers = indexByUuid(canvas, '.drag-wrapper')
   const outlines = indexByUuid(canvas, '.selected-outline')
@@ -1026,6 +1081,32 @@ const cacheDragDom = () => {
   })
   dragHandleEl = sourceId ? indexByUuid(canvas, '.floating-handle').get(sourceId) ?? null : null
   dragSettingsEl = sourceId ? indexByUuid(canvas, '.side-settings').get(sourceId) ?? null : null
+  unionOutlineDom = cacheUnionOutlineDom(canvas)
+}
+
+const setRectAttrs = (el: Element | null, rect: Rect) => {
+  if (!el) return
+  el.setAttribute('x', String(rect.x))
+  el.setAttribute('y', String(rect.y))
+  el.setAttribute('width', String(rect.w))
+  el.setAttribute('height', String(rect.h))
+}
+
+// 多选轮廓的遮罩同属 layout 派生，拖拽期需与块同步平移，否则轮廓会被旧的遮罩边界裁掉
+const syncUnionOutlineDom = () => {
+  if (!unionOutlineDom) return
+  const bands: OutlineBand[] = []
+  unionOutlineDom.outers.forEach((el, uuid) => {
+    const item = customDragItems.get(uuid)
+    if (!item) return
+    const band = outlineBandOf(item)
+    setRectAttrs(el, band.outer)
+    setRectAttrs(unionOutlineDom?.inners.get(uuid) ?? null, band.inner)
+    bands.push(band)
+  })
+  if (!bands.length) return
+  setRectAttrs(unionOutlineDom.mask, outlineBoundsOf(bands))
+  setRectAttrs(unionOutlineDom.fill, outlineBoundsOf(bands))
 }
 
 const syncDragDom = () => {
@@ -1041,12 +1122,14 @@ const syncDragDom = () => {
   const geometry = { layout: layoutOf(source), placement: placementOf(source), round: roundToPx }
   if (dragHandleEl) applyElStyle(dragHandleEl, handleBarStyleOf(geometry))
   if (dragSettingsEl) applyElStyle(dragSettingsEl, sideSettingsStyleOf(geometry))
+  syncUnionOutlineDom()
 }
 
 const clearDragDom = () => {
   dragDom = new Map()
   dragHandleEl = null
   dragSettingsEl = null
+  unionOutlineDom = null
 }
 
 // 拖拽中不递增版本号（靠命令式写 DOM），所以 layout 变更后必须显式同步一次
@@ -2506,6 +2589,56 @@ const selectedOutlineItems = computed(() =>
   isEditMode.value ? state.items.filter((it) => state.selectedIds.has(it.uuid)) : []
 )
 
+// 描边环外扩 OUTLINE_PX，外圆角须同步变大才不露块自身的尖角
+const OUTLINE_RADIUS = OUTLINE_PX + ROUNDED
+// 遮罩边界须比轮廓外扩一圈，避免抗锯齿边被裁
+const OUTLINE_MASK_PAD = 8
+
+interface OutlineBand {
+  uuid: string
+  outer: Rect
+  inner: Rect
+}
+
+const outlineBandOf = (item: CanvasItem): OutlineBand => {
+  const l = layoutOf(item)
+  const expand = roundToPx(OUTLINE_PX)
+  const x = roundToPx(l.x)
+  const y = roundToPx(l.y)
+  const w = roundToPx(l.w)
+  const h = roundToPx(l.h)
+  return {
+    uuid: item.uuid,
+    outer: { x: x - expand, y: y - expand, w: w + expand * 2, h: h + expand * 2 },
+    inner: { x, y, w, h },
+  }
+}
+
+const outlineBoundsOf = (bands: OutlineBand[]): Rect => {
+  const minX = Math.min(...bands.map((band) => band.outer.x))
+  const minY = Math.min(...bands.map((band) => band.outer.y))
+  const maxX = Math.max(...bands.map((band) => band.outer.x + band.outer.w))
+  const maxY = Math.max(...bands.map((band) => band.outer.y + band.outer.h))
+  return {
+    x: minX - OUTLINE_MASK_PAD,
+    y: minY - OUTLINE_MASK_PAD,
+    w: maxX - minX + OUTLINE_MASK_PAD * 2,
+    h: maxY - minY + OUTLINE_MASK_PAD * 2,
+  }
+}
+
+// 多选的外扩环会在贴合边互相压住叠成粗线，所以并集轮廓只在单块时退化为普通环
+const outlineBands = computed<OutlineBand[]>(() => {
+  void layoutVersion.value
+  const items = selectedOutlineItems.value
+  return items.length > 1 ? items.map(outlineBandOf) : []
+})
+const outlineBounds = computed(() =>
+  outlineBands.value.length ? outlineBoundsOf(outlineBands.value) : { x: 0, y: 0, w: 0, h: 0 },
+)
+const outlineRingItems = computed(() => (outlineBands.value.length ? [] : selectedOutlineItems.value))
+const outlineMaskId = `md-outline-mask-${useId()}`
+
 const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
   startCustomDrag(item, e)
 }
@@ -3188,6 +3321,144 @@ const load = async (raw: string) => {
 }
 // #endregion 保存与加载
 
+// #region 块复制与粘贴
+const PASTE_OFFSET = 32
+const PASTE_MAX_ATTEMPTS = 24
+
+const copySelection = (): ClipboardSnapshot | null => {
+  const selected = selectedBlockItems()
+  if (!selected.length) return null
+  const ids = new Set(selected.map((item) => item.uuid))
+  return {
+    // config 只在复制瞬间取值，之后原块怎么改都不影响剪贴板
+    blocks: selected.map((item) => ({
+      uuid: item.uuid,
+      component: item.component,
+      config: JSON.parse(JSON.stringify(item.config)),
+      layout: { desktop: { ...item.layout.desktop }, mobile: { ...item.layout.mobile } },
+      arranged: { ...item.arranged },
+    })),
+    links: Array.from(linkedPairs.value).filter((key) => key.split('|').every((id) => ids.has(id))),
+  }
+}
+
+const clipboardCenterOf = (blocks: ClipboardBlock[]): Point => {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  blocks.forEach((block) => {
+    const rect = block.layout.desktop
+    minX = Math.min(minX, rect.x)
+    minY = Math.min(minY, rect.y)
+    maxX = Math.max(maxX, rect.x + rect.w)
+    maxY = Math.max(maxY, rect.y + rect.h)
+  })
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
+}
+
+const isSameNote = (source: ClipboardSource): boolean => {
+  const current = getCurrentNote()
+  return current.fileName === source.fileName
+    && (current.dir ?? '') === (source.dir ?? '')
+    && (current.filePath ?? '') === (source.filePath ?? '')
+}
+
+const viewportCenterInContent = (): Point | null => {
+  const rect = canvasContainerRef.value?.getBoundingClientRect()
+  if (!rect) return null
+  return screenToContent(canvasTransform(), rect, rect.left + rect.width / 2, rect.top + rect.height / 2)
+}
+
+const overlapsAt = (rect: Rect): boolean =>
+  state.items.some((item) => {
+    const l = layoutOf(item)
+    return rect.x < l.x + l.w && rect.x + rect.w > l.x && rect.y < l.y + l.h && rect.y + rect.h > l.y
+  })
+
+const groupOverlaps = (blocks: ClipboardBlock[], dx: number, dy: number): boolean =>
+  blocks.some((block) => {
+    const rect = block.layout.desktop
+    return overlapsAt({ x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h })
+  })
+
+// 同笔记沿原位置错开，跨笔记落到当前视口中心，否则可能粘到看不见的坐标
+const resolvePasteOffset = (blocks: ClipboardBlock[], source: ClipboardSource): { dx: number; dy: number } => {
+  const center = clipboardCenterOf(blocks)
+  const target = isSameNote(source) ? center : (viewportCenterInContent() ?? center)
+  let dx = Math.round(target.x - center.x)
+  let dy = Math.round(target.y - center.y)
+  // 移动端块宽贴屏且纵向堆叠，横向偏移毫无意义，也谈不上重叠
+  if (mobileMode.value) return { dx: 0, dy }
+  for (let attempt = 0; attempt < PASTE_MAX_ATTEMPTS && groupOverlaps(blocks, dx, dy); attempt++) {
+    dx += PASTE_OFFSET
+    dy += PASTE_OFFSET
+  }
+  return { dx, dy }
+}
+
+const buildPastedItem = (
+  block: ClipboardBlock,
+  uuid: string,
+  offset: { dx: number; dy: number },
+): CanvasItem => markRaw({
+  uuid,
+  component: block.component,
+  config: JSON.parse(JSON.stringify(block.config)),
+  layout: {
+    desktop: {
+      x: block.layout.desktop.x + offset.dx,
+      y: block.layout.desktop.y + offset.dy,
+      w: block.layout.desktop.w,
+      h: block.layout.desktop.h,
+    },
+    mobile: {
+      x: 0,
+      y: block.layout.mobile.y + offset.dy,
+      w: block.layout.mobile.w,
+      h: block.layout.mobile.h,
+    },
+  },
+  arranged: { ...block.arranged },
+})
+
+const linkPastedPairs = (links: string[], uuidMap: Map<string, string>): void => {
+  links.forEach((key) => {
+    const [first, second] = key.split('|')
+    const nextFirst = uuidMap.get(first)
+    const nextSecond = uuidMap.get(second)
+    if (nextFirst && nextSecond) linkedPairs.value.add(pairKey(nextFirst, nextSecond))
+  })
+}
+
+const copyPastedAssets = (blocks: ClipboardBlock[], uuidMap: Map<string, string>, source: ClipboardSource): void => {
+  blocks.forEach((block) => {
+    const uuid = uuidMap.get(block.uuid)
+    if (!uuid) return
+    void copyComponentFiles(block.uuid, uuid, source).catch((cause: unknown) => {
+      if (isTauri()) void logError(`粘贴组件数据失败：${getErrorMessage(cause)}`)
+    })
+  })
+}
+
+const pasteBlocks = (entry: ClipboardEntry): void => {
+  if (!isEditMode.value || !entry.blocks.length) return
+  const offset = resolvePasteOffset(entry.blocks, entry.source)
+  const uuidMap = new Map<string, string>()
+  const created: string[] = []
+  entry.blocks.forEach((block) => {
+    const uuid = generateBlockUuid()
+    uuidMap.set(block.uuid, uuid)
+    created.push(uuid)
+    const item = buildPastedItem(block, uuid, offset)
+    state.items.push(item)
+    if (mobileMode.value && canvasWidth.value > 0) stretchMobileWidth(item)
+    bringToTop(uuid)
+  })
+  linkPastedPairs(entry.links, uuidMap)
+  copyPastedAssets(entry.blocks, uuidMap, entry.source)
+  state.selectedIds = new Set(created)
+  recomputeMasks()
+}
+// #endregion 块复制与粘贴
+
 // #region 命令与生命周期
 const batchToggleHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
   Array.from(state.selectedIds).forEach((id) => {
@@ -3284,6 +3555,8 @@ defineExpose({
   setComponentRef,
   addComponent,
   setAddPreview,
+  copySelection,
+  pasteBlocks,
   save,
   load,
   rebaseOrigin,
@@ -3368,6 +3641,21 @@ defineExpose({
   box-sizing: border-box;
   /* 描边环比块边缘外扩 2px，圆角取块自身 4px + 2px 才不露尖角 */
   border-radius: 6px;
+}
+
+/* 多选并集轮廓：遮罩内的白矩形=外扩块、黑矩形=块本体，填色后只剩 2px 并集环（--v-theme-primary 须经 rgb() 包裹） */
+.selected-outline-union {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.selected-outline-union-fill {
+  fill: rgb(var(--v-theme-primary));
 }
 
 .rich-text-drop-target {
