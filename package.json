@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/roboto": "^5.3.0",
     "@material/material-color-utilities": "^0.4.0",
     "@mdi/js": "^7.4.47",
     "@prosekit/core": "^0.13.4",
