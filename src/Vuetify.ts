@@ -2,8 +2,12 @@ import { createVuetify } from "vuetify";
 import { aliases, mdi } from "vuetify/iconsets/mdi-svg";
 import "vuetify/styles";
 import { md3 } from "vuetify/blueprints";
+import { VLoadingIndicator } from 'vuetify/labs/VLoadingIndicator'
 
 const vuetify = createVuetify({
+  components: {
+    VLoadingIndicator,
+  },
   theme: {
     defaultTheme: "light",
   },

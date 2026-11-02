@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   mdiBug,
+  mdiClose,
   mdiWindowMinimize,
   mdiWindowMaximize,
   mdiWindowClose,
@@ -27,6 +28,7 @@ import { useRoute, useRouter, type RouteLocationRaw } from "vue-router";
 import { error as logError } from "@tauri-apps/plugin-log";
 
 import { getErrorMessage } from "./utils/getErrorMessage";
+import { toolbarSelectionKey } from "./utils/toolbarSelection";
 
 if (isTauri()) {
   attachConsole();
@@ -206,6 +208,32 @@ async function startEditorTransition(
 
 provide(startEditorTransitionKey, startEditorTransition);
 
+const isSelectionMode = ref(false);
+const selectionCount = ref(0);
+let exitSelectionHandler: (() => void) | null = null;
+
+function clearToolbarSelection() {
+  if (!isSelectionMode.value) return;
+  isSelectionMode.value = false;
+  selectionCount.value = 0;
+  exitSelectionHandler = null;
+}
+
+// 页面只负责报数量和退出回调，工具栏的配色/标题/关闭按钮统一由这里渲染
+provide(toolbarSelectionKey, {
+  setSelection(count: number, onExit: () => void) {
+    isSelectionMode.value = true;
+    selectionCount.value = count;
+    exitSelectionHandler = onExit;
+  },
+  clearSelection: clearToolbarSelection,
+});
+
+function exitSelectionMode() {
+  exitSelectionHandler?.();
+  clearToolbarSelection();
+}
+
 const RAIN_DROP_COUNT = 48;
 const RAIN_DELAY_RANGE = 1_200;
 const RAIN_MIN_DURATION = 900;
@@ -306,6 +334,7 @@ const toolbarHeight = computed(
 
 // 启动瞬间先立住品牌名，随后交给路由 meta；编辑页要显示具体文件名
 const appTitle = computed(() => {
+  if (isSelectionMode.value) return `已选 ${selectionCount.value} 份`;
   if (isBootTitleVisible.value) return APP_TITLE_FALLBACK;
   if (currentRoute.name === "editor")
     return String(currentRoute.params.fileName ?? APP_TITLE_FALLBACK);
@@ -355,7 +384,7 @@ function navigateFromMenu(path: string) {
       @mousedown.prevent="startResize(edge.direction)"
     />
     <v-toolbar
-      color="primary"
+      :color="isSelectionMode ? 'surface-variant' : 'primary'"
       density="compact"
       :extended="hasToolbarTabs"
       :extension-height="TOOLBAR_EXTENSION_HEIGHT"
@@ -373,9 +402,27 @@ function navigateFromMenu(path: string) {
         "
       >
         <div id="title-left-actions" class="toolbar-actions" />
-        <v-app-bar-nav-icon @click.stop="menuRef = !menuRef" />
+        <v-fade-transition hide-on-leave>
+          <v-app-bar-nav-icon
+            v-if="!isSelectionMode"
+            key="menu"
+            @click.stop="menuRef = !menuRef"
+          />
+          <v-btn
+            v-else
+            key="close"
+            :icon="mdiClose"
+            title="退出多选"
+            variant="text"
+            @click.stop="exitSelectionMode"
+          />
+        </v-fade-transition>
         <div id="title-right-actions" class="toolbar-actions" />
-        <span data-tauri-drag-region class="text-white app-title-wrap">
+        <span
+          data-tauri-drag-region
+          class="app-title-wrap"
+          :class="isSelectionMode ? 'text-high-emphasis' : 'text-white'"
+        >
           <Transition :name="titleRollName">
             <span
               :key="displayedTitle"
@@ -465,7 +512,7 @@ function navigateFromMenu(path: string) {
       <div class="loading-curtain__layer loading-curtain__layer--back" />
       <div class="loading-curtain__layer loading-curtain__layer--front">
         <div class="loading-curtain__loader" role="status">
-          <v-progress-circular
+          <!-- <v-progress-circular
             :model-value="progress"
             :size="PROGRESS_RING_SIZE"
             :width="PROGRESS_RING_WIDTH"
@@ -475,7 +522,15 @@ function navigateFromMenu(path: string) {
             <span class="text-h6 font-weight-bold"
               >{{ Math.round(progress) }}%</span
             >
-          </v-progress-circular>
+          </v-progress-circular> -->
+          <v-loading-indicator
+            color="secondary"
+            bg-color="rgba(var(--v-theme-on-background), 0.12)"
+          >
+            <span class="text-h6 font-weight-bold"
+              >{{ Math.round(progress) }}%</span
+            >
+          </v-loading-indicator>
           <div class="loading-curtain__stage">{{ loadingStage }}</div>
           <div class="loading-curtain__filename">
             {{ loadingName || "正在打开笔记" }}

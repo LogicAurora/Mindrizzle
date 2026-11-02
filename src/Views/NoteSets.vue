@@ -74,6 +74,7 @@ import {
   sanitizeTags,
   type TagLibraryChange,
 } from "../utils/tagStore";
+import { useToolbarSelection } from "../utils/toolbarSelection";
 import {
   addWorkspaceDirectory,
   externalNotes,
@@ -399,6 +400,20 @@ const FILE_NAME_IN_PATH = /[^\\/]*$/;
 const isSelectMode = ref(false);
 const selectedKeys = ref<string[]>([]);
 const selectedCount = computed(() => selectedKeys.value.length);
+
+const toolbarSelection = useToolbarSelection();
+
+// 工具栏配色、标题与关闭按钮归全局渲染，这里只同步数量与退出回调
+watch(
+  [isSelectMode, selectedCount],
+  ([isSelecting, count]) => {
+    if (isSelecting) toolbarSelection.setSelection(count, exitSelectMode);
+    else toolbarSelection.clearSelection();
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => toolbarSelection.clearSelection());
 
 const noteSetKeyOf = (item: NoteSetItem): string =>
   `${item.dir ?? ""}|${item.filePath ?? ""}|${item.fileName}`;
@@ -820,10 +835,8 @@ function formatUpdatedAt(timestamp: number): string {
   <v-sheet class="note-sets-page" elevation="0">
     <Teleport to="#toolbar-actions" defer>
       <template v-if="isSelectMode">
-        <span class="selection-count">已选 {{ selectedCount }} 份</span>
         <v-btn
           :icon="mdiSelectAll"
-          color="white"
           title="全选 / 取消全选"
           variant="text"
           @click="toggleSelectAll"
@@ -831,7 +844,6 @@ function formatUpdatedAt(timestamp: number): string {
         <v-btn
           :disabled="selectedCount === 0"
           :icon="mdiContentCopy"
-          color="white"
           title="复制选中"
           variant="text"
           @click="copySelected"
@@ -839,17 +851,9 @@ function formatUpdatedAt(timestamp: number): string {
         <v-btn
           :disabled="selectedCount === 0"
           :icon="mdiDeleteOutline"
-          color="white"
           title="删除选中"
           variant="text"
           @click="askDeleteSelected"
-        />
-        <v-btn
-          :icon="mdiClose"
-          color="white"
-          title="退出多选"
-          variant="text"
-          @click="exitSelectMode"
         />
       </template>
       <template v-else>
@@ -1218,13 +1222,6 @@ function formatUpdatedAt(timestamp: number): string {
 .note-sets-card--selected {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
-}
-
-.selection-count {
-  margin-inline: 8px;
-  color: #fff;
-  font-size: 0.875rem;
-  white-space: nowrap;
 }
 
 .note-sets-card :deep(.v-card-text) {
