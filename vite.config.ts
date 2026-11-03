@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import vuetify from "vite-plugin-vuetify";
 import fs from "node:fs";
+import ViteFonts from 'unplugin-fonts/vite'
 
 const { TAURI_DEV_HOST: host, HOME: homeDir } = process.env;
 
@@ -21,6 +22,17 @@ export default defineConfig(async () => ({
       },
     }),
     vuetify(),
+    ViteFonts({
+      fontsource: {
+        families: [
+          {
+            name: 'Roboto',
+            weights: [100, 300, 400, 500, 700, 900],
+            styles: ['normal', 'italic'],
+          },
+        ],
+      },
+    }),
   ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
