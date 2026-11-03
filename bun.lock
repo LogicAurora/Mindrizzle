@@ -16,6 +16,7 @@
         "@tauri-apps/plugin-dialog": "^2.8.4",
         "@tauri-apps/plugin-log": "^2.10.1",
         "@tauri-apps/plugin-opener": "^2.7.2",
+        "@tauri-apps/plugin-process": "^2.4.0",
         "@vxe-ui/core": "^4.5.4",
         "dom-zindex": "^1.0.8",
         "dompurify": "^3.4.17",
@@ -233,6 +234,8 @@
     "@tauri-apps/plugin-log": ["@tauri-apps/plugin-log@2.10.1", "https://registry.npmmirror.com/@tauri-apps/plugin-log/-/plugin-log-2.10.1.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-QYgxDunUZP+Cd3ev+8ItOc3Q6uUFkEhRHdTolxUtlC/8SGsc5IyVjGgFclprkAx736HUCUYfh2vqUr3qwNfTTw=="],
 
     "@tauri-apps/plugin-opener": ["@tauri-apps/plugin-opener@2.7.2", "https://registry.npmmirror.com/@tauri-apps/plugin-opener/-/plugin-opener-2.7.2.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-LyybP1VSzTMQiaFYcsbAse47KpivlyXdLZMQzGLEnkgQacGESnpjAfFoQ6h5sqWgAdZDH9szYjPzHMpv0Sz+TQ=="],
+
+    "@tauri-apps/plugin-process": ["@tauri-apps/plugin-process@2.4.0", "https://registry.npmmirror.com/@tauri-apps/plugin-process/-/plugin-process-2.4.0.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-GddrmsSLAYrLa/yTXlXK/YRDzUgYeeOnUXTbiyvJWkmI424RmDPD3FVLeqcon7rv6O6ZfhBilcrHWnSo7o6hIQ=="],
 
     "@types/estree": ["@types/estree@1.0.9", "https://registry.npmmirror.com/@types/estree/-/estree-1.0.9.tgz", {}, "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg=="],
 

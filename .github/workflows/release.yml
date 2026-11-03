@@ -1,0 +1,376 @@
+name: Release (draft)
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "发布通道（beta/alpha 的序号自动递增）"
+        required: true
+        default: "stable"
+        type: choice
+        options: [stable, beta, alpha]
+      version:
+        description: "主版本号（例：1.4.0；v 前缀可有可无；不要带 -beta.1 后缀）"
+        required: true
+        type: string
+
+concurrency:
+  group: release-manual
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      tag: ${{ steps.calc.outputs.tag }}
+      channel: ${{ steps.calc.outputs.channel }}
+      prerelease: ${{ steps.calc.outputs.prerelease }}
+      apple_signed: ${{ steps.calc.outputs.apple_signed }}
+      win_signed: ${{ steps.calc.outputs.win_signed }}
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: calc
+        shell: bash
+        env:
+          CH: ${{ inputs.channel }}
+          VER_INPUT: ${{ inputs.version }}
+          SHA: ${{ github.sha }}
+          APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          WIN_CERT: ${{ secrets.TAURI_WINDOWS_CERTIFICATE }}
+        run: |
+          set -euo pipefail
+
+          HAS_APPLE_SIGN=false
+          [[ -n "${APPLE_CERT:-}" ]] && HAS_APPLE_SIGN=true
+          HAS_WIN_SIGN=false
+          [[ -n "${WIN_CERT:-}" ]] && HAS_WIN_SIGN=true
+
+          BASE="${VER_INPUT#v}"
+          if ! [[ "$BASE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version 只填主版本号，例：1.4.0（不要带 v 前缀或 -beta.1 后缀；当前为：$VER_INPUT）"
+            exit 1
+          fi
+
+          if [[ "$CH" == "stable" ]]; then
+            VER="$BASE"; PRE=false
+          else
+            PREFIX="v${BASE}-${CH}."
+            LAST=$(git tag -l "${PREFIX}*" | sed "s/^${PREFIX}//" | grep -E '^[0-9]+$' | sort -n | tail -n1 || true)
+            N=1; [[ -n "$LAST" ]] && N=$((LAST + 1))
+            VER="${BASE}-${CH}.${N}"; PRE=true
+          fi
+          TAG="v$VER"
+
+          if [[ "$CH" == "stable" ]]; then
+            PREV=$(git tag -l 'v*' --sort=-v:refname | grep -Ev -- '-(alpha|beta)\.' | head -n1 || true)
+          else
+            PREV=$(git describe --tags --abbrev=0 --match "v*-${CH}.*" 2>/dev/null || true)
+            [[ -z "$PREV" ]] && PREV=$(git tag -l 'v*' --sort=-v:refname | grep -Ev -- '-(alpha|beta)\.' | head -n1 || true)
+          fi
+          if [[ -n "$PREV" ]]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" "${PREV}..HEAD")
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" -30)
+          fi
+          [[ -z "$CHANGELOG" ]] && CHANGELOG="（与上一版本无新增提交）"
+
+          case "$CH" in
+            stable) CH_DESC="稳定版（所有用户可见）" ;;
+            beta)   CH_DESC="Beta 预览版（仅 beta 通道用户可见）" ;;
+            alpha)  CH_DESC="Alpha 预览版（仅 alpha 通道用户可见）" ;;
+          esac
+
+          INSTALL_NOTE=""
+          if [[ "$HAS_APPLE_SIGN" == "false" || "$HAS_WIN_SIGN" == "false" ]]; then
+            INSTALL_NOTE=$'## 首次安装说明（当前版本部分平台未做代码签名）\n'
+            if [[ "$HAS_APPLE_SIGN" == "false" ]]; then
+              INSTALL_NOTE+=$'\n### macOS\n\n首次打开会被 Gatekeeper 拦截，任选一种方式放行：\n\n- 右键点击 App → 打开 → 再点「打开」\n- 终端：`xattr -cr /Applications/Mindrizzle.app`\n- 系统设置 → 隐私与安全性 → 仍要打开\n'
+            fi
+            if [[ "$HAS_WIN_SIGN" == "false" ]]; then
+              INSTALL_NOTE+=$'\n### Windows\n\nSmartScreen 会提示「Windows 已保护你的电脑」：\n\n- 点击「更多信息」→「仍要运行」\n'
+            fi
+            INSTALL_NOTE+=$'\n> 自动更新不受影响：updater 使用独立的更新签名（`.sig`），与 OS 代码签名无关。\n'
+          fi
+
+          BODY_FILE="/tmp/release-body-${VER}.md"
+          cat > "$BODY_FILE" <<EOF
+          ## 版本信息
+
+          | 项目 | 值 |
+          |------|-----|
+          | 版本 | \`$VER\` |
+          | 通道 | \`$CH\` —— $CH_DESC |
+          | 提交 | \`${SHA:0:7}\` |
+          | 构建时间 | \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\` |
+
+          ## 更新内容
+
+          $CHANGELOG
+
+          ## 安装包
+
+          | 平台 | 架构 | 产物 |
+          |------|------|------|
+          | macOS | Apple Silicon (aarch64) | \`.app.tar.gz\` + \`.sig\` |
+          | macOS | Intel (x86_64) | \`.app.tar.gz\` + \`.sig\` |
+          | Windows | x64 | 安装程序 + \`.sig\` |
+          | Linux | x64 | AppImage / deb + \`.sig\` |
+
+          \`latest.json\` 为自动更新清单。
+
+          $INSTALL_NOTE
+          ## 自动更新
+
+          已安装旧版本的用户会在下次检查更新时收到提示。更新包经内置公钥校验签名后安装。
+
+          ## 签名校验
+
+          每个安装包均有对应 \`.sig\`，客户端使用内置公钥验证。请勿修改或删除 \`.sig\` 与 \`latest.json\`。
+
+          ---
+
+          _本发布详情由 GitHub Actions 自动生成。_
+          EOF
+
+          {
+            echo "version=$VER"
+            echo "tag=$TAG"
+            echo "channel=$CH"
+            echo "prerelease=$PRE"
+            echo "apple_signed=$HAS_APPLE_SIGN"
+            echo "win_signed=$HAS_WIN_SIGN"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::将创建 $TAG（通道 $CH）；Apple=$HAS_APPLE_SIGN，Windows=$HAS_WIN_SIGN"
+
+      - name: Ensure tag does not exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.calc.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            echo "::error::tag $TAG 已存在。stable 请换主版本号；beta/alpha 重跑会再 +1。"
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG 已存在。"
+            exit 1
+          fi
+          echo "tag $TAG 可用"
+
+      - name: Create tag & draft release
+        id: create
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.calc.outputs.tag }}
+          VER: ${{ steps.calc.outputs.version }}
+          CH: ${{ steps.calc.outputs.channel }}
+          PRE: ${{ steps.calc.outputs.prerelease }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ARGS=(--draft --target "$SHA" --title "$VER ($CH)" --notes-file "/tmp/release-body-${VER}.md")
+          [[ "$PRE" == "true" ]] && ARGS+=(--prerelease)
+          NEW_ID=$(gh release create "$TAG" "${ARGS[@]}" --json id -q .id)
+          echo "release_id=$NEW_ID" >> "$GITHUB_OUTPUT"
+          echo "::notice::已创建 tag $TAG 与草稿 Release (id=$NEW_ID)"
+
+  matrix-build:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Inject version
+        shell: bash
+        env:
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs=require('fs'),p='src-tauri/tauri.conf.json';
+            const c=JSON.parse(fs.readFileSync(p));
+            c.version=process.env.V;
+            fs.writeFileSync(p, JSON.stringify(c,null,2));
+          "
+          sed -i -E 's/^version = ".*"/version = "'"$V"'"/' src-tauri/Cargo.toml
+
+      - name: Install Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: "./src-tauri -> target" }
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build & upload to draft
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_WINDOWS_CERTIFICATE: ${{ secrets.TAURI_WINDOWS_CERTIFICATE }}
+          TAURI_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.TAURI_WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          releaseId: ${{ needs.build.outputs.release_id }}
+          releaseAssetNamePattern: "[name]-[arch][ext]"
+          args: ${{ matrix.args }}
+
+      - name: Backup artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.platform }}-${{ matrix.args || 'default' }}
+          path: src-tauri/target/**/release/bundle/
+          retention-days: 7
+
+  summary:
+    needs: [build, matrix-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        shell: bash
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          VER: ${{ needs.build.outputs.version }}
+          CH: ${{ needs.build.outputs.channel }}
+          PRE: ${{ needs.build.outputs.prerelease }}
+          APPLE_SIGNED: ${{ needs.build.outputs.apple_signed }}
+          WIN_SIGNED: ${{ needs.build.outputs.win_signed }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "## 本次操作：构建草稿（手动发布由你完成）" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${{ needs.build.result }}" != "success" || "${{ needs.matrix-build.result }}" != "success" ]]; then
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## ❌ 草稿构建失败
+
+          查上方失败日志：
+
+          - \`build\` 失败 → version 格式 / 防重 / tag 解析
+          - \`matrix-build\` 失败 → 平台构建或 updater 签名
+
+          丢弃草稿（如需）：
+
+          \`\`\`bash
+          gh release delete ${TAG:-<tag>} --yes --cleanup-tag
+          \`\`\`
+          EOF
+            exit 0
+          fi
+
+          SIGN=""
+          [[ "$APPLE_SIGNED" == "true" ]] && SIGN+="macOS 已签名；" || SIGN+="macOS 未签名（首次打开需放行）；"
+          [[ "$WIN_SIGNED" == "true" ]]   && SIGN+="Windows 已签名" || SIGN+="Windows 未签名（SmartScreen 需放行）"
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## ✅ 草稿已就绪（尚未发布）
+
+          | 项目 | 值 |
+          |------|-----|
+          | Tag | \`$TAG\` |
+          | 版本 | \`$VER\` |
+          | 通道 | \`$CH\` |
+          | 预发布标记 | \`$PRE\` |
+          | 签名状态 | $SIGN |
+          | 草稿地址 | https://github.com/$REPO/releases/edit/$TAG |
+
+          ### 手动发布 checklist
+
+          **1. 核对资产**
+
+          - [ ] \`latest.json\` 含 4 个平台键：\`darwin-aarch64\` / \`darwin-x86_64\` / \`linux-x86_64\` / \`windows-x86_64\`
+          - [ ] 每个平台有安装包 + 对应 \`.sig\`
+          - [ ] 版本号与 \`$VER\` 一致
+
+          \`\`\`bash
+          gh release download $TAG --pattern latest.json --dir /tmp/chk --clobber
+          jq -r '.platforms | keys[]' /tmp/chk/latest.json
+          \`\`\`
+
+          **2. 发布草稿**
+
+          \`\`\`bash
+          gh release edit $TAG --draft=false
+          \`\`\`
+          EOF
+
+          if [[ "$CH" != "stable" ]]; then
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+
+          **3. 镜像通道清单（$CH 必做）**
+
+          \`\`\`bash
+          CH=$CH
+          TAG=$TAG
+          CH_TAG="\${CH}-channel"
+
+          git tag "\$CH_TAG" 2>/dev/null && git push origin "\$CH_TAG" || true
+          gh release view "\$CH_TAG" >/dev/null 2>&1 || gh release create "\$CH_TAG" \\
+            --title "Updater channel: \$CH" --notes "固定通道锚点，请勿删除" --prerelease
+
+          rm -rf /tmp/upd && mkdir -p /tmp/upd
+          gh release download "\$TAG" --pattern latest.json --dir /tmp/upd --clobber
+          gh release upload "\$CH_TAG" /tmp/upd/latest.json --clobber
+          \`\`\`
+          EOF
+          else
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+
+          **3. 无需额外操作**（stable 走 \`releases/latest/download/latest.json\`）
+          EOF
+          fi
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+
+          **4. 丢弃草稿（如需）**
+
+          \`\`\`bash
+          gh release delete $TAG --yes --cleanup-tag
+          \`\`\`
+          EOF

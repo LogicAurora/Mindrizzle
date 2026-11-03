@@ -62,6 +62,59 @@ fn get_git_commit() -> &'static str {
     env!("GIT_COMMIT")
 }
 
+use tauri_plugin_updater::UpdaterExt;
+
+fn endpoint_for(channel: &str) -> &'static str {
+    match channel {
+        "alpha" => {
+            "https://github.com/LogicAurora/Mindrizzle/releases/download/alpha-channel/latest.json"
+        }
+        "beta" => {
+            "https://github.com/LogicAurora/Mindrizzle/releases/download/beta-channel/latest.json"
+        }
+        _ => "https://github.com/LogicAurora/Mindrizzle/releases/latest/download/latest.json",
+    }
+}
+
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<String>, String> {
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![
+            url::Url::parse(endpoint_for(&channel)).map_err(|e| e.to_string())?
+        ])
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    match updater.check().await {
+        Ok(Some(u)) => Ok(Some(u.version)),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle, channel: String) -> Result<(), String> {
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![
+            url::Url::parse(endpoint_for(&channel)).map_err(|e| e.to_string())?
+        ])
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    match updater.check().await {
+        Ok(Some(u)) => u
+            .download_and_install(|_chunk, _total| {}, || {})
+            .await
+            .map_err(|e| e.to_string()),
+        Ok(None) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 环境变量必须在 GTK/WebKitGTK 初始化前写入
@@ -87,6 +140,13 @@ pub fn run() {
         ))
     };
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            app.handle().plugin(tauri_plugin_process::init())?;
+            Ok(())
+        })
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log_level)
@@ -106,6 +166,8 @@ pub fn run() {
             fetch_file_list,
             is_file_name_valid,
             get_git_commit,
+            check_update,
+            install_update,
             mdr_file_op::get_mdr_file_meta,
             mdr_file_op::get_mdr_file_body,
             mdr_file_op::set_mdr_file_body,

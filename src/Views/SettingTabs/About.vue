@@ -11,6 +11,7 @@ import { computed, ref } from "vue";
 
 import packageInfo from "../../../package.json";
 import appIconUrl from "../../../app-icon.svg";
+import AboutUpdatePanel from "./AboutUpdatePanel.vue";
 import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
 import { useSecretKnock } from "../../utils/easterEggs";
 import { saveDeveloperMode } from "../../utils/developerMode";
@@ -125,6 +126,8 @@ function openDeveloperTab() {
         </div>
       </section>
     </template>
+
+    <AboutUpdatePanel />
 
     <div class="about-bottom">
       <div class="about-actions">
