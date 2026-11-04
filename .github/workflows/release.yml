@@ -183,7 +183,8 @@ jobs:
           set -euo pipefail
           ARGS=(--draft --target "$SHA" --title "$VER ($CH)" --notes-file "/tmp/release-body-${VER}.md")
           [[ "$PRE" == "true" ]] && ARGS+=(--prerelease)
-          NEW_ID=$(gh release create "$TAG" "${ARGS[@]}" --json id -q .id)
+          gh release create "$TAG" "${ARGS[@]}" > /dev/null
+          NEW_ID=$(gh release view "$TAG" --json databaseId -q .databaseId)
           echo "release_id=$NEW_ID" >> "$GITHUB_OUTPUT"
           echo "::notice::已创建 tag $TAG 与草稿 Release (id=$NEW_ID)"
 
