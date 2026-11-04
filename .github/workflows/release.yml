@@ -122,7 +122,7 @@ jobs:
           |------|------|------|
           | macOS | Apple Silicon (aarch64) | \`.app.tar.gz\` + \`.sig\` |
           | macOS | Intel (x86_64) | \`.app.tar.gz\` + \`.sig\` |
-          | Windows | x64 | 安装程序 + \`.sig\` |
+          | Windows | x64 | NSIS 安装程序 + \`.sig\` |
           | Linux | x64 | AppImage / deb + \`.sig\` |
 
           \`latest.json\` 为自动更新清单。
@@ -208,19 +208,95 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # ---- 版本注入：node 跨平台处理，避免 BSD/GNU sed 差异 ----
       - name: Inject version
         shell: bash
         env:
           V: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
-          node -e "
-            const fs=require('fs'),p='src-tauri/tauri.conf.json';
-            const c=JSON.parse(fs.readFileSync(p));
-            c.version=process.env.V;
-            fs.writeFileSync(p, JSON.stringify(c,null,2));
-          "
-          sed -i -E 's/^version = ".*"/version = "'"$V"'"/' src-tauri/Cargo.toml
+          node -e '
+            const fs = require("fs");
+            const V = process.env.V;
+
+            const p1 = "src-tauri/tauri.conf.json";
+            const c = JSON.parse(fs.readFileSync(p1, "utf8"));
+            c.version = V;
+            fs.writeFileSync(p1, JSON.stringify(c, null, 2));
+
+            const p2 = "src-tauri/Cargo.toml";
+            let s = fs.readFileSync(p2, "utf8");
+            s = s.replace(/^version = ".*"$/m, `version = "${V}"`);
+            fs.writeFileSync(p2, s);
+
+            console.log("Injected version:", V);
+          '
+
+      # ---- 条件注入签名 env：secret 为空时不产生变量，避免触发签名流程 ----
+      - name: Configure signing env (only if secrets set)
+        shell: bash
+        env:
+          APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID_IN: ${{ secrets.APPLE_ID }}
+          APPLE_PW_IN: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_IN: ${{ secrets.APPLE_TEAM_ID }}
+          WIN_CERT: ${{ secrets.TAURI_WINDOWS_CERTIFICATE }}
+          WIN_CERT_PW: ${{ secrets.TAURI_WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            if [[ -n "${APPLE_CERT:-}" ]]; then
+              {
+                echo "APPLE_CERTIFICATE=$APPLE_CERT"
+                echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERT_PW"
+                echo "APPLE_SIGNING_IDENTITY=$APPLE_IDENTITY"
+                echo "APPLE_ID=$APPLE_ID_IN"
+                echo "APPLE_PASSWORD=$APPLE_PW_IN"
+                echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_IN"
+              } >> "$GITHUB_ENV"
+              echo "macOS 签名环境变量已注入"
+            else
+              echo "APPLE_CERTIFICATE 未设置，跳过 macOS 签名（ad-hoc 模式）"
+            fi
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            if [[ -n "${WIN_CERT:-}" ]]; then
+              {
+                echo "TAURI_WINDOWS_CERTIFICATE=$WIN_CERT"
+                echo "TAURI_WINDOWS_CERTIFICATE_PASSWORD=$WIN_CERT_PW"
+              } >> "$GITHUB_ENV"
+              echo "Windows 签名环境变量已注入"
+            else
+              echo "TAURI_WINDOWS_CERTIFICATE 未设置，跳过 Windows 签名"
+            fi
+          fi
+
+      # ---- 平台适配 bundle 类型：规避 MSI/RPM 的版本号限制 ----
+      - name: Compute bundle args
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          B=""
+          case "$PLATFORM" in
+            windows-latest)
+              # MSI(WiX) 要求 pre-release 纯数字，统一用 NSIS 规避
+              B="--bundles nsis"
+              ;;
+            ubuntu-22.04)
+              if [[ "$V" == *-* ]]; then
+                # RPM 不接受 '-'，预发布版本跳过 rpm
+                B="--bundles deb,appimage"
+              else
+                B="--bundles deb,rpm,appimage"
+              fi
+              ;;
+          esac
+          echo "BUNDLE_ARGS=$B" >> "$GITHUB_ENV"
+          echo "BUNDLE_ARGS=$B"
 
       - name: Install Linux deps
         if: matrix.platform == 'ubuntu-22.04'
@@ -241,24 +317,18 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # 注意：这里不再声明 APPLE_*/TAURI_WINDOWS_*，
+      # 它们由上一步"仅当 secret 非空时"注入到 $GITHUB_ENV
       - name: Build & upload to draft
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_WINDOWS_CERTIFICATE: ${{ secrets.TAURI_WINDOWS_CERTIFICATE }}
-          TAURI_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.TAURI_WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           releaseId: ${{ needs.build.outputs.release_id }}
           releaseAssetNamePattern: "[name]-[arch][ext]"
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ env.BUNDLE_ARGS }}
 
       - name: Backup artifacts
         if: always()
