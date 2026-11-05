@@ -325,7 +325,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.build.outputs.release_id }}
-          releaseAssetNamePattern: "[name]-[arch][ext]"
+          assetNamePattern: "[name]-[platform]-[arch][setup][ext]"
           args: ${{ matrix.args }} ${{ env.BUNDLE_ARGS }}
 
       - name: Backup artifacts
