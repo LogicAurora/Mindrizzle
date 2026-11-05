@@ -413,20 +413,13 @@ jobs:
           if [[ "$CH" != "stable" ]]; then
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
 
-          **3. 镜像通道清单（$CH 必做）**
+          **3. 通道清单自动镜像**（发布后 \`channel-mirror.yml\` 把 latest.json 同步到 \`${CH}-channel\`）
+
+          失败时手动补跑：
 
           \`\`\`bash
-          CH=$CH
-          TAG=$TAG
-          CH_TAG="\${CH}-channel"
-
-          git tag "\$CH_TAG" 2>/dev/null && git push origin "\$CH_TAG" || true
-          gh release view "\$CH_TAG" >/dev/null 2>&1 || gh release create "\$CH_TAG" \\
-            --title "Updater channel: \$CH" --notes "固定通道锚点，请勿删除" --prerelease
-
-          rm -rf /tmp/upd && mkdir -p /tmp/upd
-          gh release download "\$TAG" --pattern latest.json --dir /tmp/upd --clobber
-          gh release upload "\$CH_TAG" /tmp/upd/latest.json --clobber
+          gh release download $TAG --pattern latest.json --dir /tmp/upd --clobber
+          gh release upload "${CH}-channel" /tmp/upd/latest.json --clobber
           \`\`\`
           EOF
           else

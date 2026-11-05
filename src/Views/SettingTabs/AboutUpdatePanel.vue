@@ -135,62 +135,62 @@ function describeError(error: unknown) {
         >检查更新</v-btn
       >
     </div>
-    <p class="update-status" :class="{ 'is-error': state === 'failed' }">
-      <v-icon
-        v-if="state === 'latest'"
-        :icon="mdiCheckCircle"
-        size="16"
-        class="update-status-icon"
-      />
+    <div
+      class="text-caption update-status"
+      :class="{ 'text-error': state === 'failed' }"
+    >
+      <v-icon v-if="state === 'latest'" :icon="mdiCheckCircle" size="16" />
       {{ statusText }}
-    </p>
+    </div>
   </section>
 </template>
 
 <style scoped>
+/* 主题的 surface-variant 在部分配色里与页面底色几乎相同，所以用主色掺面色的方式自己叠一层，跟主题走 */
 .about-update {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
   padding: 18px 20px;
-  border-radius: 6px;
-  background-color: rgb(var(--v-theme-surface-variant));
+  border: 1px solid
+    color-mix(in srgb, rgb(var(--v-theme-primary)) 32%, transparent);
+  border-radius: 8px;
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--v-theme-primary)) 10%,
+    rgb(var(--v-theme-surface))
+  );
 }
 
 .update-heading h2 {
   font-size: 1rem;
   font-weight: 600;
+  line-height: 1.4;
 }
 
 .update-heading p {
   margin-top: 4px;
-  font-size: 0.8rem;
-  opacity: 0.72;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .update-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
 
 .update-channel {
-  max-width: 200px;
+  max-width: 240px;
 }
 
 .update-status {
   display: flex;
   align-items: center;
-  font-size: 0.8rem;
+  gap: 4px;
   opacity: 0.8;
-}
-
-.update-status.is-error {
-  color: rgb(var(--v-theme-error));
-}
-
-.update-status-icon {
-  margin-right: 4px;
 }
 </style>
