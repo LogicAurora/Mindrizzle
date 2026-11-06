@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-11-06 -->
 
 # 00 系统全景
 
@@ -16,6 +16,8 @@ flowchart TB
     MC["MdrCanvas.vue"]
     ZI["zIndex.ts"]
     CC["utils/canvasCoords.ts"]
+    AN["AnnotationLayer.vue"]
+    AM["annotationModel.ts"]
   end
 
   subgraph Block["块渲染层"]
@@ -64,6 +66,8 @@ flowchart TB
   BH --> BHO
   MC --> CC
   MC --> ZI
+  MC --> AN
+  AN --> AM
   BHU -.->|"读取 DOM 契约"| MC
 ```
 
@@ -76,6 +80,12 @@ flowchart LR
   MC --> CC["canvasCoords.ts"]
   MC --> ZI["zIndex.ts"]
   MC --> BHU["blockHandleUtils.ts"]
+  MC --> AN["AnnotationLayer.vue"]
+  AN --> AM["annotationModel.ts"]
+  MC --> AT["AnnotationToolbar.vue"]
+  AT --> ST["SideToolbar.vue"]
+  TT["TableToolbar.vue"] --> ST
+  ST --> ZI
   MCB --> RB
   MCB --> GEO["blockFloatGeometry.ts"]
   MCB --> CTRL["canvasComponentControllers.ts"]
@@ -114,6 +124,7 @@ flowchart LR
 - **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 base 渲染共用。
 - **控制器契约**：canvasComponentControllers 定义块内组件向画布申请移动/改尺寸/平移/缩放/读视图的接口（provide/inject），自动高度与光标跟随都由块组件自己调用
 - **工具层**：blockHandleUtils 是编辑器侧唯一坐标与几何入口。
+- **批注层**：AnnotationLayer 只负责绘制与指针会话，annotationModel 提供连接线端点/贝塞尔/命中几何；数据存于 MdrCanvas 并随 `body.json` 持久化（见 12-annotation）。
 
 ## 维护提示
 

@@ -10,6 +10,7 @@
    - 手柄/popup → [06-block-handle](06-block-handle.md)
    - 卡顿 → [09-perf](09-perf.md)
    - 诡异行为 → [11-workarounds](11-workarounds.md)
+   - 批注/连接线 → [12-annotation](12-annotation.md)
    - 新增块类型 → [../components/README.md](../components/README.md)
 
 ## 文件索引
@@ -28,6 +29,8 @@
 | 09-perf.md            | 节流与缓存         |
 | 10-utils.md           | 工具函数索引       |
 | 11-workarounds.md     | 非逻辑防御清单     |
+| 12-annotation.md      | 批注模式与工具条位 |
+| 12-annotation.md      | 批注模式与连接线   |
 
 > 组件开发（定义、上下文、设置面板、私有文件）见 [../components/](../components/)：
 > 先读 [快速上手](../components/01-quick-start.md)。

@@ -1,15 +1,5 @@
 <template>
-  <Teleport to=".canvas-container" defer>
-    <v-sheet
-      v-if="visible"
-      class="table-toolbar"
-      border
-      rounded="lg"
-      :style="{ zIndex: Z_LAYER.formatModePicker }"
-      @mousedown.stop
-      @pointerdown.stop
-      @click.stop
-    >
+  <SideToolbar :visible="visible">
       <v-btn
         v-tooltip:left="'加行'"
         :disabled="!canAddRow"
@@ -93,8 +83,7 @@
         size="small"
         @click="emit('clear')"
       />
-    </v-sheet>
-  </Teleport>
+  </SideToolbar>
 </template>
 
 <script setup lang="ts">
@@ -111,7 +100,7 @@ import {
   mdiViewSequentialOutline,
 } from "@mdi/js";
 
-import { Z_LAYER } from "../../Core/zIndex.ts";
+import SideToolbar from "../../Core/SideToolbar.vue";
 
 defineProps<{
   visible: boolean;
@@ -139,31 +128,3 @@ const emit = defineEmits<{
   (e: "clear"): void;
 }>();
 </script>
-
-<style scoped>
-/* 与右侧添加块选择器同位：选中表格块时由它接管这一列按钮 */
-.table-toolbar {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 4px;
-  background: rgb(var(--v-theme-surface));
-  transform: translateY(-50%);
-  pointer-events: auto;
-}
-
-@media (max-width: 599px) {
-  .table-toolbar {
-    top: auto;
-    right: 50%;
-    /* 让开底部居中的画布工具栏 */
-    bottom: 60px;
-    flex-direction: row;
-    transform: translateX(50%);
-  }
-}
-</style>

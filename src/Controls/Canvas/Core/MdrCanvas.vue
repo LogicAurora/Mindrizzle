@@ -45,6 +45,18 @@
         @dragstart="onFloatingHandleDown(item, $event)"
       />
 
+      <AnnotationLayer
+        v-if="!mobileMode"
+        :items="annotations"
+        :blocks="annotationBlocks"
+        :tool="annotationTool"
+        :active="isAnnotationMode"
+        :zoom="zoom"
+        :to-content="annotationPointOf"
+        @create="addAnnotation"
+        @erase="eraseAnnotation"
+      />
+
       <v-fade-transition :duration="120">
         <div
           v-if="selectionBox"
@@ -149,7 +161,7 @@
       </template>
 
       <div
-        v-if="addPreviewPos && addPreviewKey && previewVisible"
+        v-if="addPreviewPos && addPreviewKey && previewVisible && !isAnnotationMode"
         class="add-preview"
         :style="addPreviewStyle"
       >
@@ -158,6 +170,14 @@
         }}</span>
       </div>
     </div>
+    <AnnotationToolbar
+      :visible="isAnnotationMode"
+      :tool="annotationTool"
+      :count="annotations.length"
+      @set-tool="setAnnotationTool"
+      @clear="clearAnnotations"
+      @exit="setAnnotationMode(false)"
+    />
     <!-- 箭头用屏幕坐标、不随画布变换，所以定位在容器层 -->
     <div
       v-if="addPreviewPos && addPreviewKey && !previewVisible"
@@ -231,6 +251,14 @@ import type {
 import type { MdrCanvasComponentShellProps } from "./MdrCanvasComponentBase.types.ts";
 import type { ResizeConstraints } from "../Registry/resizeConstraints.ts";
 import { Z_LAYER } from "./zIndex.ts";
+import AnnotationLayer from "./AnnotationLayer.vue";
+import AnnotationToolbar from "../AnnotationToolbar.vue";
+import {
+  normalizeAnnotations,
+  type AnnotationBlock,
+  type AnnotationItem,
+  type AnnotationTool,
+} from "./annotationModel.ts";
 import { isTauri } from "@tauri-apps/api/core";
 import { error as logError } from "@tauri-apps/plugin-log";
 import {
@@ -321,6 +349,81 @@ const blockZ = (id: string): number => {
 const isActive = (id: string): boolean =>
   isEditMode.value && state.selectedIds.has(id);
 
+// #region 批注
+const annotations = ref<AnnotationItem[]>([]);
+const isAnnotationMode = ref(false);
+const annotationTool = ref<AnnotationTool>("pen");
+
+const annotationBlocks = computed<AnnotationBlock[]>(() => {
+  void layoutVersion.value;
+  return [...state.items]
+    .sort((first, second) => blockZ(first.uuid) - blockZ(second.uuid))
+    .map((item) => ({ uuid: item.uuid, rect: { ...layoutOf(item) } }));
+});
+
+const annotationPointOf = (clientX: number, clientY: number): Point | null => {
+  const rect = canvasContainerRef.value?.getBoundingClientRect();
+  if (!rect) return null;
+  return screenToContent(canvasTransform(), rect, clientX, clientY);
+};
+
+const addAnnotation = (item: AnnotationItem) => {
+  annotations.value = [...annotations.value, item];
+};
+
+const hasAnnotationConnectors = (): boolean =>
+  annotations.value.some((item) => item.kind === "connector");
+
+const eraseAnnotation = (id: string) => {
+  annotations.value = annotations.value.filter((item) => item.id !== id);
+};
+
+const clearAnnotations = () => {
+  annotations.value = [];
+};
+
+const setAnnotationTool = (tool: AnnotationTool) => {
+  annotationTool.value = tool;
+};
+
+// 批注存的是桌面布局坐标，移动端瀑布流会重排块，所以移动端直接退出批注模式
+const setAnnotationMode = (enabled: boolean) => {
+  const next = enabled && !mobileMode.value;
+  isAnnotationMode.value = next;
+  if (!next) return;
+  state.selectedIds = new Set();
+  hoveredUuid.value = null;
+};
+
+// 删块后连接线端点已不存在，同步移除避免留下悬空箭头
+const pruneAnnotationConnectors = (removedIds: Set<string>) => {
+  const kept = annotations.value.filter(
+    (item) =>
+      item.kind === "stroke" ||
+      (!removedIds.has(item.fromUuid) && !removedIds.has(item.toUuid)),
+  );
+  if (kept.length !== annotations.value.length) annotations.value = kept;
+};
+
+const serializeAnnotations = (offsetX: number, offsetY: number) =>
+  annotations.value.map((item) =>
+    item.kind === "stroke"
+      ? {
+          ...item,
+          points: item.points.map((point) => ({
+            x: Math.round(point.x + offsetX),
+            y: Math.round(point.y + offsetY),
+          })),
+        }
+      : item,
+  );
+
+watch(mobileMode, (isMobileMode) => {
+  if (!isMobileMode) return;
+  setAnnotationMode(false);
+});
+// #endregion 批注
+
 const componentRefs = ref<Record<string, ComponentController | undefined>>({});
 const canvasRef = ref<HTMLElement | null>(null);
 const canvasContainerRef = ref<HTMLElement | null>(null);
@@ -372,6 +475,18 @@ const rebaseOrigin = (offset: { x: number; y: number }) => {
     item.layout.desktop.y -= dy;
     item.layout.mobile.y -= dy;
   });
+  // 批注共用块坐标系，重定位时须同步平移，否则批注会与块错位
+  annotations.value = annotations.value.map((item) =>
+    item.kind === "stroke"
+      ? {
+          ...item,
+          points: item.points.map((point) => ({
+            x: point.x - effDx,
+            y: point.y - dy,
+          })),
+        }
+      : item,
+  );
   origin.x += effDx;
   origin.y += dy;
 };
@@ -1456,8 +1571,8 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
   // 编辑器 hover 自解析在 zoom≠1 时会 stopPropagation，所以用捕获阶段监听
   window.addEventListener("pointermove", onCustomDragMove, true);
   window.addEventListener("pointerup", onCustomDragUp);
-  // 拖拽期间 layout 不触发重渲染，所以块本体与跟随浮层靠命令式写 DOM，链接线等派生浮层退回逐帧重渲染
-  dragNeedsRender = linkedPairs.value.size > 0;
+  // 拖拽期间 layout 不触发重渲染，所以块本体与跟随浮层靠命令式写 DOM，链接线/批注连接线等派生浮层退回逐帧重渲染
+  dragNeedsRender = linkedPairs.value.size > 0 || hasAnnotationConnectors();
   cacheDragDom();
   window.addEventListener("mousemove", onCustomDragMove, true);
   window.addEventListener("mouseup", onCustomDragUp);
@@ -2122,6 +2237,7 @@ const insertDraggedComponent = (
       return !removedIds.has(first) && !removedIds.has(second);
     }),
   );
+  pruneAnnotationConnectors(removedIds);
   return true;
 };
 
@@ -2754,6 +2870,7 @@ const onCanvasMouseDown = (e: MouseEvent) => {
 const startSelection = (e: MouseEvent) => {
   const target = e.target as HTMLElement;
   if (e.button !== 0) return;
+  if (isAnnotationMode.value) return;
   if (
     target.closest(".drag-wrapper") ||
     target.closest(".drag-handle") ||
@@ -4020,6 +4137,10 @@ const save = () => {
     origin: { x: cx, y: cy },
     items: serializable,
     links: Array.from(linkedPairs.value),
+    annotations: serializeAnnotations(
+      origin.x + pan.x - cx,
+      origin.y + pan.y - cy,
+    ),
   });
 };
 
@@ -4099,6 +4220,10 @@ const load = async (raw: string) => {
     Array.isArray(parsed.links)
       ? parsed.links.filter((k: unknown) => typeof k === "string")
       : [],
+  );
+  annotations.value = normalizeAnnotations(
+    parsed.annotations,
+    new Set(state.items.map((item) => item.uuid)),
   );
   await nextTick();
   await nextTick();
@@ -4323,6 +4448,7 @@ const deleteSelected = () => {
   ids.forEach((id) => {
     delete componentRefs.value[id];
   });
+  pruneAnnotationConnectors(new Set(ids));
   recomputeMasks(); // 删除块会改变贴合关系，刷新遮罩
 };
 
@@ -4434,6 +4560,12 @@ defineExpose({
   batchToggleHeading,
   deleteSelected,
   compensateResizeAutoPan,
+  annotations,
+  isAnnotationMode,
+  annotationTool,
+  setAnnotationMode,
+  setAnnotationTool,
+  clearAnnotations,
 });
 // #endregion 命令与生命周期
 </script>

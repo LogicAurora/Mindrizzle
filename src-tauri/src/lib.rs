@@ -64,15 +64,15 @@ fn get_git_commit() -> &'static str {
 
 use tauri_plugin_updater::UpdaterExt;
 
-fn endpoint_for(channel: &str) -> &'static str {
+// 通道清单放 main 的 channel/ 下：固定 tag 的锚点 release 会一直占着 tag 与 release 列表
+const CHANNEL_MANIFEST_ROOT: &str =
+    "https://raw.githubusercontent.com/LogicAurora/Mindrizzle/main/channel";
+
+fn endpoint_for(channel: &str) -> String {
     match channel {
-        "alpha" => {
-            "https://github.com/LogicAurora/Mindrizzle/releases/download/alpha-channel/latest.json"
-        }
-        "beta" => {
-            "https://github.com/LogicAurora/Mindrizzle/releases/download/beta-channel/latest.json"
-        }
-        _ => "https://github.com/LogicAurora/Mindrizzle/releases/latest/download/latest.json",
+        "alpha" => format!("{CHANNEL_MANIFEST_ROOT}/alpha-latest.json"),
+        "beta" => format!("{CHANNEL_MANIFEST_ROOT}/beta-latest.json"),
+        _ => format!("{CHANNEL_MANIFEST_ROOT}/stable-latest.json"),
     }
 }
 
@@ -81,7 +81,7 @@ async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<S
     let updater = app
         .updater_builder()
         .endpoints(vec![
-            url::Url::parse(endpoint_for(&channel)).map_err(|e| e.to_string())?
+            url::Url::parse(&endpoint_for(&channel)).map_err(|e| e.to_string())?
         ])
         .map_err(|e| e.to_string())?
         .build()
@@ -99,7 +99,7 @@ async fn install_update(app: tauri::AppHandle, channel: String) -> Result<(), St
     let updater = app
         .updater_builder()
         .endpoints(vec![
-            url::Url::parse(endpoint_for(&channel)).map_err(|e| e.to_string())?
+            url::Url::parse(&endpoint_for(&channel)).map_err(|e| e.to_string())?
         ])
         .map_err(|e| e.to_string())?
         .build()

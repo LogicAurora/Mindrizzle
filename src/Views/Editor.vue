@@ -28,16 +28,18 @@
       :can-paste="isEditMode && clipboardEntries.length > 0"
       :clipboard="clipboardEntries"
       :zoom="zoom"
+      :is-annotation-mode="annotationMode"
       @toggle-edit="toggleEditMode"
       @toggle-mobile="toggleMobileSim"
       @delete="deleteSelected"
       @copy="copySelectedBlocks"
       @paste="pasteEntry"
       @set-zoom="setZoom"
+      @toggle-annotation="toggleAnnotationMode"
     />
 
     <AddBlockPicker
-      v-if="!hasSelection && MdrCRef?.isEditMode"
+      v-if="!hasSelection && MdrCRef?.isEditMode && !annotationMode"
       :options="addOptions"
       :model-value="addIdx"
       :visible="true"
@@ -97,6 +99,12 @@ const hasSelection = computed(
 const canOperateSelection = computed(
   () => isEditMode.value && hasSelection.value,
 );
+
+const annotationMode = computed(() => MdrCRef.value?.isAnnotationMode ?? false);
+
+const toggleAnnotationMode = () => {
+  MdrCRef.value?.setAnnotationMode(!annotationMode.value);
+};
 
 // 添加类型单源
 const addOptions = computed(() =>

@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-01 -->
+<!-- 最后验证: 2026-11-05 -->
 
 # 08 序列化与兼容
 
@@ -10,7 +10,7 @@ flowchart TD
   B --> C["计算块群包围盒中心 cx, cy"]
   C --> D["toSaveRect 相对 origin + pan - 中心"]
   D --> E["序列化 items（桌面 + 移动）"]
-  E --> F["序列化 origin + links"]
+  E --> F["序列化 origin + links + annotations"]
   F --> G["返回 JSON 字符串"]
 ```
 
@@ -27,7 +27,7 @@ flowchart TD
   F --> G
   G --> H["清 virtualSnapshots / virtualScrolls"]
   H --> I["reconcileVirtualBlocks 首次定虚拟集"]
-  I --> J["linkedPairs 恢复"]
+  I --> J["linkedPairs + annotations 恢复"]
   J --> K["nextTick × 2"]
   K --> L{"mobileMode?"}
   L -->|是| M["origin.x 并入 desktop.x<br/>applyMobileLayout"]
@@ -129,7 +129,8 @@ flowchart TD
 
 - 块标识字段为 `uuid`（放置时生成、持久化），不做旧 `id` 字段兼容
 - 旧扁平格式（`it.x/y/w/h`）→ 转为 `layout.desktop`
-- `origin` 坐标归一化：保存时减去块群中心，加载时归零 pan
+- `origin` 坐标归一化：保存时减去块群中心，加载时归零 pan；批注笔画点走同一偏移
+- 批注 `annotations` 缺失时视为空数组；连接线两端块不存在时丢弃
 - 移动端宽度运行时拉伸，不持久化
 - `arranged` 缺失时：desktop 视为已排，mobile 若与 desktop 一致则视为未排
 
@@ -138,3 +139,4 @@ flowchart TD
 - 新增字段 → 更新图 8.1、8.3
 - 改兼容规则 → 更新图 8.3 + 加测试
 - 改复制/粘贴语义 → 更新图 8.4
+- 改批注结构 → 更新图 8.1、8.2 与 12-annotation

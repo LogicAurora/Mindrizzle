@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-18 -->
+<!-- 最后验证: 2026-11-05 -->
 
 # 03 交互会话状态机（MdrCanvas 内部）
 
@@ -13,6 +13,9 @@
 | 拖块     | `customDrag`     | 左键块/拖拽栏      | mouseup → onCustomDragUp  |
 | 缩放     | `resizeSession`  | 手柄 mousedown     | mouseup → onResizeStop    |
 | 自动平移 | `autoPan`        | 任何会话贴边       | 会话结束 → stopAutoPan    |
+
+> 批注绘制（`AnnotationLayer` 内的 `isDrawing`）是第 6 个会话，但它挂在 `.annotation-catcher` 上并 `stopPropagation`，
+> 不参与上面五个会话的优先级判定；批注模式开启时 `startSelection` 直接短路。详见 12-annotation。
 
 ## 图 3.1 五大交互会话总状态机
 

@@ -1,0 +1,85 @@
+name: Channel manifest
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: channel-manifest
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  write-manifest:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      # 清单直接提交进 main，客户端读 raw.githubusercontent，省掉固定 tag 的锚点 release
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve channel
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$ ]]; then
+            echo "name=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "name=stable" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$TAG 不是发布版本，跳过"
+            echo "name=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write manifest and bump versions
+        if: steps.channel.outputs.name != ''
+        shell: bash
+        env:
+          CH: ${{ steps.channel.outputs.name }}
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/manifest"
+          mkdir -p "$WORK"
+          gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir "$WORK" --clobber
+
+          VERSION="$(jq -r '.version' "$WORK/latest.json")"
+          cp "$WORK/latest.json" "channel/${CH}-latest.json"
+
+          # 用正则只改版本字段，JSON.stringify 重排整个文件会让 diff 变噪音
+          VERSION="$VERSION" node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            const replaceFirst = (file, pattern, replacement) => {
+              const text = fs.readFileSync(file, "utf8");
+              fs.writeFileSync(file, text.replace(pattern, replacement));
+            };
+            replaceFirst("package.json", /("version":\s*")[^"]*(")/, `$1v${version}$2`);
+            replaceFirst("src-tauri/Cargo.toml", /^version = ".*"$/m, `version = "${version}"`);
+            replaceFirst("src-tauri/tauri.conf.json", /^  "version": ".*",$/m, `  "version": "${version}",`);
+          '
+          echo "已更新 channel/${CH}-latest.json 与版本号 $VERSION"
+
+      - name: Commit and push
+        if: steps.channel.outputs.name != ''
+        shell: bash
+        env:
+          CH: ${{ steps.channel.outputs.name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add channel package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore(release): 更新 ${CH} 通道清单与版本号"
+          git push origin HEAD:main

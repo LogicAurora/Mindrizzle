@@ -13,6 +13,7 @@
         v-tooltip:right="isEditMode ? '切换到只读' : '切换到编辑'"
         :icon="isEditMode ? mdiPencilOff : mdiPencil"
         variant="text"
+        size="small"
         @click="emit('toggle-edit')"
       />
       <v-btn
@@ -25,7 +26,16 @@
               : mdiDevices
         "
         variant="text"
+        size="small"
         @click="emit('toggle-mobile')"
+      />
+      <v-btn
+        v-tooltip:right="isAnnotationMode ? '退出批注' : '批注模式'"
+        :color="isAnnotationMode ? 'primary' : undefined"
+        :icon="mdiDraw"
+        variant="text"
+        size="small"
+        @click="emit('toggle-annotation')"
       />
       <v-btn
         v-tooltip:right="'删除选中'"
@@ -33,6 +43,7 @@
         :icon="mdiDeleteOutline"
         color="error"
         variant="text"
+        size="small"
         @click="emit('delete')"
       />
       <v-btn
@@ -40,6 +51,7 @@
         :disabled="!canCopy"
         :icon="mdiContentCopy"
         variant="text"
+        size="small"
         @click="emit('copy')"
       />
       <v-btn
@@ -47,6 +59,7 @@
         :disabled="!canPaste"
         :icon="mdiContentPaste"
         variant="text"
+        size="small"
         @click="pasteLatest"
       />
       <v-menu location="right" offset="8" :disabled="!canPaste">
@@ -57,6 +70,7 @@
             :disabled="!canPaste"
             :icon="mdiHistory"
             variant="text"
+            size="small"
           />
         </template>
         <v-list density="compact" max-height="320" min-width="240">
@@ -79,6 +93,7 @@
             v-tooltip:right="'缩放'"
             class="canvas-toolbar__zoom"
             variant="text"
+            size="small"
           >
             {{ Math.round(zoom * 100) }}%
           </v-btn>
@@ -104,6 +119,7 @@ import {
   mdiContentCopy,
   mdiContentPaste,
   mdiDeleteOutline,
+  mdiDraw,
   mdiHistory,
   mdiPencil,
   mdiLaptop,
@@ -123,6 +139,7 @@ const props = defineProps<{
   canPaste: boolean;
   clipboard: ClipboardEntry[];
   zoom: number;
+  isAnnotationMode: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -132,6 +149,7 @@ const emit = defineEmits<{
   copy: [];
   paste: [entry: ClipboardEntry];
   "set-zoom": [value: number];
+  "toggle-annotation": [];
 }>();
 
 const ZOOM_OPTIONS = [
@@ -184,7 +202,10 @@ const pasteLatest = () => {
 }
 
 .canvas-toolbar__zoom {
-  min-width: 40px;
+  /* 与右侧工具条同宽：small 图标按钮 28px，百分比文字不得撑宽整列 */
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
   font-size: 0.6875rem;
   letter-spacing: 0;
 }

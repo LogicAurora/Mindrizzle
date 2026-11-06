@@ -410,26 +410,16 @@ jobs:
 
           EOF
 
-          if [[ "$CH" != "stable" ]]; then
-            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
 
-          **3. 通道清单自动镜像**（发布后 \`channel-mirror.yml\` 把 latest.json 同步到 \`${CH}-channel\`）
+          **3. 通道清单自动写入**（发布后 \`channel-manifest.yml\` 把 latest.json 提交为 \`channel/$CH-latest.json\`，并同步 \`package.json\` / \`Cargo.toml\` / \`tauri.conf.json\` 的版本号）
 
           失败时手动补跑：
 
           \`\`\`bash
           gh release download $TAG --pattern latest.json --dir /tmp/upd --clobber
-          gh release upload "${CH}-channel" /tmp/upd/latest.json --clobber
+          cp /tmp/upd/latest.json channel/$CH-latest.json
           \`\`\`
-          EOF
-          else
-            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-
-          **3. 无需额外操作**（stable 走 \`releases/latest/download/latest.json\`）
-          EOF
-          fi
-
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
 
           **4. 丢弃草稿（如需）**
 
