@@ -1,20 +1,22 @@
-# cliff.toml
-# git-cliff 配置：从 Conventional Commits 生成分类 changelog
-
 [changelog]
 header = ""
 body = """
-{% if version %}\
-## {{ version | trim_start_matches(pat="v") }}
-{% else %}\
-## Unreleased
-{% endif %}\
+{% set authors = commits | map(attribute="author.name") | unique | sort %}
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | upper_first }}
+### {{ group | split(pat="-->") | last | trim }}
 {% for commit in commits %}
-- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
+- {% if commit.scope %}**{{ commit.scope }}：** {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} ⚠️{% endif %} — [`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/{{ get_env(name="GITHUB_REPO") }}/commit/{{ commit.id }})
 {% endfor %}
-{% endfor %}\n
+{% endfor %}
+{% if authors | length > 0 %}
+## 🙏 贡献者
+
+感谢以下贡献者对本版本的贡献：
+
+{% for author in authors %}
+- {{ author }}
+{% endfor %}
+{% endif %}
 """
 trim = true
 
@@ -25,28 +27,25 @@ split_commits = false
 protect_breaking_commits = true
 
 commit_parsers = [
-  # 破坏性变更置顶（放在最前面）
-  { message = "^feat.*!:", group = "<!-- 0 -->⚠ Breaking Changes" },
-  { message = "^fix.*!:",  group = "<!-- 0 -->⚠ Breaking Changes" },
-  { body = ".*BREAKING[ -]CHANGE.*", group = "<!-- 0 -->⚠ Breaking Changes" },
+  # 破坏性变更置顶
+  { message = "^feat.*!:", group = "<!-- 00 -->⚠️ 破坏性变更" },
+  { message = "^fix.*!:",  group = "<!-- 00 -->⚠️ 破坏性变更" },
+  { body = ".*BREAKING[ -]CHANGE.*", group = "<!-- 00 -->⚠️ 破坏性变更" },
 
-  # 常规类型分组
-  { message = "^feat",     group = "<!-- 1 -->Features" },
-  { message = "^fix",      group = "<!-- 2 -->Bug Fixes" },
-  { message = "^perf",     group = "<!-- 3 -->Performance" },
-  { message = "^refactor", group = "<!-- 4 -->Refactoring" },
-  { message = "^docs?",    group = "<!-- 5 -->Documentation" },
-  { message = "^test",     group = "<!-- 6 -->Tests" },
+  { message = "^feat",     group = "<!-- 01 -->✨ 新功能" },
+  { message = "^fix",      group = "<!-- 02 -->🐛 问题修复" },
+  { message = "^perf",     group = "<!-- 03 -->⚡ 性能优化" },
+  { message = "^refactor", group = "<!-- 04 -->♻️ 代码重构" },
+  { message = "^docs?",    group = "<!-- 05 -->📝 文档" },
+  { message = "^test",     group = "<!-- 06 -->✅ 测试" },
   { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore\\(deps\\)",    group = "<!-- 7 -->Dependencies" },
-  { message = "^chore",    group = "<!-- 8 -->Chores" },
-  { message = "^ci",       group = "<!-- 9 -->CI" },
-  { message = "^style",    group = "<!-- 10 -->Styling" },
-  { message = "^build",    group = "<!-- 11 -->Build" },
+  { message = "^chore\\(deps\\)",    group = "<!-- 07 -->📦 依赖更新" },
+  { message = "^chore",    group = "<!-- 08 -->🔧 杂项" },
+  { message = "^ci",       group = "<!-- 09 -->👷 流水线" },
+  { message = "^style",    group = "<!-- 10 -->💄 代码风格" },
+  { message = "^build",    group = "<!-- 11 -->🏗️ 构建" },
 
-  # 兜底：未匹配到的 conventional commit 归到 Other
-  { message = ".*", group = "<!-- 12 -->Other", default_scope = "other" },
+  { message = ".*", group = "<!-- 12 -->📌 其他", default_scope = "other" },
 ]
 
-# 只保留 HEAD 可达的 commit（避免历史分支噪声）
 filter_commits = false

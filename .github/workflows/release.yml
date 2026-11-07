@@ -37,24 +37,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ---- 用 git-cliff 生成分类 changelog ----
-      - name: Generate categorized changelog
-        uses: orhun/git-cliff-action@v4
-        id: cliff
-        with:
-          config: cliff.toml
-          args: --unreleased --strip all
-        env:
-          OUTPUT: /tmp/changelog.md
-          GITHUB_REPO: ${{ github.repository }}
-
       - name: Resolve version
         id: calc
         shell: bash
         env:
           CH: ${{ inputs.channel }}
           VER_INPUT: ${{ inputs.version }}
-          SHA: ${{ github.sha }}
           APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE }}
           WIN_CERT: ${{ secrets.TAURI_WINDOWS_CERTIFICATE }}
         run: |
@@ -81,12 +69,58 @@ jobs:
           fi
           TAG="v$VER"
 
-          # ---- 改为读取 git-cliff 的输出 ----
-          if [[ -s /tmp/changelog.md ]]; then
-            CHANGELOG=$(cat /tmp/changelog.md)
-          else
-            CHANGELOG="（与上一版本无新增提交）"
+          # ---- 计算 git-cliff 的 range ----
+          # stable：上一个 stable tag..HEAD，汇总本周期所有 beta/alpha 内容
+          # beta/alpha：--unreleased（序号连续递增，语义正好）
+          CLIFF_ARGS="--unreleased --strip all"
+          if [[ "$CH" == "stable" ]]; then
+            PREV_STABLE=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
+            if [[ -n "$PREV_STABLE" ]]; then
+              CLIFF_ARGS="--strip all ${PREV_STABLE}..HEAD"
+              echo "::notice::stable changelog range: ${PREV_STABLE}..HEAD"
+            else
+              CLIFF_ARGS="--strip all"
+              echo "::notice::首个 stable，changelog 覆盖全部历史"
+            fi
           fi
+
+          {
+            echo "version=$VER"
+            echo "tag=$TAG"
+            echo "channel=$CH"
+            echo "prerelease=$PRE"
+            echo "apple_signed=$HAS_APPLE_SIGN"
+            echo "win_signed=$HAS_WIN_SIGN"
+            echo "cliff_args=$CLIFF_ARGS"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::将创建 $TAG（通道 $CH）；Apple=$HAS_APPLE_SIGN，Windows=$HAS_WIN_SIGN"
+
+      - name: Generate categorized changelog
+        uses: orhun/git-cliff-action@v4
+        id: cliff
+        with:
+          config: cliff.toml
+          args: ${{ steps.calc.outputs.cliff_args }}
+        env:
+          OUTPUT: /tmp/changelog.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Compose release body
+        shell: bash
+        env:
+          VER: ${{ steps.calc.outputs.version }}
+          CH: ${{ steps.calc.outputs.channel }}
+          SHA: ${{ github.sha }}
+          APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          WIN_CERT: ${{ secrets.TAURI_WINDOWS_CERTIFICATE }}
+        run: |
+          set -euo pipefail
+
+          HAS_APPLE_SIGN=false
+          [[ -n "${APPLE_CERT:-}" ]] && HAS_APPLE_SIGN=true
+          HAS_WIN_SIGN=false
+          [[ -n "${WIN_CERT:-}" ]] && HAS_WIN_SIGN=true
 
           case "$CH" in
             stable) CH_DESC="稳定版（所有用户可见）" ;;
@@ -107,7 +141,8 @@ jobs:
           fi
 
           BODY_FILE="/tmp/release-body-${VER}.md"
-          cat > "$BODY_FILE" <<EOF
+          {
+            cat <<EOF
           ## 版本信息
 
           | 项目 | 值 |
@@ -119,43 +154,39 @@ jobs:
 
           ## 更新内容
 
-          $CHANGELOG
+          EOF
+            if [[ -s /tmp/changelog.md ]]; then cat /tmp/changelog.md; else echo "（与上一版本无新增提交）"; fi
+            cat <<'EOF'
 
           ## 安装包
 
           | 平台 | 架构 | 产物 |
           |------|------|------|
-          | macOS | Apple Silicon (aarch64) | \`.app.tar.gz\` + \`.sig\` |
-          | macOS | Intel (x86_64) | \`.app.tar.gz\` + \`.sig\` |
-          | Windows | x64 | NSIS 安装程序 + \`.sig\` |
-          | Linux | x64 | AppImage / deb + \`.sig\` |
+          | macOS | Apple Silicon (aarch64) | `.app.tar.gz` + `.sig` |
+          | macOS | Intel (x86_64) | `.app.tar.gz` + `.sig` |
+          | Windows | x64 | NSIS 安装程序 + `.sig` |
+          | Linux | x64 | AppImage / deb + `.sig` |
 
-          \`latest.json\` 为自动更新清单。
+          `latest.json` 为自动更新清单。
 
-          $INSTALL_NOTE
+          EOF
+            printf '%s\n' "$INSTALL_NOTE"
+            cat <<'EOF'
           ## 自动更新
 
           已安装旧版本的用户会在下次检查更新时收到提示。更新包经内置公钥校验签名后安装。
 
           ## 签名校验
 
-          每个安装包均有对应 \`.sig\`，客户端使用内置公钥验证。请勿修改或删除 \`.sig\` 与 \`latest.json\`。
+          每个安装包均有对应 `.sig`，客户端使用内置公钥验证。请勿修改或删除 `.sig` 与 `latest.json`。
 
           ---
 
           _本发布详情由 GitHub Actions 自动生成。_
           EOF
+          } > "$BODY_FILE"
 
-          {
-            echo "version=$VER"
-            echo "tag=$TAG"
-            echo "channel=$CH"
-            echo "prerelease=$PRE"
-            echo "apple_signed=$HAS_APPLE_SIGN"
-            echo "win_signed=$HAS_WIN_SIGN"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "::notice::将创建 $TAG（通道 $CH）；Apple=$HAS_APPLE_SIGN，Windows=$HAS_WIN_SIGN"
+          echo "::notice::release body 已生成：$BODY_FILE"
 
       - name: Ensure tag does not exist
         shell: bash
