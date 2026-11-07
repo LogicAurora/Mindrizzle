@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-01 -->
+<!-- 最后验证: 2026-11-07 -->
 
 # 01 坐标系
 
@@ -75,7 +75,12 @@ flowchart LR
   subgraph MdrCanvas["MdrCanvas.vue"]
     C1["roundToPx = roundToVisual(zoom, v)"]
     C2["visualY(v) = contentToVisual(t, 0, v).y"]
+    C3["resolveAddSpot：复用 roundToPx 对齐鼠标落点"]
+    C4["canvasStyle translate 保留小数<br/>抵消 zoom 后精确等于 pan + origin"]
   end
+  A2 -->|"预览 / 添加块鼠标落点"| C3
+  C3 -->|"视觉像素对齐"| C1
+  C4 -->|"画布位移与坐标模型一致"| A1
   A1 --> C2
   A4 --> C1
   B1 --> B2

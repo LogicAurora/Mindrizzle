@@ -545,10 +545,10 @@ watch(
   { flush: "post" },
 );
 
-// zoom 会同步放大 translate，所以平移量除以 zoom；屏幕位置 = content*zoom + pan + origin
+// 保留 translate 小数，避免 zoom 放大前取整造成画布相对指针偏移
 const canvasStyle = computed<CSSProperties>(() => ({
   zoom: zoom.value,
-  transform: `translate(${Math.round((pan.x + origin.x) / zoom.value)}px, ${Math.round((pan.y + origin.y) / zoom.value)}px)`,
+  transform: `translate(${(pan.x + origin.x) / zoom.value}px, ${(pan.y + origin.y) / zoom.value}px)`,
   transformOrigin: "0 0",
 }));
 // #endregion 缩放与画布变换
@@ -3678,7 +3678,7 @@ const resolveAddSpot = (
       return x < l.x + l.w && x + w > l.x && y < l.y + l.h && y + h > l.y;
     });
   };
-  const spot = { x: Math.round(at.x), y: Math.round(at.y) };
+  const spot = { x: roundToPx(at.x), y: roundToPx(at.y) };
   return overlapsAt(spot.x, spot.y) ? { spot: freeSpotFor(w, h) } : { spot };
 };
 
