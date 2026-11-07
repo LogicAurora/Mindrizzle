@@ -451,7 +451,7 @@ jobs:
 
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
 
-          **3. 通道清单自动写入**（发布后 \`channel-manifest.yml\` 把 latest.json 提交为 \`channel/$CH-latest.json\`，并同步 \`package.json\` / \`Cargo.toml\` / \`tauri.conf.json\` 的版本号）
+          **3. 通道清单自动写入**（发布后 \`channel-manifest.yml\` 把 latest.json 提交为 \`channel/$CH-latest.json\`，并同步 \`package.json\` / \`Cargo.toml\` / \`Cargo.lock\` / \`tauri.conf.json\` 的版本号）
 
           失败时手动补跑：
 
