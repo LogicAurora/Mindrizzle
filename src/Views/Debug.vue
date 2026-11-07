@@ -3,12 +3,12 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { isTauri } from "@tauri-apps/api/core";
 
-import { getErrorMessage } from "../utils/getErrorMessage";
 import {
   clearLocalNotes,
   clearTestNotes,
   createTestNotes,
-} from "../utils/localNoteStore";
+} from "../fileOperations";
+import { getErrorMessage } from "../utils/getErrorMessage";
 import {
   invalidateNoteSetEntries,
   lastNoteSetLoad,

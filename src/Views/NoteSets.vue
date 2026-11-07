@@ -45,17 +45,15 @@ import {
   type EditorNoteRef,
 } from "../utils/editorRoute";
 import { getErrorMessage } from "../utils/getErrorMessage";
-import { invokeCommand } from "../utils/invoke";
 import {
+  exportLocalNoteMdrf,
+  fileOperations,
+  importLocalNoteMdrf,
   isValidNoteFileName,
   NOTE_FILE_NAME_MAX_LEN,
   NOTE_FILE_NAME_RULE_HINT,
-} from "../utils/noteFileName";
-import {
-  exportLocalNoteMdrf,
-  importLocalNoteMdrf,
   moveLocalNoteToWorkspace,
-} from "../utils/localNoteStore";
+} from "../fileOperations";
 import {
   fetchNoteSetEntry,
   invalidateNoteSetEntries,
@@ -125,12 +123,9 @@ async function prepareEditor(note: EditorNoteRef) {
       noteLoadController.setProgress(event.payload);
     });
   }
-  const bodyPromise: Promise<EditorBodyResult> = invokeCommand<{
-    content: string;
-  }>("get_mdr_file_body", {
-    ...note,
-    debugProgress: isDebugLoadingEnabled.value,
-  }).then(
+  const bodyPromise: Promise<EditorBodyResult> = fileOperations
+    .getNoteBody(note, isDebugLoadingEnabled.value)
+    .then(
     (body) => ({ content: body.content ?? "" }),
     (error: unknown) => ({ error }),
   );
@@ -502,12 +497,9 @@ async function isNameAvailable(
   name: string,
 ): Promise<boolean> {
   if (!item.filePath)
-    return invokeCommand<boolean>("is_file_name_valid", {
-      fileName: name,
-      dir: item.dir,
-    });
+    return fileOperations.isFileNameAvailable(name, item.dir);
   try {
-    await invokeCommand("get_mdr_file_meta", {
+    await fileOperations.getNoteMeta({
       fileName: name,
       filePath: renamePathFileName(item.filePath, name),
     });
@@ -543,8 +535,8 @@ const externalRecordOf = (item: NoteSetItem, fileName: string) => ({
 
 async function copyNoteSet(item: NoteSetItem): Promise<void> {
   const newName = await allocateCopyName(item);
-  const copied = await invokeCommand<string>("copy_mdrf_file", {
-    ...noteSetArgsOf(item),
+  const copied = await fileOperations.copyNote({
+    location: noteSetArgsOf(item),
     newFileName: newName,
   });
   invalidateNoteSetEntries();
@@ -575,7 +567,7 @@ async function copySelected() {
 }
 
 async function deleteNoteSet(item: NoteSetItem): Promise<void> {
-  await invokeCommand("delete_mdrf_file", noteSetArgsOf(item));
+  await fileOperations.deleteNote(noteSetArgsOf(item));
   invalidateNoteSetEntries();
   if (isExternalSection.value) {
     const key = item.filePath ?? item.localName;
@@ -646,19 +638,16 @@ async function renameNoteSet(
   newName: string,
 ): Promise<void> {
   const isTitleFollowing = item.name === item.fileName;
-  const renamed = await invokeCommand<string>("rename_mdrf_file", {
-    ...noteSetArgsOf(item),
+  const renamed = await fileOperations.renameNote({
+    location: noteSetArgsOf(item),
     newFileName: newName,
-    // 用户自定义过标题就保持原样，避免纯改名也把整包重写一遍
-    ...(isTitleFollowing
+    meta: isTitleFollowing
       ? {
-          mdrFileInfo: {
-            title: newName,
-            description: item.description,
-            tag: item.tag,
-          },
+          title: newName,
+          description: item.description,
+          tag: item.tag,
         }
-      : {}),
+      : undefined,
   });
   invalidateNoteSetEntries();
   await applyRenamedNoteSet(item, renamed);
@@ -796,8 +785,8 @@ async function moveExternalNote(noteSet: NoteSetItem, targetDir?: string) {
   try {
     // 网页端副本只能归入默认工作区；桌面端直接把归档文件挪进目标目录
     if (noteSet.localName) await moveLocalNoteToWorkspace(noteSet.localName);
-    else
-      await invokeCommand("move_mdrf_file", {
+    else if (noteSet.filePath)
+      await fileOperations.moveExternalNote({
         filePath: noteSet.filePath,
         dir: targetDir,
       });

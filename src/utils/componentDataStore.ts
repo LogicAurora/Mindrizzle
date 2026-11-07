@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
-import { invokeCommand } from "./invoke";
+import {
+  fileOperations,
+  type NoteFileLocation,
+} from "../fileOperations";
 import { getCurrentNote } from "./noteContext";
 
-export interface NoteLocation {
-  fileName: string;
-  dir?: string;
-  filePath?: string;
-}
+export type NoteLocation = NoteFileLocation;
 
 // 外部文件与自定义工作区靠 dir/filePath 定位，组件数据命令必须带上同一份上下文
 const noteSourceOf = (
@@ -128,20 +127,19 @@ export class ComponentDataStore {
     validateComponentPath(location.path);
     const bytes =
       typeof content === "string" ? new TextEncoder().encode(content) : content;
-    await invokeCommand("write_component_data_file", {
-      request: {
-        ...location,
-        ...noteSourceOf(this.location),
-        contentBase64: encodeBase64(bytes),
-      },
+    await fileOperations.writeComponentDataFile({
+      ...location,
+      ...noteSourceOf(this.location),
+      contentBase64: encodeBase64(bytes),
     });
   }
 
   async readFile(url: string): Promise<Uint8Array> {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
-    const encoded = await invokeCommand<string>("read_component_data_file", {
-      request: { ...location, ...noteSourceOf(this.location) },
+    const encoded = await fileOperations.readComponentDataFile({
+      ...location,
+      ...noteSourceOf(this.location),
     });
     return decodeBase64(encoded);
   }
@@ -154,24 +152,28 @@ export class ComponentDataStore {
   async exportFile(url: string, targetPath: string): Promise<void> {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
-    await invokeCommand("export_component_data_file", {
-      request: { ...location, ...noteSourceOf(this.location), targetPath },
+    await fileOperations.exportComponentDataFile({
+      ...location,
+      ...noteSourceOf(this.location),
+      targetPath,
     });
   }
 
   async deleteFile(url: string): Promise<void> {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
-    await invokeCommand("delete_component_data_file", {
-      request: { ...location, ...noteSourceOf(this.location) },
+    await fileOperations.deleteComponentDataFile({
+      ...location,
+      ...noteSourceOf(this.location),
     });
   }
 
   async hasFile(url: string): Promise<boolean> {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
-    return invokeCommand<boolean>("component_data_file_exists", {
-      request: { ...location, ...noteSourceOf(this.location) },
+    return fileOperations.componentDataFileExists({
+      ...location,
+      ...noteSourceOf(this.location),
     });
   }
 
@@ -183,12 +185,10 @@ export class ComponentDataStore {
     if (!COMPONENT_UUID_PATTERN.test(location.uuid) || !location.fileName) {
       throw new Error("组件数据范围非法");
     }
-    return invokeCommand<string[]>("list_component_data_files", {
-      request: {
-        fileName: location.fileName,
-        uuid: location.uuid,
-        ...noteSourceOf(this.location),
-      },
+    return fileOperations.listComponentDataFiles({
+      fileName: location.fileName,
+      uuid: location.uuid,
+      ...noteSourceOf(this.location),
     });
   }
 }

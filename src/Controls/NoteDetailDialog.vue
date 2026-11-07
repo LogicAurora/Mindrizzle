@@ -3,7 +3,7 @@ import { ref, watch } from "vue";
 
 import NoteTagEditor from "./NoteTagEditor.vue";
 import { getErrorMessage } from "../utils/getErrorMessage";
-import { invokeCommand } from "../utils/invoke";
+import { fileOperations } from "../fileOperations";
 import { loadTagLibrary, rememberTags, sanitizeTags } from "../utils/tagStore";
 
 export interface NoteDetailTarget {
@@ -98,17 +98,12 @@ async function persistNote(note: NoteDetailTarget) {
     description: description.value.trim(),
     tag: sanitizeTags(tags.value),
   };
-  await invokeCommand("set_mdr_file_meta", {
-    fileName: note.fileName,
-    mdrFileInfo: meta,
-    dir: note.dir,
-    filePath: note.filePath,
-  });
+  await fileOperations.setNoteMeta(note, meta);
   await rememberTags(meta.tag);
   const targetDir = resolveTargetDir(note);
   const isMoved = props.isMovable && targetDir !== note.dir;
   if (isMoved) {
-    await invokeCommand("move_mdr_file", {
+    await fileOperations.moveNote({
       fileName: note.fileName,
       dir: note.dir,
       targetDir,

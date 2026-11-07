@@ -88,6 +88,7 @@ flowchart TD
 
 ## 笔记定位（工作区 / 外部文件）
 
+- 前端文件接口集中在 `src/fileOperations/`：`types.ts` 定义请求类型，`index.ts` 路由到 Tauri IPC 或浏览器端 `browserStore.ts`；界面层使用命名方法，不直接传命令名和参数对象。
 - 默认工作区：只传 `fileName`，后端拼到用户文档目录 `Mindrizzle/`。
 - 自定义工作区：额外传 `dir`（绝对目录），归档为 `dir/<fileName>.mdrf`。
 - 外部文件：传 `filePath`（绝对路径），后端直接读写该归档，保存写回原文件。

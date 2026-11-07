@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { invokeCommand } from "../utils/invoke";
 import {
+  fileOperations,
   isValidNoteFileName,
   NOTE_FILE_NAME_RULE_HINT,
-} from "../utils/noteFileName";
+} from "../fileOperations";
 import { invalidateNoteSetEntries } from "../utils/noteSetStore";
 import { error as LogError } from "@tauri-apps/plugin-log";
 
@@ -60,10 +60,7 @@ const debouncedCheck = (name: string) => {
       return;
     }
     try {
-      const valid = await invokeCommand<boolean>("is_file_name_valid", {
-        fileName: name,
-        dir: props.dir,
-      });
+      const valid = await fileOperations.isFileNameAvailable(name, props.dir);
       fileNameAsyncError.value = valid ? true : "文件名已被占用";
     } catch {
       fileNameAsyncError.value = "校验失败，请重试";
@@ -87,8 +84,8 @@ async function submit() {
   if (!valid) return;
 
   try {
-    const createdFileName = await invokeCommand<string>("create_mdr_file", {
-      mdrFileInfo: {
+    const createdFileName = await fileOperations.createNote({
+      meta: {
         title: title.value,
         description: description.value,
         tag: ["新笔记"],

@@ -1,7 +1,13 @@
 // 网页端没有 Tauri IPC，笔记文件层退化为 IndexedDB：正文与元信息按结构化克隆存取，不做 tar/压缩
-import type { InvokeArgs } from "@tauri-apps/api/core";
-
 import { buildMdrfBlob, parseMdrfArchive } from "./mdrfArchive";
+import type {
+  ComponentDataFile,
+  ComponentDataScope,
+  ComponentDataWriteRequest,
+  FileOperations,
+  NoteMeta,
+  RenameNoteRequest,
+} from "./types";
 
 const DB_NAME = "mindrizzle-local";
 const DB_VERSION = 1;
@@ -48,19 +54,11 @@ const FILE_NAME_RESERVED = [
   "LPT9",
 ];
 
-export interface NoteMeta {
-  title: string;
-  description: string;
-  tag: string[];
-}
-
 interface NoteRecord {
   meta: NoteMeta;
   content: string;
   updatedAt: number;
 }
-
-type NoteCommandArgs = Record<string, unknown>;
 
 const noteKeyOf = (fileName: string): string => `${NOTE_KEY_PREFIX}${fileName}`;
 
@@ -303,20 +301,21 @@ interface ComponentScope {
   uuid: string;
 }
 
-const resolveComponentScope = (args: NoteCommandArgs): ComponentScope => {
-  const request = args.request as { fileName: string; uuid: string };
-  const fileName = resolveFileName(String(request.fileName));
-  const uuid = String(request.uuid);
+const resolveComponentScope = (
+  request: ComponentDataScope,
+): ComponentScope => {
+  const fileName = resolveFileName(request.fileName);
+  const uuid = request.uuid;
   if (!COMPONENT_UUID_PATTERN.test(uuid)) throw new Error("组件 UUID 非法");
   return { key: `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`, uuid };
 };
 
 // 浏览器端没有真实路径，入口校验仍与后端保持一致，避免两端行为漂移
 const resolveComponentFile = (
-  args: NoteCommandArgs,
+  request: ComponentDataFile,
 ): ComponentScope & { path: string } => {
-  const scope = resolveComponentScope(args);
-  const path = String((args.request as { path?: string }).path ?? "");
+  const scope = resolveComponentScope(request);
+  const path = request.path;
   const hasBadSegment =
     path === "" ||
     path.length > COMPONENT_PATH_MAX_LEN ||
@@ -338,30 +337,35 @@ const writeComponentFiles = (
   files: Record<string, string>,
 ): Promise<void> => runWrite((store) => store.put(files, key));
 
-const listComponentFiles = async (args: NoteCommandArgs): Promise<string[]> => {
-  const { key } = resolveComponentScope(args);
+const listComponentFiles = async (
+  request: ComponentDataScope,
+): Promise<string[]> => {
+  const { key } = resolveComponentScope(request);
   return Object.keys(await readComponentFiles(key)).sort();
 };
 
-const readComponentFile = async (args: NoteCommandArgs): Promise<string> => {
-  const { key, path } = resolveComponentFile(args);
+const readComponentFile = async (
+  request: ComponentDataFile,
+): Promise<string> => {
+  const { key, path } = resolveComponentFile(request);
   const content = (await readComponentFiles(key))[path];
   if (content === undefined) throw new Error("组件数据文件不存在");
   return content;
 };
 
-const writeComponentFile = async (args: NoteCommandArgs): Promise<void> => {
-  const { key, path } = resolveComponentFile(args);
-  const contentBase64 = String(
-    (args.request as { contentBase64?: string }).contentBase64 ?? "",
-  );
+const writeComponentFile = async (
+  request: ComponentDataWriteRequest,
+): Promise<void> => {
+  const { key, path } = resolveComponentFile(request);
   const files = await readComponentFiles(key);
-  files[path] = contentBase64;
+  files[path] = request.contentBase64;
   await writeComponentFiles(key, files);
 };
 
-const deleteComponentFile = async (args: NoteCommandArgs): Promise<void> => {
-  const { key, path } = resolveComponentFile(args);
+const deleteComponentFile = async (
+  request: ComponentDataFile,
+): Promise<void> => {
+  const { key, path } = resolveComponentFile(request);
   const files = await readComponentFiles(key);
   if (!(path in files)) return;
   delete files[path];
@@ -369,8 +373,10 @@ const deleteComponentFile = async (args: NoteCommandArgs): Promise<void> => {
   else await runWrite((store) => store.delete(key));
 };
 
-const componentFileExists = async (args: NoteCommandArgs): Promise<boolean> => {
-  const { key, path } = resolveComponentFile(args);
+const componentFileExists = async (
+  request: ComponentDataFile,
+): Promise<boolean> => {
+  const { key, path } = resolveComponentFile(request);
   return path in (await readComponentFiles(key));
 };
 
@@ -515,45 +521,40 @@ const deleteLocalNoteFile = async (fileName: string): Promise<void> => {
   );
 };
 
-const COMMAND_HANDLERS: Record<string, (args: NoteCommandArgs) => unknown> = {
-  fetch_file_list: () => fetchFileList(),
-  is_file_name_valid: (args) => isFileNameValid(String(args.fileName)),
-  get_mdr_file_meta: (args) => getFileMeta(String(args.fileName)),
-  get_mdr_file_body: (args) => getFileBody(String(args.fileName)),
-  set_mdr_file_body: (args) =>
-    setFileBody(String(args.fileName), String(args.content)),
-  set_mdr_file_meta: (args) =>
-    setFileMeta(String(args.fileName), args.mdrFileInfo as NoteMeta),
-  move_mdr_file: () => {
+export const browserFileOperations: FileOperations = {
+  fetchFileNames: () => fetchFileList(),
+  isFileNameAvailable: (fileName) => isFileNameValid(fileName),
+  getNoteMeta: ({ fileName }) => getFileMeta(fileName),
+  getNoteBody: ({ fileName }) => getFileBody(fileName),
+  setNoteBody: ({ fileName }, content) => setFileBody(fileName, content),
+  setNoteMeta: ({ fileName }, meta) => setFileMeta(fileName, meta),
+  createNote: ({ fileName, meta }) => createFile(meta, fileName),
+  moveNote: async () => {
     throw new Error("网页端只有默认工作区，无法跨工作区移动");
   },
-  create_mdr_file: (args) =>
-    createFile(args.mdrFileInfo as NoteMeta, String(args.fileName)),
-  delete_mdrf_file: (args) => deleteLocalNoteFile(String(args.fileName)),
-  copy_mdrf_file: async (args) => {
-    const target = resolveFileName(String(args.newFileName));
-    await transferNote(resolveFileName(String(args.fileName)), target, false);
+  moveExternalNote: async () => {
+    throw new Error("网页端不支持移动本地文件");
+  },
+  deleteNote: ({ fileName }) => deleteLocalNoteFile(fileName),
+  copyNote: async ({ location, newFileName }) => {
+    const target = resolveFileName(newFileName);
+    await transferNote(resolveFileName(location.fileName), target, false);
     return target;
   },
-  rename_mdrf_file: async (args) => {
-    const source = resolveFileName(String(args.fileName));
-    const target = resolveFileName(String(args.newFileName));
+  renameNote: async ({ location, newFileName, meta }: RenameNoteRequest) => {
+    const source = resolveFileName(location.fileName);
+    const target = resolveFileName(newFileName);
     if (target === source) return target;
     await transferNote(source, target, true);
+    if (meta) await setFileMeta(target, meta);
     return target;
   },
-  list_component_data_files: listComponentFiles,
-  read_component_data_file: readComponentFile,
-  write_component_data_file: writeComponentFile,
-  delete_component_data_file: deleteComponentFile,
-  component_data_file_exists: componentFileExists,
+  listComponentDataFiles: listComponentFiles,
+  readComponentDataFile: readComponentFile,
+  writeComponentDataFile: writeComponentFile,
+  deleteComponentDataFile: deleteComponentFile,
+  componentDataFileExists: componentFileExists,
+  exportComponentDataFile: async () => {
+    throw new Error("网页端不支持将组件数据直接导出到本地路径");
+  },
 };
-
-export async function invokeLocalNoteCommand<T>(
-  command: string,
-  args?: InvokeArgs,
-): Promise<T> {
-  const handler = COMMAND_HANDLERS[command];
-  if (!handler) throw new Error(`浏览器端未实现命令：${command}`);
-  return (await handler(args as NoteCommandArgs)) as T;
-}

@@ -75,7 +75,7 @@ import { CANVAS_COMPONENTS } from "../Controls/Canvas/Registry/canvasComponents.
 import { isDeveloperMode } from "../utils/developerMode";
 import { screenToContent } from "../utils/canvasCoords";
 import { useRoute } from "vue-router";
-import { invokeCommand } from "../utils/invoke";
+import { fileOperations } from "../fileOperations";
 import { getErrorMessage } from "../utils/getErrorMessage.ts";
 import { takePendingEditorBody } from "../utils/editorRoute";
 import { touchNoteSetUpdatedAt } from "../utils/noteSetStore";
@@ -234,10 +234,10 @@ const saved = ref(false);
 const save = async () => {
   isSaving.value = true;
   try {
-    await invokeCommand("set_mdr_file_body", {
-      ...noteRef,
-      content: MdrCRef.value?.save() ?? "",
-    });
+    await fileOperations.setNoteBody(
+      noteRef,
+      MdrCRef.value?.save() ?? "",
+    );
     touchNoteSetUpdatedAt(noteRef.fileName, dir);
   } catch (error) {
     logError(getErrorMessage(error));
@@ -250,10 +250,7 @@ const save = async () => {
 const load = async () => {
   const raw = pendingEditorBody
     ? await pendingEditorBody
-    : await invokeCommand<{ content: string }>("get_mdr_file_body", {
-        ...noteRef,
-        debugProgress: isDebugLoadingEnabled.value,
-      });
+    : await fileOperations.getNoteBody(noteRef, isDebugLoadingEnabled.value);
   if ("error" in raw) throw raw.error;
   await MdrCRef.value?.load(raw.content ?? "");
 };
