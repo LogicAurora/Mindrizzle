@@ -4523,6 +4523,11 @@ defineExpose({
   background: rgba(var(--v-theme-primary), 0.08);
   pointer-events: none;
   box-sizing: border-box;
+  transition:
+    width 0.15s cubic-bezier(0.2, 0, 0, 1),
+    height 0.15s cubic-bezier(0.2, 0, 0, 1);
+
+  will-change: width, height;
 }
 .add-preview-label {
   position: absolute;
