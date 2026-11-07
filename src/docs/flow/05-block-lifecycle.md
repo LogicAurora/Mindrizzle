@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-24 -->
+<!-- 最后验证: 2026-11-07 -->
 
 # 05 块生命周期
 
@@ -93,15 +93,12 @@ flowchart TD
   B --> C["测 .editor-scroll.offsetHeight + 10"]
   C --> D["componentController.resizeTo({ height })"]
   D --> E["MdrCanvas resizeBlockTo → applyBlockSize"]
-  E --> F{"mobileMode?"}
-  F -->|是| G["shiftBlocksBelow 下方堆叠块跟随"]
-  F -->|否| H["propagateLinkedEdges 联结群<br/>heightChangable=false 的块不改高"]
-  H --> I["pushOverlapped<br/>按起始方位：右侧推右 / 下方推下"]
-  I --> I2["pruneDetachedLinks<br/>剔除已不贴合的链接"]
-  G --> J["scheduleGeometryRefresh + markLayoutDirty"]
-  I2 --> J
-  C --> K["canvasController.getViewData()"]
-  K --> L["光标超出视口底部 → panBy(0, -over)"]
+  E --> F["propagateLinkedEdges 联结群<br/>heightChangable=false 的块不改高"]
+  F --> G["pushOverlapped<br/>按起始方位：右侧推右 / 下方推下"]
+  G --> G2["pruneDetachedLinks<br/>剔除已不贴合的链接"]
+  G2 --> H["scheduleGeometryRefresh + markLayoutDirty"]
+  C --> I["canvasController.getViewData()"]
+  I --> J["光标超出视口底部 → panBy(0, -over)"]
 ```
 
 > `heightChangable` 由块组件注册项声明（富文本 autoHeight 时不可改高），画布与 base 共用同一判定；`isPanning` 由 `getViewData` 提供，拖拽平移期间组件不跟随光标。

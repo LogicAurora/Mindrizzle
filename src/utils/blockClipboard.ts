@@ -14,8 +14,8 @@ export interface ClipboardBlock {
   uuid: string;
   component: string;
   config: unknown;
-  layout: { desktop: ClipboardRect; mobile: ClipboardRect };
-  arranged: { desktop: boolean; mobile: boolean };
+  layout: ClipboardRect;
+  arranged: boolean;
 }
 
 // 画布只提供块快照，来源与时间由剪贴板补齐；跨笔记粘贴要靠来源定位资产文件
@@ -45,9 +45,30 @@ export const clipboardEntries = ref<ClipboardEntry[]>([]);
 
 let isLoaded = false;
 
+function isClipboardBlock(value: unknown): value is ClipboardBlock {
+  if (!value || typeof value !== "object") return false;
+  const block = value as Partial<ClipboardBlock>;
+  const rect = block.layout;
+  return (
+    typeof block.uuid === "string" &&
+    typeof block.component === "string" &&
+    typeof block.arranged === "boolean" &&
+    !!rect &&
+    typeof rect.x === "number" &&
+    typeof rect.y === "number" &&
+    typeof rect.w === "number" &&
+    typeof rect.h === "number"
+  );
+}
+
 function normalizeEntry(raw: unknown): ClipboardEntry | null {
   const entry = raw as Partial<ClipboardEntry> | null;
-  if (!entry || !Array.isArray(entry.blocks) || !entry.blocks.length)
+  if (
+    !entry ||
+    !Array.isArray(entry.blocks) ||
+    !entry.blocks.length ||
+    !entry.blocks.every(isClipboardBlock)
+  )
     return null;
   if (!entry.source || typeof entry.source.fileName !== "string") return null;
   return {
@@ -76,11 +97,13 @@ export function loadClipboardEntries(): void {
     const parsed: unknown = JSON.parse(
       localStorage.getItem(STORAGE_KEY) ?? "[]",
     );
-    clipboardEntries.value = Array.isArray(parsed)
+    const entries = Array.isArray(parsed)
       ? parsed
           .map(normalizeEntry)
           .filter((entry): entry is ClipboardEntry => entry !== null)
       : [];
+    clipboardEntries.value = entries;
+    if (Array.isArray(parsed) && entries.length !== parsed.length) persist();
   } catch {
     // 忽略，剪贴板损坏不影响画布
     clipboardEntries.value = [];

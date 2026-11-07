@@ -22,7 +22,7 @@ const ctx = useBlockContext<TodoConfig>();
 | `moveBy(dx, dy)`              | 移动自身，联动联结块                                        |
 | `panBy(dx, dy)` / `zoomTo(z)` | 平移/缩放画布（`z` 范围 0.5–3）                             |
 | `readOnly`                    | 只读态（响应式 getter）                                     |
-| `isCompact`                   | 画布移动端模式                                              |
+| `isCompact`                   | 当前视口是否使用紧凑界面，不改变块布局                      |
 | `isActive`                    | 是否处于选中态                                              |
 | `setDropHandlers(handlers)`   | 注册后块才能接收画布拖入                                    |
 

@@ -22,7 +22,6 @@
     <MdrCanvas class="editor-wrapper" ref="MdrCRef" />
     <CanvasSideToolbar
       :is-edit-mode="isEditMode"
-      :mobile-label="mobileButtonLabel"
       :can-delete="canOperateSelection"
       :can-copy="canOperateSelection"
       :can-paste="isEditMode && clipboardEntries.length > 0"
@@ -30,7 +29,6 @@
       :zoom="zoom"
       :is-annotation-mode="annotationMode"
       @toggle-edit="toggleEditMode"
-      @toggle-mobile="toggleMobileSim"
       @delete="deleteSelected"
       @copy="copySelectedBlocks"
       @paste="pasteEntry"
@@ -196,19 +194,6 @@ const onMouseUp = (e: MouseEvent) => {
   const key = addOptions.value[addIdx.value]?.key;
   if (key)
     MdrCRef.value?.addComponent(key, canvasPointFromMouse(e) ?? undefined);
-};
-
-const mobileButtonLabel = computed(() => {
-  const forced = MdrCRef.value?.forceMobile;
-  if (forced === null) return "自动布局";
-  return forced ? "移动端" : "桌面端";
-});
-
-const toggleMobileSim = () => {
-  // 模式切换会重挂载组件，先同步组件数据
-  MdrCRef.value!.syncComponentData();
-  // 布局刷新由 watch(mobileMode) 统一处理，此处仅切换标志
-  MdrCRef.value!.forceMobile = MdrCRef.value!.nextForceMobile();
 };
 
 const toggleEditMode = () => {

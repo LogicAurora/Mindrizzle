@@ -31,7 +31,7 @@
       <!-- 虚拟化切换必须换 key：自带壳的块只有整体重建才会重新 mount 内部编辑器 -->
       <component
         v-for="item in state.items"
-        :key="`${item.uuid}-${mobileMode ? 'm' : 'd'}-${isVirtualized(item.uuid) ? 'v' : 'a'}`"
+        :key="`${item.uuid}-${isVirtualized(item.uuid) ? 'v' : 'a'}`"
         :is="blockHostOf(item)"
         :ref="componentRefOf(item)"
         v-bind="blockDefinitionPropsOf(item)"
@@ -46,7 +46,6 @@
       />
 
       <AnnotationLayer
-        v-if="!mobileMode"
         :items="annotations"
         :blocks="annotationBlocks"
         :tool="annotationTool"
@@ -292,18 +291,6 @@ import { useDisplay } from "vuetify";
 const { xs } = useDisplay();
 const isMobile = computed(() => xs.value);
 
-// 要支持三态调试，所以 null 表示不强制、走真实断点
-const forceMobile = ref<boolean | null>(null);
-const mobileMode = computed(() =>
-  forceMobile.value === null ? isMobile.value : forceMobile.value,
-);
-
-const nextForceMobile = (): boolean | null => {
-  if (forceMobile.value === null) return true;
-  if (forceMobile.value === true) return false;
-  return null;
-};
-
 const isEditMode = ref(true);
 // #endregion 显示模式
 
@@ -386,11 +373,9 @@ const setAnnotationTool = (tool: AnnotationTool) => {
   annotationTool.value = tool;
 };
 
-// 批注存的是桌面布局坐标，移动端瀑布流会重排块，所以移动端直接退出批注模式
 const setAnnotationMode = (enabled: boolean) => {
-  const next = enabled && !mobileMode.value;
-  isAnnotationMode.value = next;
-  if (!next) return;
+  isAnnotationMode.value = enabled;
+  if (!enabled) return;
   state.selectedIds = new Set();
   hoveredUuid.value = null;
 };
@@ -418,10 +403,6 @@ const serializeAnnotations = (offsetX: number, offsetY: number) =>
       : item,
   );
 
-watch(mobileMode, (isMobileMode) => {
-  if (!isMobileMode) return;
-  setAnnotationMode(false);
-});
 // #endregion 批注
 
 const componentRefs = ref<Record<string, ComponentController | undefined>>({});
@@ -468,12 +449,9 @@ const rebaseOrigin = (offset: { x: number; y: number }) => {
   const dx = Math.round(offset.x) || 0;
   const dy = Math.round(offset.y) || 0;
   if (!dx && !dy) return;
-  // 移动端锁水平，所以仅竖直重定位且两端同步，保证切换模式后位置一致
-  const effDx = mobileMode.value ? 0 : dx;
   state.items.forEach((item) => {
-    item.layout.desktop.x -= effDx;
-    item.layout.desktop.y -= dy;
-    item.layout.mobile.y -= dy;
+    item.layout.x -= dx;
+    item.layout.y -= dy;
   });
   // 批注共用块坐标系，重定位时须同步平移，否则批注会与块错位
   annotations.value = annotations.value.map((item) =>
@@ -481,13 +459,13 @@ const rebaseOrigin = (offset: { x: number; y: number }) => {
       ? {
           ...item,
           points: item.points.map((point) => ({
-            x: point.x - effDx,
+            x: point.x - dx,
             y: point.y - dy,
           })),
         }
       : item,
   );
-  origin.x += effDx;
+  origin.x += dx;
   origin.y += dy;
 };
 
@@ -499,7 +477,7 @@ const maybeRebaseOrigin = () => {
     maxX = -Infinity,
     maxY = -Infinity;
   state.items.forEach((it) => {
-    const l = it.layout.desktop;
+    const l = it.layout;
     if (l.x < minX) minX = l.x;
     if (l.y < minY) minY = l.y;
     if (l.x > maxX) maxX = l.x;
@@ -541,8 +519,9 @@ watch(zoom, (z2) => {
   if (!cont) return;
   const w = cont.clientWidth;
   const h = cont.clientHeight;
-  if (!mobileMode.value)
-    pan.x = Math.round(pan.x + (w / 2 - (pan.x + origin.x)) * (1 - z2 / z1));
+  pan.x = Math.round(
+    pan.x + (w / 2 - (pan.x + origin.x)) * (1 - z2 / z1),
+  );
   pan.y = Math.round(pan.y + (h / 2 - (pan.y + origin.y)) * (1 - z2 / z1));
 });
 
@@ -708,12 +687,12 @@ const autoPanTick = (frame: number) => {
   const { vx: rx, vy: ry } = restrictedPanVelocity();
   if (!shouldPrioritizeRichText && (rx !== 0 || ry !== 0)) {
     // pan 是外部像素平移，按视口像素直接累加
-    const sx = mobileMode.value ? 0 : Math.round(rx);
+    const sx = Math.round(rx);
     const sy = Math.round(ry);
-    if (!mobileMode.value) pan.x += sx;
+    pan.x += sx;
     pan.y += sy;
-    // 块屏幕位置 = 块坐标*z + pan，所以需补偿被拖块坐标（移动端锁水平只补偿竖向）
-    panCompAcc.x += mobileMode.value ? 0 : -sx / zoom.value;
+    // 块屏幕位置 = 块坐标*z + pan，所以需补偿被拖块坐标
+    panCompAcc.x += -sx / zoom.value;
     panCompAcc.y += -sy / zoom.value;
     const compX = Math.round(panCompAcc.x);
     const compY = Math.round(panCompAcc.y);
@@ -723,7 +702,7 @@ const autoPanTick = (frame: number) => {
     if (customDrag.active) {
       customDragItems.forEach((dragTarget) => {
         const layout = layoutOf(dragTarget);
-        if (!mobileMode.value) layout.x += compX;
+        layout.x += compX;
         layout.y += compY;
       });
       richTextDropTargetId.value = findRichTextDropTarget();
@@ -822,8 +801,8 @@ const updatePan = (e: MouseEvent) => {
 const applyPan = () => {
   panRafId = 0;
   if (!panSession.active) return;
-  // 亚像素平移会致界面模糊，所以取整；移动端锁水平
-  pan.x = mobileMode.value ? 0 : Math.round(panTargetX);
+  // 亚像素平移会致界面模糊，所以取整
+  pan.x = Math.round(panTargetX);
   pan.y = Math.round(panTargetY);
 };
 
@@ -848,7 +827,7 @@ const onCanvasPanEvent = (e: Event) => {
   const dx = Number(detail.dx) || 0;
   const dy = Number(detail.dy) || 0;
   if (dx === 0 && dy === 0) return;
-  if (!mobileMode.value) pan.x += Math.round(dx);
+  pan.x += Math.round(dx);
   pan.y += Math.round(dy);
 };
 // #endregion 手动平移（右键拖拽）
@@ -903,7 +882,7 @@ const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
     minHeight: (c.minHeight ?? 0) + 8,
     maxWidth: c.maxWidth,
     maxHeight: c.maxHeight,
-    compact: mobileMode.value,
+    compact: isMobile.value,
     active: isActive(item.uuid),
     dragging: customDrag.draggingUuids.has(item.uuid),
     showHandle: floatingHandleItem.value?.uuid === item.uuid,
@@ -962,12 +941,12 @@ const blockDefinitionPropsOf = (item: CanvasItem) => {
 };
 
 const blockEnvOf = (): BlockEnv => ({
-  isCompact: mobileMode.value,
+  isCompact: isMobile.value,
   isReadOnly: !isEditMode.value,
 });
 
 const layoutOf = (item: CanvasItem): Rect =>
-  mobileMode.value ? item.layout.mobile : item.layout.desktop;
+  item.layout;
 // #endregion 组件数据读写
 
 // 接触段要融合、露出段保留边框，所以为每块生成接触段同色遮罩（块内相对坐标）
@@ -1557,17 +1536,15 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
       customDragItems.set(id, target);
     }
   });
-  // 粘贴的块需随被拖块一起移动，所以把链接可达的块加入拖拽组（仅桌面端）
-  if (!mobileMode.value) {
-    collectLinkedUuids(item.uuid).forEach((id) => {
-      if (customDragGroup[id]) return;
-      const target = state.items.find((it) => it.uuid === id);
-      if (target) {
-        customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y };
-        customDragItems.set(id, target);
-      }
-    });
-  }
+  // 粘贴的块需随被拖块一起移动，所以把链接可达的块加入拖拽组
+  collectLinkedUuids(item.uuid).forEach((id) => {
+    if (customDragGroup[id]) return;
+    const target = state.items.find((it) => it.uuid === id);
+    if (target) {
+      customDragGroup[id] = { x: layoutOf(target).x, y: layoutOf(target).y };
+      customDragItems.set(id, target);
+    }
+  });
   // 编辑器 hover 自解析在 zoom≠1 时会 stopPropagation，所以用捕获阶段监听
   window.addEventListener("pointermove", onCustomDragMove, true);
   window.addEventListener("pointerup", onCustomDragUp);
@@ -1900,9 +1877,9 @@ const applyCustomDrag = (frame: number) => {
     const origin = customDragGroup[id];
     const layout = layoutOf(target);
     // 块屏幕位置需落在整数像素，所以取整
-    layout.x = mobileMode.value ? origin.x : Math.round(origin.x + dx - panDx);
+    layout.x = Math.round(origin.x + dx - panDx);
     layout.y = Math.round(origin.y + dy - panDy);
-    if (!mobileMode.value) snapLayoutToOthers(target, layout);
+    snapLayoutToOthers(target, layout);
   });
   richTextDropTargetId.value = findRichTextDropTarget();
   updateRichTextDrop(frame);
@@ -1978,7 +1955,7 @@ const isAdjacent = (a: Rect, b: Rect): boolean => {
 
 // 尺寸传播受 min/max 钳制或推挤后可能把联结块推离贴合位，此时链接线已画不出来，所以同步剔除失效链接
 const pruneDetachedLinks = () => {
-  if (linkedPairs.value.size === 0 || mobileMode.value) return;
+  if (linkedPairs.value.size === 0) return;
   const itemMap = new Map(state.items.map((item) => [item.uuid, item]));
   const kept = new Set<string>();
   linkedPairs.value.forEach((key) => {
@@ -2000,13 +1977,11 @@ const connectionPoint = (a: Rect, b: Rect): { x: number; y: number } => {
 // 层级已在 zIndex.ts 固定，所以曲别针无需运行时降 z
 
 // 每次渲染返回新数组会让 ResizeBox 判定 props 变更而重渲染，所以复用常量数组
-const HANDLES_MOBILE = ["tm", "bm"];
 const HANDLES_NO_TOP_MIDDLE = ["tl", "tr", "ml", "mr", "bl", "bm", "br"];
 const HANDLES_ALL = ["tl", "tm", "tr", "ml", "mr", "bl", "bm", "br"];
 
 // 手柄已 Teleport 脱离 .drag-wrapper（CSS 隐藏规则失效），所以按 popup 显隐过滤 tm 手柄；可变形由 base 按 changable 收窄
 const resizeHandlesOf = (item: CanvasItem): string[] => {
-  if (mobileMode.value) return HANDLES_MOBILE;
   if (popupBlockUuid.value === item.uuid) return HANDLES_NO_TOP_MIDDLE;
   return HANDLES_ALL;
 };
@@ -2034,15 +2009,13 @@ const resizeCallbacksOf = (item: CanvasItem): ResizeCallbacks => {
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 
-// 组件申请移动时沿用联结语义：联动可达块一起走，移动端锁水平
+// 组件申请移动时沿用联结语义：联动可达块一起走
 const moveBlockBy = (item: CanvasItem, dx: number, dy: number) => {
   if (!isEditMode.value) return;
-  const deltaX = mobileMode.value ? 0 : Math.round(dx);
+  const deltaX = Math.round(dx);
   const deltaY = Math.round(dy);
   if (!deltaX && !deltaY) return;
-  const targets = mobileMode.value
-    ? [item.uuid]
-    : Array.from(collectLinkedUuids(item.uuid));
+  const targets = Array.from(collectLinkedUuids(item.uuid));
   const itemMap = new Map(state.items.map((it) => [it.uuid, it]));
   targets.forEach((id) => {
     const target = itemMap.get(id);
@@ -2074,7 +2047,7 @@ const resizeBlockTo = (item: CanvasItem, size: Partial<BlockSize>) => {
 };
 
 const panCanvasBy = (dx: number, dy: number) => {
-  if (!mobileMode.value) pan.x += Math.round(dx);
+  pan.x += Math.round(dx);
   pan.y += Math.round(dy);
 };
 
@@ -2139,7 +2112,7 @@ const paperclipCandidateOf = (
 };
 
 const computePaperclipCandidates = (): PaperclipCandidate[] => {
-  if (mobileMode.value || popupTopOpen.value) return [];
+  if (popupTopOpen.value) return [];
   const out: PaperclipCandidate[] = [];
   state.items.forEach((first, index) => {
     const row = state.items
@@ -2579,14 +2552,10 @@ const captureLinkedStarts = (uuid: string): Map<string, Rect> => {
 };
 
 const onResizeStart = (item: CanvasItem, handle: string) => {
-  // 移动端不启用块联结，仅桌面端收集
-  const starts = mobileMode.value
-    ? new Map<string, Rect>()
-    : captureLinkedStarts(item.uuid);
   resizeSession = {
     uuid: item.uuid,
     handle,
-    starts,
+    starts: captureLinkedStarts(item.uuid),
     lastBase: { ...layoutOf(item) },
     panStartX: pan.x,
     panStartY: pan.y,
@@ -2637,21 +2606,7 @@ const onResizeStop = (
 };
 // #endregion 尺寸调整与联结传播
 
-// 移动端纵向堆叠，autoHeight 变化后下方块须跟随平移，否则重叠
 // #region 高度自适应
-const shiftBlocksBelow = (item: CanvasItem, delta: number) => {
-  if (delta === 0) return;
-  state.items
-    .filter(
-      (it) =>
-        it.uuid !== item.uuid && it.layout.mobile.y > item.layout.mobile.y,
-    )
-    .sort((a, b) => a.layout.mobile.y - b.layout.mobile.y)
-    .forEach((it) => {
-      it.layout.mobile.y += delta;
-    });
-};
-
 // 联结链上的位移判定必须基于变化前的相对关系，否则逐级改高后贴合判定会失效
 interface LinkedShift {
   starts: Map<string, Rect>;
@@ -2793,15 +2748,6 @@ const pushOverlapped = (shift: LinkedShift) => {
 const applyBlockSize = (item: CanvasItem, width: number, height: number) => {
   const layout = layoutOf(item);
   if (layout.w === width && layout.h === height) return;
-  if (mobileMode.value) {
-    // 先算 delta 再覆盖高度，使下方堆叠块跟随平移
-    const dy = height - layout.h;
-    layout.h = height;
-    shiftBlocksBelow(item, dy);
-    scheduleGeometryRefresh();
-    markLayoutDirty();
-    return;
-  }
   const shift = buildShiftContext();
   shift.moved.add(item.uuid);
   layout.w = width;
@@ -2988,10 +2934,8 @@ const addPreviewSpot = computed(() => {
   return resolveAddSpot(key, pos).spot;
 });
 
-// 移动端预览宽度取画布宽而非默认尺寸
 const previewWidthOf = (key: CanvasItem["component"]): number => {
   const meta = componentMetaOf(key);
-  if (mobileMode.value) return canvasWidth.value || meta?.defaultSize.w || 0;
   return meta?.defaultSize.w ?? 0;
 };
 
@@ -3554,58 +3498,9 @@ const updateCanvasWidth = () => {
   }
 };
 
-const stretchMobileWidth = (item: CanvasItem) => {
-  const mobile = item.layout.mobile;
-  mobile.x = 0;
-  mobile.w = canvasWidth.value;
-};
-
-const applyMobileLayout = () => {
-  if (!mobileMode.value || canvasWidth.value <= 0) return;
-  state.items.forEach((item) => {
-    stretchMobileWidth(item);
-    const { desktop, mobile } = item.layout;
-    // 旧数据可能缺失移动端位置/高度，从桌面布局补齐
-    if (mobile.y == null) mobile.y = desktop.y;
-    if (mobile.h == null) mobile.h = desktop.h;
-  });
-};
-
 const refreshLayout = () => {
   updateCanvasWidth();
-  if (mobileMode.value) applyMobileLayout();
 };
-
-// 内容要在组件重挂载前同步，所以用 flush: 'pre'
-watch(
-  mobileMode,
-  () => {
-    syncComponentData();
-    if (mobileMode.value) {
-      // 移动端锁水平，所以把水平原点并入桌面布局并归零
-      if (origin.x) {
-        state.items.forEach((it) => {
-          it.layout.desktop.x += origin.x;
-        });
-        origin.x = 0;
-      }
-      // 移动端按视口宽度拉伸，所以归零缩放；归零属模式重置，跳过锚点补偿
-      zoomAnchorPrev = 1;
-      zoom.value = 1;
-    }
-    // 残留 pan.y 会把另一布局顶出视口，所以切换时归零平移
-    pan.x = 0;
-    pan.y = 0;
-    autoArrange(mobileMode.value ? "mobile" : "desktop");
-    recomputeMasks();
-    nextTick(() => {
-      refreshLayout();
-      // 换布局会整体改变可见性，所以要按新视口重算虚拟集
-      reconcileVirtualBlocks();
-    });
-  },
-  { flush: "pre" },
-);
 
 // 块删除后其曲别针链接失效，随 items 变化自动清理
 watch(
@@ -3645,44 +3540,23 @@ const onResize = () => {
 };
 // #endregion 数据同步与布局刷新
 
-// 未排的块按桌面阅读顺序纵向堆叠在已排块下方（x 恒 0）
 // #region 自动布局与添加
-const autoArrangeMobile = () => {
-  const pending = state.items.filter((it) => !it.arranged.mobile);
-  if (pending.length === 0) return;
-  let cursor = ARRANGE_TOP;
-  state.items.forEach((it) => {
-    if (it.arranged.mobile)
-      cursor = Math.max(cursor, it.layout.mobile.y + it.layout.mobile.h);
-  });
-  pending
-    .sort((a, b) => a.layout.desktop.y - b.layout.desktop.y)
-    .forEach((it) => {
-      const m = it.layout.mobile;
-      m.x = 0;
-      m.h = m.h > 0 ? m.h : it.layout.desktop.h;
-      m.y = Math.round(cursor + ARRANGE_GAP);
-      cursor = m.y + m.h;
-      it.arranged.mobile = true;
-    });
-};
-
-// 未排的块按视口宽度瀑布流平铺在已排块下方
+// 未排的块按视口宽度从左到右排列在已排块下方
 const autoArrangeDesktop = () => {
-  const pending = state.items.filter((it) => !it.arranged.desktop);
+  const pending = state.items.filter((it) => !it.arranged);
   if (pending.length === 0) return;
   let cursorY = ARRANGE_TOP;
   state.items.forEach((it) => {
-    if (it.arranged.desktop)
-      cursorY = Math.max(cursorY, it.layout.desktop.y + it.layout.desktop.h);
+    if (it.arranged)
+      cursorY = Math.max(cursorY, it.layout.y + it.layout.h);
   });
   const maxX = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2);
   let cursorX = ARRANGE_LEFT;
   let rowH = 0;
   pending
-    .sort((a, b) => a.layout.desktop.y - b.layout.desktop.y)
+    .sort((a, b) => a.layout.y - b.layout.y)
     .forEach((it) => {
-      const d = it.layout.desktop;
+      const d = it.layout;
       if (cursorX + d.w > maxX - ARRANGE_LEFT) {
         cursorX = ARRANGE_LEFT;
         cursorY += rowH + ARRANGE_GAP;
@@ -3692,26 +3566,18 @@ const autoArrangeDesktop = () => {
       d.y = Math.round(cursorY);
       cursorX += d.w + ARRANGE_GAP;
       rowH = Math.max(rowH, d.h);
-      it.arranged.desktop = true;
+      it.arranged = true;
     });
 };
 
-const autoArrange = (mode: "desktop" | "mobile") => {
-  if (mode === "mobile") autoArrangeMobile();
-  else autoArrangeDesktop();
+const autoArrange = () => {
+  autoArrangeDesktop();
   // 排列只写 layout（非响应式），所以须显式刷新
   markLayoutDirty();
 };
 
-// 桌面端取各已放块底部作候选顶边、视口内从左到右找空位（贴底候选比固定网格更紧凑）；移动端追加到末尾
+// 取各已放块底部作候选顶边、视口内从左到右找空位
 const freeSpotFor = (w: number, h: number): { x: number; y: number } => {
-  if (mobileMode.value) {
-    let maxBottom = 0;
-    state.items.forEach((it) => {
-      maxBottom = Math.max(maxBottom, it.layout.mobile.y + it.layout.mobile.h);
-    });
-    return { x: 0, y: Math.round(maxBottom + ARRANGE_GAP) };
-  }
   const placed = state.items.map((it) => layoutOf(it));
   // canvasWidth 是像素，所以换算 content 宽度需除 zoom（否则换行边界错位）
   const vx = Math.round(-(origin.x + pan.x) / zoom.value);
@@ -3756,7 +3622,7 @@ const panToBlock = (id: string) => {
   const vh = cont?.clientHeight ?? window.innerHeight;
   const cx = (layout.x + layout.w / 2) * zoom.value;
   const cy = (layout.y + layout.h / 2) * zoom.value;
-  if (!mobileMode.value) pan.x = Math.round(vw / 2 - origin.x - cx);
+  pan.x = Math.round(vw / 2 - origin.x - cx);
   pan.y = Math.round(vh / 2 - origin.y - cy);
 };
 
@@ -3802,10 +3668,6 @@ const resolveAddSpot = (
   const meta = componentMetaOf(key);
   if (!meta) return { spot: { x: 0, y: 0 } };
   if (!at) return { spot: freeSpotFor(meta.defaultSize.w, meta.defaultSize.h) };
-  if (mobileMode.value) {
-    // 移动端锁水平（x 恒 0、宽贴屏），但 y 跟随鼠标位置
-    return { spot: { x: 0, y: Math.round(at.y) } };
-  }
   const { w, h } = meta.defaultSize;
   const overlapsAt = (x: number, y: number) => {
     const b = itemsBounds.value;
@@ -3840,16 +3702,10 @@ const addComponent = (
     uuid,
     component: key,
     config: config ?? meta.defaultConfig(),
-    layout: {
-      desktop: { x, y, ...meta.defaultSize },
-      mobile: { x: 0, y, ...meta.defaultSize },
-    },
-    arranged: { desktop: !mobileMode.value, mobile: mobileMode.value },
+    layout: { x, y, ...meta.defaultSize },
+    arranged: true,
   });
   state.items.push(newItem);
-  if (mobileMode.value && canvasWidth.value > 0) {
-    stretchMobileWidth(newItem);
-  }
   if (!isRectVisibleInViewport(layoutOf(newItem))) panToBlock(newItem.uuid);
   recomputeMasks();
   return uuid;
@@ -4103,7 +3959,7 @@ const save = () => {
       maxX = -Infinity,
       maxY = -Infinity;
     state.items.forEach((it) => {
-      const a = absOf(it.layout.desktop);
+      const a = absOf(it.layout);
       if (a.x < minX) minX = a.x;
       if (a.y < minY) minY = a.y;
       if (a.x > maxX) maxX = a.x;
@@ -4118,20 +3974,12 @@ const save = () => {
     w: Math.round(r.w),
     h: Math.round(r.h),
   });
-  // 移动端宽度运行时拉伸，不持久化
   const serializable = state.items.map((it) => ({
     uuid: it.uuid,
     component: it.component,
     config: it.config,
-    layout: {
-      desktop: toSaveRect(it.layout.desktop),
-      mobile: {
-        x: 0,
-        y: Math.round(it.layout.mobile.y + origin.y + pan.y - cy),
-        h: Math.round(it.layout.mobile.h),
-      },
-    },
-    arranged: { ...it.arranged },
+    layout: toSaveRect(it.layout),
+    arranged: it.arranged,
   }));
   return JSON.stringify({
     origin: { x: cx, y: cy },
@@ -4144,7 +3992,7 @@ const save = () => {
   });
 };
 
-// 兼容双端布局重构前的扁平格式并对缺失字段兜底
+// 兼容旧扁平块数据并对缺失字段兜底
 const normalizeLoadedItem = (it: any): CanvasItem => {
   const component: CanvasItem["component"] = blockDefinitionOf(
     it.component as string,
@@ -4153,29 +4001,21 @@ const normalizeLoadedItem = (it: any): CanvasItem => {
     : DEFAULT_COMPONENT_KEY;
   const isLegacyFlat =
     !it.layout && typeof it.x === "number" && typeof it.y === "number";
-  const desktop: Rect = isLegacyFlat
+  const layout: Rect = isLegacyFlat
     ? { x: it.x, y: it.y, w: it.w ?? 400, h: it.h ?? 300 }
-    : { x: 0, y: 0, w: 400, h: 300, ...(it.layout?.desktop ?? {}) };
-  const mobile: Rect = { ...desktop, ...(it.layout?.mobile ?? {}) };
+    : {
+        x: 0,
+        y: 0,
+        w: 400,
+        h: 300,
+        ...(it.layout?.desktop ?? it.layout ?? {}),
+      };
   // 坐标异常会使块丢失，所以一律归 0
-  desktop.x = typeof desktop.x === "number" ? desktop.x : 0;
-  desktop.y = typeof desktop.y === "number" ? desktop.y : 0;
-  mobile.x = typeof mobile.x === "number" ? mobile.x : 0;
-  mobile.y = typeof mobile.y === "number" ? mobile.y : 0;
-  // 旧数据无 arranged：desktop 视为已排，mobile 与 desktop 完全一致（纯副本）则视为未排
-  let arranged = { desktop: true, mobile: true };
-  if (it.arranged && typeof it.arranged === "object") {
-    arranged = {
-      desktop: it.arranged.desktop !== false,
-      mobile: it.arranged.mobile !== false,
-    };
-  } else {
-    const savedMobile = it.layout?.mobile;
-    const mobileIsCopy =
-      !savedMobile ||
-      (savedMobile.y === desktop.y && savedMobile.h === desktop.h);
-    arranged = { desktop: true, mobile: !mobileIsCopy };
-  }
+  layout.x = typeof layout.x === "number" ? layout.x : 0;
+  layout.y = typeof layout.y === "number" ? layout.y : 0;
+  const arranged =
+    it.arranged !== false &&
+    (typeof it.arranged !== "object" || it.arranged?.desktop !== false);
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   return markRaw({
     uuid:
@@ -4184,7 +4024,7 @@ const normalizeLoadedItem = (it: any): CanvasItem => {
     config: (it.config ??
       componentMetaOf(component)?.defaultConfig() ??
       {}) as WidgetConfig,
-    layout: { desktop, mobile },
+    layout,
     arranged,
   });
 };
@@ -4227,18 +4067,7 @@ const load = async (raw: string) => {
   );
   await nextTick();
   await nextTick();
-  if (mobileMode.value) {
-    // origin.x 非 0 会把块水平顶出屏外，所以并入 desktop.x 并归零
-    if (origin.x) {
-      state.items.forEach((it) => {
-        it.layout.desktop.x += origin.x;
-      });
-      origin.x = 0;
-    }
-    updateCanvasWidth();
-    applyMobileLayout();
-  }
-  autoArrange(mobileMode.value ? "mobile" : "desktop");
+  autoArrange();
   // 排列改了 layout，所以要按落定后的位置再定一次虚拟集（首次渲染那次用的是文件里的旧坐标）
   reconcileVirtualBlocks();
   state.items.forEach((item) => {
@@ -4264,11 +4093,8 @@ const copySelection = (): ClipboardSnapshot | null => {
       uuid: item.uuid,
       component: item.component,
       config: JSON.parse(JSON.stringify(item.config)),
-      layout: {
-        desktop: { ...item.layout.desktop },
-        mobile: { ...item.layout.mobile },
-      },
-      arranged: { ...item.arranged },
+      layout: { ...item.layout },
+      arranged: item.arranged,
     })),
     links: Array.from(linkedPairs.value).filter((key) =>
       key.split("|").every((id) => ids.has(id)),
@@ -4282,7 +4108,7 @@ const clipboardCenterOf = (blocks: ClipboardBlock[]): Point => {
     maxX = -Infinity,
     maxY = -Infinity;
   blocks.forEach((block) => {
-    const rect = block.layout.desktop;
+    const rect = block.layout;
     minX = Math.min(minX, rect.x);
     minY = Math.min(minY, rect.y);
     maxX = Math.max(maxX, rect.x + rect.w);
@@ -4328,7 +4154,7 @@ const groupOverlaps = (
   dy: number,
 ): boolean =>
   blocks.some((block) => {
-    const rect = block.layout.desktop;
+    const rect = block.layout;
     return overlapsAt({ x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h });
   });
 
@@ -4343,8 +4169,6 @@ const resolvePasteOffset = (
     : (viewportCenterInContent() ?? center);
   let dx = Math.round(target.x - center.x);
   let dy = Math.round(target.y - center.y);
-  // 移动端块宽贴屏且纵向堆叠，横向偏移毫无意义，也谈不上重叠
-  if (mobileMode.value) return { dx: 0, dy };
   for (
     let attempt = 0;
     attempt < PASTE_MAX_ATTEMPTS && groupOverlaps(blocks, dx, dy);
@@ -4366,20 +4190,12 @@ const buildPastedItem = (
     component: block.component,
     config: JSON.parse(JSON.stringify(block.config)),
     layout: {
-      desktop: {
-        x: block.layout.desktop.x + offset.dx,
-        y: block.layout.desktop.y + offset.dy,
-        w: block.layout.desktop.w,
-        h: block.layout.desktop.h,
-      },
-      mobile: {
-        x: 0,
-        y: block.layout.mobile.y + offset.dy,
-        w: block.layout.mobile.w,
-        h: block.layout.mobile.h,
-      },
+      x: block.layout.x + offset.dx,
+      y: block.layout.y + offset.dy,
+      w: block.layout.w,
+      h: block.layout.h,
     },
-    arranged: { ...block.arranged },
+    arranged: block.arranged,
   });
 
 const linkPastedPairs = (
@@ -4423,7 +4239,6 @@ const pasteBlocks = (entry: ClipboardEntry): void => {
     created.push(uuid);
     const item = buildPastedItem(block, uuid, offset);
     state.items.push(item);
-    if (mobileMode.value && canvasWidth.value > 0) stretchMobileWidth(item);
     bringToTop(uuid);
   });
   linkPastedPairs(entry.links, uuidMap);
@@ -4533,18 +4348,15 @@ defineExpose({
   pan,
   origin,
   zoom,
-  mobileMode,
   isPanning,
   canvasStyle,
   containerStyle,
   selectionBoxStyle,
   CANVAS_COMPONENTS,
   isEditMode,
-  forceMobile,
   componentRefs,
   virtualSnapshots,
   reconcileVirtualBlocks,
-  nextForceMobile,
   syncComponentData,
   layoutOf,
   handlePlacementOf,

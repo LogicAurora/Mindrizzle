@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Mindrizzle"
-version = "0.0.1-alpha"
+version = "0.0.1-alpha.1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",

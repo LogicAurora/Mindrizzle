@@ -107,14 +107,8 @@ export interface CanvasItem {
   uuid: string;
   component: string;
   config: WidgetConfig;
-  layout: {
-    desktop: Rect;
-    mobile: Rect;
-  };
-  arranged: {
-    desktop: boolean;
-    mobile: boolean;
-  };
+  layout: Rect;
+  arranged: boolean;
 }
 
 // 新增块只需在 Components 下放一对同名文件（Xxx.block.ts + Xxx.vue），注册表自动收集

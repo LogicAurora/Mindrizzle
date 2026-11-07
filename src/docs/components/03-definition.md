@@ -48,9 +48,9 @@ defineBlock({
 ```ts
 // 自动高度模式：高度随内容走，不能被联结改
 heightChangableOf: (config) => config.autoHeight !== true,
-// 移动端宽度锁在画布宽
-widthChangableOf: (config, env) => !env.isCompact,
 ```
+
+`env.isCompact` 只反映紧凑界面，不代表画布布局模式。
 
 ## 动态标题与图标
 

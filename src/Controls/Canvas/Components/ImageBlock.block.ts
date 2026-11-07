@@ -23,8 +23,7 @@ export default defineBlock<ImageBlockConfig>({
     autoSize: false,
   }),
   defaultSize: { w: 360, h: 240 },
-  // 移动端宽度锁在画布宽，块自己再放开会与堆叠布局冲突
-  widthChangableOf: (config, env) => config.autoSize !== true && !env.isCompact,
+  widthChangableOf: (config) => config.autoSize !== true,
   heightChangableOf: (config) => config.autoSize !== true,
   settings: ImageSettings,
   embed: {

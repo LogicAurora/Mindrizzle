@@ -17,19 +17,6 @@
         @click="emit('toggle-edit')"
       />
       <v-btn
-        v-tooltip:right="'当前 : ' + mobileLabel"
-        :icon="
-          mobileLabel === '移动端'
-            ? mdiCellphone
-            : mobileLabel === '桌面端'
-              ? mdiLaptop
-              : mdiDevices
-        "
-        variant="text"
-        size="small"
-        @click="emit('toggle-mobile')"
-      />
-      <v-btn
         v-tooltip:right="isAnnotationMode ? '退出批注' : '批注模式'"
         :color="isAnnotationMode ? 'primary' : undefined"
         :icon="mdiDraw"
@@ -115,15 +102,12 @@
 
 <script setup lang="ts">
 import {
-  mdiCellphone,
   mdiContentCopy,
   mdiContentPaste,
   mdiDeleteOutline,
   mdiDraw,
   mdiHistory,
   mdiPencil,
-  mdiLaptop,
-  mdiDevices,
   mdiPencilOff,
 } from "@mdi/js";
 
@@ -133,7 +117,6 @@ import type { ClipboardEntry } from "../../utils/blockClipboard.ts";
 
 const props = defineProps<{
   isEditMode: boolean;
-  mobileLabel: string;
   canDelete: boolean;
   canCopy: boolean;
   canPaste: boolean;
@@ -144,7 +127,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "toggle-edit": [];
-  "toggle-mobile": [];
   delete: [];
   copy: [];
   paste: [entry: ClipboardEntry];

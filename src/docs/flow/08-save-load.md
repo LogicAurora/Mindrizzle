@@ -1,6 +1,6 @@
-<!-- 最后验证: 2026-11-05 -->
+<!-- 最后验证: 2026-11-07 -->
 
-# 08 序列化与兼容
+# 08 序列化与加载
 
 ## 图 8.1 save 数据流
 
@@ -9,7 +9,7 @@ flowchart TD
   A["save()"] --> B["syncComponentData 拉取各组件 saveConfig"]
   B --> C["计算块群包围盒中心 cx, cy"]
   C --> D["toSaveRect 相对 origin + pan - 中心"]
-  D --> E["序列化 items（桌面 + 移动）"]
+  D --> E["序列化 items（单一 layout）"]
   E --> F["序列化 origin + links + annotations"]
   F --> G["返回 JSON 字符串"]
 ```
@@ -29,32 +29,25 @@ flowchart TD
   H --> I["reconcileVirtualBlocks 首次定虚拟集"]
   I --> J["linkedPairs + annotations 恢复"]
   J --> K["nextTick × 2"]
-  K --> L{"mobileMode?"}
-  L -->|是| M["origin.x 并入 desktop.x<br/>applyMobileLayout"]
-  L -->|否| N["跳过"]
-  M --> O["autoArrange"]
-  N --> O
-  O --> P["reconcileVirtualBlocks 二次定虚拟集"]
-  P --> Q["loadConfig 各组件"]
-  Q --> R["recomputeMasks"]
+  K --> L["autoArrange"]
+  L --> M["reconcileVirtualBlocks 二次定虚拟集"]
+  M --> N["loadConfig 各组件"]
+  N --> O["recomputeMasks"]
 ```
 
-## 图 8.3 normalizeLoadedItem 兼容分支
+## 图 8.3 normalizeLoadedItem 数据分支
 
 ```mermaid
 flowchart TD
   A["normalizeLoadedItem(it)"] --> B["component 未知则回落 RichTextEditor"]
   B --> C{"isLegacyFlat?"}
-  C -->|是| D["从 it.x/y/w/h 构造 desktop"]
-  C -->|否| E["用 it.layout.desktop + 默认兜底"]
-  D --> F["mobile = desktop + it.layout.mobile 覆盖"]
+  C -->|是| D["用 it.x/y/w/h 构造 layout"]
+  C -->|否| E["读取 it.layout.desktop 或 it.layout"]
+  D --> F["补默认尺寸"]
   E --> F
   F --> G["坐标类型兜底归 0"]
-  G --> H{"it.arranged 存在？"}
-  H -->|是| I["读取 arranged"]
-  H -->|否| J["desktop 视为已排<br/>mobile 与 desktop 一致则未排"]
-  I --> K["markRaw 返回"]
-  J --> K
+  G --> H["读取 arranged"]
+  H --> I["markRaw 返回"]
 ```
 
 ## 组件私有文件（ComponentsData）
@@ -123,16 +116,16 @@ flowchart TD
 - 剪贴板是应用级共享数据（`src/utils/blockClipboard.ts`），跨便签保留历史；内容相同的复制只刷新时间并提到最前。
 - 块只看 `config` / `layout` / `arranged`，不依赖原块实例；粘贴后原块再改不会影响已复制内容。
 - 资产文件按 `source`（fileName + dir/filePath）定位：`ComponentDataStore` 支持显式传入来源笔记，`copyComponentFiles` 从源笔记读、写入当前笔记。
-- 移动端粘贴 x 恒 0，不做横向偏移与重叠避让。
 
 ## 兼容规则速查
 
 - 块标识字段为 `uuid`（放置时生成、持久化），不做旧 `id` 字段兼容
-- 旧扁平格式（`it.x/y/w/h`）→ 转为 `layout.desktop`
+- 旧扁平格式（`it.x/y/w/h`）→ 转为 `layout`
 - `origin` 坐标归一化：保存时减去块群中心，加载时归零 pan；批注笔画点走同一偏移
 - 批注 `annotations` 缺失时视为空数组；连接线两端块不存在时丢弃
-- 移动端宽度运行时拉伸，不持久化
-- `arranged` 缺失时：desktop 视为已排，mobile 若与 desktop 一致则视为未排
+- 旧双布局数据只读取 `layout.desktop`，移动端布局直接丢弃
+- 旧对象型 `arranged` 只读取 `desktop` 状态
+- 旧剪贴板条目不含单一布局时直接丢弃
 
 ## 维护提示
 
