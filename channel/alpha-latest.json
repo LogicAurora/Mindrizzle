@@ -1,6 +1,35 @@
 {
-  "version": "0.0.0",
+  "version": "0.0.1-alpha.1",
   "notes": "",
-  "pub_date": "2026-11-05T00:00:00Z",
-  "platforms": {}
+  "pub_date": "2026-11-07T07:14:38.428Z",
+  "platforms": {
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3E2K3V6NTNBTWZ3dFZ2QmRiajJsQzZSL28wTzJKYlNFeDRmQUprSGM4MndreU9kQWdZbEY3TE5kaVVUTUtJeURKMjF0K1gxU1NxczgyWFMzVFVyWndrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1NjQzCWZpbGU6TWluZHJpenpsZV8wLjAuMS1hbHBoYS4xX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4wLjEtYWxwaGEuMQpVNXgwRjNsYmJLRnVWVFNTTldPUEk5aWsraVRNdVNlSTJvcEhBbkdaTk9lWnptem56b2FHdk1XRExiR0I0bC9BYytwUnY1WkluVmxyMWhlam5kQjlCZz09Cg==",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719945005"
+    },
+    "linux-x86_64-appimage": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3E2K3V6NTNBTWZ3dFZ2QmRiajJsQzZSL28wTzJKYlNFeDRmQUprSGM4MndreU9kQWdZbEY3TE5kaVVUTUtJeURKMjF0K1gxU1NxczgyWFMzVFVyWndrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1NjQzCWZpbGU6TWluZHJpenpsZV8wLjAuMS1hbHBoYS4xX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4wLjEtYWxwaGEuMQpVNXgwRjNsYmJLRnVWVFNTTldPUEk5aWsraVRNdVNlSTJvcEhBbkdaTk9lWnptem56b2FHdk1XRExiR0I0bC9BYytwUnY1WkluVmxyMWhlam5kQjlCZz09Cg==",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719945005"
+    },
+    "linux-x86_64-deb": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3RTZzN6QVByOXVmY01tVHdwWGlpVDkxZG0vL3hZUjg0RHI1a0NXYzMxOVUzN2JFbGhvTVBEVXg2RFZ6M210ZitIaUw3MWlQVDVaUUhUMnFuTHF5bUFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1NjQzCWZpbGU6TWluZHJpenpsZV8wLjAuMS1hbHBoYS4xX2FtZDY0LmRlYgl2ZXJzaW9uOjAuMC4xLWFscGhhLjEKQUc2NUk2WXNDMVUvOFJyUEZFVkhlY0pqV0dyaWNCZE5heWhVQUllZmxiNW1HOWdwN3VBcUtwYjY5NXdYeEJTOTFWbU5tM3R4Y3NYZmdhbTNWbmVTRHc9PQo=",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719944905"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3BxZUZRaHowaDNrdWlNV3ZPaTROdlZIQlJ1a0pqNDg0ZW1Lb0l3Y3FIVEhlZldlZXMxV3k0cnN6TEZNQ2FjSTJvLzhORDZLQjlNaHR3K283YXdqa2dFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1NjQ0CWZpbGU6TWluZHJpenpsZS5hcHAudGFyLmd6CXZlcnNpb246MC4wLjEtYWxwaGEuMQpYWG1IZEdnQlU3eUJlRWhtWXhaSW16cWowc1hJUktlaldTOXNuZkYzMTZGUkFRdW0rempSYitad3B2QmFLYTE0ZkdNZ25XaCs1QlJ2UEFWMmhYeFJDQT09Cg==",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719945078"
+    },
+    "darwin-x86_64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3BxZUZRaHowaDNrdWlNV3ZPaTROdlZIQlJ1a0pqNDg0ZW1Lb0l3Y3FIVEhlZldlZXMxV3k0cnN6TEZNQ2FjSTJvLzhORDZLQjlNaHR3K283YXdqa2dFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1NjQ0CWZpbGU6TWluZHJpenpsZS5hcHAudGFyLmd6CXZlcnNpb246MC4wLjEtYWxwaGEuMQpYWG1IZEdnQlU3eUJlRWhtWXhaSW16cWowc1hJUktlaldTOXNuZkYzMTZGUkFRdW0rempSYitad3B2QmFLYTE0ZkdNZ25XaCs1QlJ2UEFWMmhYeFJDQT09Cg==",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719945078"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3BSODhUb0svMnBZMHgvS1JKVFpub0tWaXU5YUU3OTllTmdneDJNUFhnUlp1NGtGbTlmRXdRaStKbkFvdzRlUlJnQXE1Z0lMTWtGZG00aDZjaXBrdEFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1Njc2CWZpbGU6TWluZHJpenpsZV8wLjAuMS1hbHBoYS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjAuMS1hbHBoYS4xClZDbVRMaUdiS3JBYkxsTnhpbUwySXB0QzFaOHZhK2xjdlNNV1lxd1F4TGtJQm4rRWRXc1AxbTRteTBRTDcrT0lDSlAzbzdDK2lKMllnRkRlZGNXaURBPT0K",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719946201"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakovU2VWTG1xK3BSODhUb0svMnBZMHgvS1JKVFpub0tWaXU5YUU3OTllTmdneDJNUFhnUlp1NGtGbTlmRXdRaStKbkFvdzRlUlJnQXE1Z0lMTWtGZG00aDZjaXBrdEFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDM1Njc2CWZpbGU6TWluZHJpenpsZV8wLjAuMS1hbHBoYS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjAuMS1hbHBoYS4xClZDbVRMaUdiS3JBYkxsTnhpbUwySXB0QzFaOHZhK2xjdlNNV1lxd1F4TGtJQm4rRWRXc1AxbTRteTBRTDcrT0lDSlAzbzdDK2lKMllnRkRlZGNXaURBPT0K",
+      "url": "https://api.github.com/repos/LogicAurora/Mindrizzle/releases/assets/719946201"
+    }
+  }
 }
