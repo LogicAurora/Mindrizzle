@@ -62,16 +62,15 @@ jobs:
           if [[ "$CH" == "stable" ]]; then
             VER="$BASE"; PRE=false
           else
-            PREFIX="v${BASE}-${CH}."
-            LAST=$(git tag -l "${PREFIX}*" | sed "s/^${PREFIX}//" | grep -E '^[0-9]+$' | sort -n | tail -n1 || true)
-            N=1; [[ -n "$LAST" ]] && N=$((LAST + 1))
+            # 转义 PREFIX 中的点，并用 10# 避免前导零被当作八进制
+            PREFIX_ESCAPED="v${BASE}-${CH}\\."
+            LAST=$(git tag -l "v${BASE}-${CH}.*" | sed "s/^v${BASE}-${CH}\.//" | grep -E '^[0-9]+$' | sort -n | tail -n1 || true)
+            LAST_CLEAN="${LAST:-0}"
+            N=$((10#$LAST_CLEAN + 1))
             VER="${BASE}-${CH}.${N}"; PRE=true
           fi
           TAG="v$VER"
 
-          # ---- 计算 git-cliff 的 range ----
-          # stable：上一个 stable tag..HEAD，汇总本周期所有 beta/alpha 内容
-          # beta/alpha：--unreleased（序号连续递增，语义正好）
           CLIFF_ARGS="--unreleased --strip all"
           if [[ "$CH" == "stable" ]]; then
             PREV_STABLE=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
@@ -155,7 +154,11 @@ jobs:
           ## 更新内容
 
           EOF
-            if [[ -s /tmp/changelog.md ]]; then cat /tmp/changelog.md; else echo "（与上一版本无新增提交）"; fi
+            if [[ -s /tmp/changelog.md ]] && grep -q '[^[:space:]]' /tmp/changelog.md; then
+              cat /tmp/changelog.md
+            else
+              echo "（与上一版本无新增提交）"
+            fi
             cat <<'EOF'
 
           ## 安装包
@@ -165,7 +168,7 @@ jobs:
           | macOS | Apple Silicon (aarch64) | `.app.tar.gz` + `.sig` |
           | macOS | Intel (x86_64) | `.app.tar.gz` + `.sig` |
           | Windows | x64 | NSIS 安装程序 + `.sig` |
-          | Linux | x64 | AppImage / deb + `.sig` |
+          | Linux | x64 | AppImage + `.sig`（deb/rpm 无更新签名） |
 
           `latest.json` 为自动更新清单。
 
@@ -196,9 +199,10 @@ jobs:
         run: |
           set -euo pipefail
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
-            echo "::error::tag $TAG 已存在。stable 请换主版本号；beta/alpha 重跑会再 +1。"
+            echo "::error::tag $TAG 已存在。stable 请换主版本号；beta/alpha 重跑会再 +1。若需重跑 stable，请先清理：gh release delete $TAG --yes --cleanup-tag"
             exit 1
           fi
+          # 区分“不存在”和其他网络错误
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::Release $TAG 已存在。"
             exit 1
@@ -230,13 +234,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - name: macos-aarch64
+            platform: macos-latest
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
+          - name: macos-x86_64
+            platform: macos-latest
             args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-22.04
+          - name: linux-x64
+            platform: ubuntu-22.04
             args: ""
-          - platform: windows-latest
+          - name: windows-x64
+            platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
     steps:
@@ -244,28 +252,28 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - name: Install cargo-set-version
+        shell: bash
+        run: cargo install cargo-set-version --locked
+
       - name: Inject version
         shell: bash
         env:
           V: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
+          # 更新 tauri.conf.json
           node -e '
             const fs = require("fs");
             const V = process.env.V;
-
             const p1 = "src-tauri/tauri.conf.json";
             const c = JSON.parse(fs.readFileSync(p1, "utf8"));
             c.version = V;
             fs.writeFileSync(p1, JSON.stringify(c, null, 2));
-
-            const p2 = "src-tauri/Cargo.toml";
-            let s = fs.readFileSync(p2, "utf8");
-            s = s.replace(/^version = ".*"$/m, `version = "${V}"`);
-            fs.writeFileSync(p2, s);
-
-            console.log("Injected version:", V);
+            console.log("Injected version into tauri.conf.json:", V);
           '
+          # 精确更新 Cargo.toml 的 [package] version
+          cargo set-version --manifest-path src-tauri/Cargo.toml "$V"
 
       - name: Configure signing env (only if secrets set)
         shell: bash
@@ -333,7 +341,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -349,21 +357,21 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: Build & upload to draft
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.build.outputs.release_id }}
-          assetNamePattern: "[name]-[platform]-[arch][setup][ext]"
+          releaseAssetNamePattern: "[name]-[platform]-[arch][setup][ext]"
           args: ${{ matrix.args }} ${{ env.BUNDLE_ARGS }}
 
       - name: Backup artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bundles-${{ matrix.platform }}-${{ matrix.args || 'default' }}
+          name: bundles-${{ matrix.name }}
           path: src-tauri/target/**/release/bundle/
           retention-days: 7
 
