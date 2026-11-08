@@ -458,10 +458,7 @@ fn sibling_archive(
     new_file_name: &str,
 ) -> anyhow::Result<(PathBuf, String)> {
     let note_name = resolve_mdrf_file_name(new_file_name)?;
-    let directory = source
-        .archive
-        .parent()
-        .context("定位笔记所在目录")?;
+    let directory = source.archive.parent().context("定位笔记所在目录")?;
     Ok((directory.join(format!("{note_name}.mdrf")), note_name))
 }
 
@@ -495,7 +492,11 @@ pub(crate) fn pack_cache_atomic(path: &Path, root: &Path, compressed: bool) -> a
 fn archive_signature(archive: &Path) -> anyhow::Result<String> {
     let metadata = fs::metadata(archive)
         .with_context(|| format!("读取笔记文件属性：{}", archive.display()))?;
-    Ok(format!("{}:{}", metadata.len(), read_file_modified_millis(archive)?))
+    Ok(format!(
+        "{}:{}",
+        metadata.len(),
+        read_file_modified_millis(archive)?
+    ))
 }
 
 pub(crate) fn open_note_cache(
@@ -522,8 +523,8 @@ pub(crate) fn open_note_cache_with_progress(
     }
     cache.cleanup();
     fs::create_dir_all(cache.path()).context("重建笔记缓存目录")?;
-    let file = File::open(archive)
-        .with_context(|| format!("打开笔记文件：{}", archive.display()))?;
+    let file =
+        File::open(archive).with_context(|| format!("打开笔记文件：{}", archive.display()))?;
     extract_to_cache_with_progress(file, cache.path(), compressed, &mut progress)
         .context("解包笔记归档")?;
     write_signature(cache.path(), &signature).context("写入缓存签名")?;
@@ -545,7 +546,9 @@ fn rewrite_note_meta(archive: &Path, meta: MindrizzleFileMeta) -> anyhow::Result
     let compressed = is_mdrf_compressed(archive).context("检测笔记压缩格式")?;
     let (cache, _) = open_note_cache(archive, compressed)?;
     let meta_xml = serialize_mdr_file_meta_xml(meta).context("编码笔记元信息")?;
-    cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
+    cache
+        .write_file("meta.json", meta_xml.as_bytes())
+        .context("写入笔记元信息缓存")?;
     flush_note_cache(archive, &cache, compressed)
 }
 
@@ -580,8 +583,8 @@ fn read_note_meta_xml(
             }
         }
     }
-    let file = File::open(archive)
-        .with_context(|| format!("打开笔记文件：{}", archive.display()))?;
+    let file =
+        File::open(archive).with_context(|| format!("打开笔记文件：{}", archive.display()))?;
     extract_meta(file, compressed).context("读取笔记元信息")
 }
 
