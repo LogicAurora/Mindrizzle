@@ -45,6 +45,7 @@ import {
   type EditorNoteRef,
 } from "../utils/editorRoute";
 import { getErrorMessage } from "../utils/getErrorMessage";
+import { recordRecentNote } from "../utils/homeActivity";
 import {
   exportLocalNoteMdrf,
   fileOperations,
@@ -150,6 +151,7 @@ async function openEditor(noteSet: NoteSetItem) {
       { name: "editor", params: { fileName: note.fileName }, query },
       () => prepareEditor(note),
     );
+    recordRecentNote(note);
   } finally {
     noteSet.loading = false;
   }

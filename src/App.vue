@@ -8,6 +8,7 @@ import {
   mdiFormatListBulleted,
   mdiCalendarBlankOutline,
   mdiCogOutline,
+  mdiHomeOutline,
 } from "@mdi/js";
 import {
   computed,
@@ -27,6 +28,7 @@ import { useDisplay } from "vuetify";
 import { useRoute, useRouter, type RouteLocationRaw } from "vue-router";
 import { error as logError } from "@tauri-apps/plugin-log";
 
+import QuickOpenPalette from "./Controls/QuickOpenPalette.vue";
 import { getErrorMessage } from "./utils/getErrorMessage";
 import { toolbarSelectionKey } from "./utils/toolbarSelection";
 
@@ -447,6 +449,11 @@ function navigateFromMenu(path: string) {
     >
       <v-list :lines="false" density="compact" nav>
         <v-list-item
+          :prepend-icon="mdiHomeOutline"
+          title="首页"
+          @click="navigateFromMenu('/')"
+        />
+        <v-list-item
           :prepend-icon="mdiFormatListBulleted"
           title="便签集"
           @click="navigateFromMenu('/set')"
@@ -500,6 +507,7 @@ function navigateFromMenu(path: string) {
         </Transition>
       </router-view>
     </v-main>
+    <QuickOpenPalette />
     <div
       class="loading-curtain"
       :class="`is-${curtainState}`"

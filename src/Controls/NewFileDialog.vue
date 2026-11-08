@@ -8,6 +8,7 @@ import {
 } from "../fileOperations";
 import { invalidateNoteSetEntries } from "../utils/noteSetStore";
 import { error as LogError } from "@tauri-apps/plugin-log";
+import { recordRecentNote } from "../utils/homeActivity";
 
 const props = defineProps<{ isOpen: boolean; dir?: string }>();
 const emit = defineEmits<{ "update:close": [value: { status: boolean }] }>();
@@ -95,6 +96,10 @@ async function submit() {
     });
     dialog.value = false;
     invalidateNoteSetEntries();
+    recordRecentNote({
+      fileName: createdFileName,
+      ...(props.dir ? { dir: props.dir } : {}),
+    });
     router.push({
       name: "editor",
       params: { fileName: createdFileName },

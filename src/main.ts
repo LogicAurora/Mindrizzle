@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import App from "./App.vue";
 import vuetify from "./Vuetify.ts";
 import NoteSet from "./Views/NoteSets.vue";
+import Home from "./Views/Home.vue";
 import { routeTransition } from "./utils/routeTransition.ts";
 import { loadEditorComponent } from "./utils/editorRoute";
 import { getSetting } from "./utils/settingsStore";
@@ -15,7 +16,7 @@ import { defaultThemes } from "./Vuetify.ts";
 import 'unfonts.css'
 
 const routes = [
-  { path: "/", redirect: "/set" },
+  { path: "/", component: Home, meta: { level: 1, title: "首页" } },
   { path: "/set", component: NoteSet, meta: { level: 1, title: "便签集" } },
   {
     path: "/board",

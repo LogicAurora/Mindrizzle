@@ -15,6 +15,7 @@ import type {
   RenameNoteRequest,
 } from "./types";
 import { rememberTags } from "../utils/tagStore";
+import { recordFileActivity } from "../utils/homeActivity";
 
 const route = <T>(native: () => Promise<T>, browser: () => Promise<T>) =>
   isTauri() ? native() : browser();
@@ -40,20 +41,24 @@ export const fileOperations: FileOperations = {
       () => invoke("get_mdr_file_body", { ...location, debugProgress }),
       () => browserFileOperations.getNoteBody(location, debugProgress),
     ),
-  setNoteBody: (location, content) =>
-    route(
+  setNoteBody: async (location, content) => {
+    await route(
       () => invoke("set_mdr_file_body", { ...location, content }),
       () => browserFileOperations.setNoteBody(location, content),
-    ),
-  setNoteMeta: (location, meta) =>
-    route(
+    );
+    recordFileActivity("modified");
+  },
+  setNoteMeta: async (location, meta) => {
+    await route(
       () =>
         invoke("set_mdr_file_meta", {
           ...location,
           mdrFileInfo: meta,
         }),
       () => browserFileOperations.setNoteMeta(location, meta),
-    ),
+    );
+    recordFileActivity("modified");
+  },
   createNote: (request: CreateNoteRequest) => {
     rememberTags(request.meta.tag ?? []);
     return route(
@@ -64,7 +69,10 @@ export const fileOperations: FileOperations = {
           mdrFileInfo: request.meta,
         }),
       () => browserFileOperations.createNote(request),
-    )
+    ).then((fileName) => {
+      recordFileActivity("created");
+      return fileName;
+    });
   },
   moveNote: (request: MoveNoteRequest) =>
     route(
@@ -76,11 +84,13 @@ export const fileOperations: FileOperations = {
       () => invoke<string>("move_mdrf_file", { ...request }),
       () => browserFileOperations.moveExternalNote(request),
     ),
-  deleteNote: (location: NoteFileLocation) =>
-    route(
+  deleteNote: async (location: NoteFileLocation) => {
+    await route(
       () => invoke("delete_mdrf_file", { ...location }),
       () => browserFileOperations.deleteNote(location),
-    ),
+    );
+    recordFileActivity("deleted");
+  },
   copyNote: (request: CopyNoteRequest) =>
     route(
       () =>
@@ -89,9 +99,12 @@ export const fileOperations: FileOperations = {
           newFileName: request.newFileName,
         }),
       () => browserFileOperations.copyNote(request),
-    ),
-  renameNote: (request: RenameNoteRequest) =>
-    route(
+    ).then((fileName) => {
+      recordFileActivity("created");
+      return fileName;
+    }),
+  renameNote: async (request: RenameNoteRequest) => {
+    const fileName = await route(
       () =>
         invoke<string>("rename_mdrf_file", {
           ...request.location,
@@ -99,7 +112,10 @@ export const fileOperations: FileOperations = {
           ...(request.meta ? { mdrFileInfo: request.meta } : {}),
         }),
       () => browserFileOperations.renameNote(request),
-    ),
+    );
+    recordFileActivity("modified");
+    return fileName;
+  },
   listComponentDataFiles: (scope: ComponentDataScope) =>
     route(
       () => invoke<string[]>("list_component_data_files", { request: scope }),

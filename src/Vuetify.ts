@@ -3,10 +3,12 @@ import { aliases, mdi } from "vuetify/iconsets/mdi-svg";
 import "vuetify/styles";
 import { md3 } from "vuetify/blueprints";
 import { VLoadingIndicator } from 'vuetify/labs/VLoadingIndicator'
+import { VCommandPalette } from "vuetify/labs/VCommandPalette";
 
 const vuetify = createVuetify({
   components: {
     VLoadingIndicator,
+    VCommandPalette,
   },
   theme: {
     defaultTheme: "light",

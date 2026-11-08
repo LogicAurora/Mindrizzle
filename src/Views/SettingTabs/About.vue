@@ -16,6 +16,10 @@ import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
 import { useSecretKnock } from "../../utils/easterEggs";
 import { saveDeveloperMode } from "../../utils/developerMode";
 import { pendingSettingsTab } from "../../utils/settingsTabIntent";
+import {
+  BRAND_CHINESE_TAGLINE,
+  BRAND_ENGLISH_TAGLINE,
+} from "../../utils/brandCopy";
 
 const isDiagnosticsOpen = ref(false);
 const isGitCommitLoaded = ref(!isTauri());
@@ -107,10 +111,10 @@ function openDeveloperTab() {
           </v-avatar>
           <div class="about-copy">
             <div class="about-eyebrow">
-              关于应用 <span>Catch your mind drizzle.</span>
+              关于应用 <span>{{ BRAND_ENGLISH_TAGLINE }}</span>
             </div>
             <h1>Mindrizzle</h1>
-            <p>让想法有处可落，让笔记自然成形。</p>
+            <p>{{ BRAND_CHINESE_TAGLINE }}</p>
           </div>
         </div>
         <div class="about-build">
