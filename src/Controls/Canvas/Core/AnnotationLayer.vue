@@ -290,6 +290,5 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   cursor: crosshair;
-  touch-action: none;
 }
 </style>

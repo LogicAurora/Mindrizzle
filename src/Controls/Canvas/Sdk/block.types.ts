@@ -9,7 +9,6 @@ export interface BlockSize {
 }
 
 export interface BlockEnv {
-  isCompact: boolean;
   isReadOnly: boolean;
 }
 
@@ -32,7 +31,6 @@ export interface BlockContext<
   readonly uuid: string;
   readonly config: TConfig;
   readonly readOnly: boolean;
-  readonly isCompact: boolean;
   readonly isActive: boolean;
   readonly files: BlockFiles;
   setConfig: (patch: Partial<TConfig>) => void;

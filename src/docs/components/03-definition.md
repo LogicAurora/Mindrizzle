@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-01 -->
+<!-- 最后验证: 2026-11-08 -->
 
 # 03 块定义
 
@@ -18,7 +18,7 @@
 | `defaultConfig` / `defaultSize`          | 是   | 新块初始配置与尺寸                                                  |
 | `constraints`                            | 否   | 尺寸约束，缺省走画布默认值                                          |
 | `titleOf` / `iconOf`                     | 否   | 按 config 动态取标题/图标                                           |
-| `widthChangableOf` / `heightChangableOf` | 否   | `(config, env) => boolean`，`env` 含 `isCompact` / `isReadOnly`     |
+| `widthChangableOf` / `heightChangableOf` | 否   | `(config, env) => boolean`，`env` 含 `isReadOnly`                  |
 | `snapshot`                               | 否   | 视口外显示什么，默认 `'html'`，见 [04 生命周期](04-lifecycle.md)    |
 | `settings`                               | 否   | 嵌入富文本时的设置面板组件（props + `update` 事件），块与插入块共用 |
 | `settingsWidth`                          | 否   | 画布设置面板宽度（px），缺省 240；网址等长文本面板可加宽            |
@@ -49,8 +49,6 @@ defineBlock({
 // 自动高度模式：高度随内容走，不能被联结改
 heightChangableOf: (config) => config.autoHeight !== true,
 ```
-
-`env.isCompact` 只反映紧凑界面，不代表画布布局模式。
 
 ## 动态标题与图标
 

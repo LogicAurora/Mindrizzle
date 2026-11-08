@@ -9,7 +9,6 @@ import {
   getScrollEl,
   getView,
   getVisibleBlockRectInViewport,
-  isCompactView,
   isPointerInsideRect,
 } from "./blockHandleUtils";
 import type { HoveredBlock } from "./useHoverState";
@@ -87,13 +86,11 @@ export function useHoverUi(options: {
     const editorView = view();
     const scrollEl = getScrollEl(editorView);
 
-    // 桌面端 left/right 放置时 popup 已贴行旁，所以仅 compact 或退化 top/bottom 时显示行高亮
+    // left/right 时 popup 已贴行旁，所以仅退化到 top/bottom 时显示行高亮
     highlightRect.value = null;
     if (
       hover &&
-      (isCompactView(view()) ||
-        placement.value === "top" ||
-        placement.value === "bottom")
+      (placement.value === "top" || placement.value === "bottom")
     ) {
       const r = getVisibleBlockRectInViewport(
         editorView,

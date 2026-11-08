@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-07 -->
+<!-- 最后验证: 2026-11-08 -->
 
 # 08 序列化与加载
 
@@ -40,14 +40,10 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["normalizeLoadedItem(it)"] --> B["component 未知则回落 RichTextEditor"]
-  B --> C{"isLegacyFlat?"}
-  C -->|是| D["用 it.x/y/w/h 构造 layout"]
-  C -->|否| E["读取 it.layout.desktop 或 it.layout"]
-  D --> F["补默认尺寸"]
-  E --> F
-  F --> G["坐标类型兜底归 0"]
-  G --> H["读取 arranged"]
-  H --> I["markRaw 返回"]
+  B --> C["读取 it.layout 并补默认尺寸"]
+  C --> D["坐标类型兜底归 0"]
+  D --> E["读取布尔 arranged"]
+  E --> F["markRaw 返回"]
 ```
 
 ## 组件私有文件（ComponentsData）
@@ -121,11 +117,9 @@ flowchart TD
 ## 兼容规则速查
 
 - 块标识字段为 `uuid`（放置时生成、持久化），不做旧 `id` 字段兼容
-- 旧扁平格式（`it.x/y/w/h`）→ 转为 `layout`
 - `origin` 坐标归一化：保存时减去块群中心，加载时归零 pan；批注笔画点走同一偏移
 - 批注 `annotations` 缺失时视为空数组；连接线两端块不存在时丢弃
-- 旧双布局数据只读取 `layout.desktop`，移动端布局直接丢弃
-- 旧对象型 `arranged` 只读取 `desktop` 状态
+- 画布文件只使用单一 `layout` 与布尔 `arranged`；不兼容旧扁平块数据或双布局数据
 - 旧剪贴板条目不含单一布局时直接丢弃
 
 ## 维护提示

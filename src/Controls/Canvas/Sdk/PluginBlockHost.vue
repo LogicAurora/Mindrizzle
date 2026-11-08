@@ -40,7 +40,6 @@ watch(
 );
 
 const changeableEnv = () => ({
-  isCompact: props.base.compact === true,
   isReadOnly: props.base.readOnly === true,
 });
 
@@ -73,9 +72,6 @@ const ctx: BlockContext = {
   },
   get readOnly() {
     return props.base.readOnly === true;
-  },
-  get isCompact() {
-    return props.base.compact === true;
   },
   get isActive() {
     return props.base.active === true;

@@ -25,7 +25,6 @@
             <div class="bench-metrics">
               <span><b>尺寸</b> {{ size.w }}×{{ size.h }}</span>
               <span><b>readOnly</b> {{ ctx.readOnly }}</span>
-              <span><b>compact</b> {{ ctx.isCompact }}</span>
               <span><b>active</b> {{ ctx.isActive }}</span>
             </div>
 

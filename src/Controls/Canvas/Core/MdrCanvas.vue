@@ -286,14 +286,9 @@ import {
   invalidateCanvasScaleCache,
 } from "../Components/RichEditor/extensions/blockHandleUtils.ts";
 
-import { useDisplay } from "vuetify";
-
-// #region 显示模式
-const { xs } = useDisplay();
-const isMobile = computed(() => xs.value);
-
+// #region 编辑模式
 const isEditMode = ref(true);
-// #endregion 显示模式
+// #endregion 编辑模式
 
 // #region 画布状态与 z 层
 const state = reactive({
@@ -895,7 +890,6 @@ const blockBasePropsOf = (item: CanvasItem): MdrCanvasComponentShellProps => {
     minHeight: (c.minHeight ?? 0) + 8,
     maxWidth: c.maxWidth,
     maxHeight: c.maxHeight,
-    compact: isMobile.value,
     active: isActive(item.uuid),
     dragging: customDrag.draggingUuids.has(item.uuid),
     showHandle: floatingHandleItem.value?.uuid === item.uuid,
@@ -954,7 +948,6 @@ const blockDefinitionPropsOf = (item: CanvasItem) => {
 };
 
 const blockEnvOf = (): BlockEnv => ({
-  isCompact: isMobile.value,
   isReadOnly: !isEditMode.value,
 });
 
@@ -4005,30 +3998,24 @@ const save = () => {
   });
 };
 
-// 兼容旧扁平块数据并对缺失字段兜底
+// 对缺失字段兜底
 const normalizeLoadedItem = (it: any): CanvasItem => {
   const component: CanvasItem["component"] = blockDefinitionOf(
     it.component as string,
   )
     ? (it.component as string)
     : DEFAULT_COMPONENT_KEY;
-  const isLegacyFlat =
-    !it.layout && typeof it.x === "number" && typeof it.y === "number";
-  const layout: Rect = isLegacyFlat
-    ? { x: it.x, y: it.y, w: it.w ?? 400, h: it.h ?? 300 }
-    : {
-        x: 0,
-        y: 0,
-        w: 400,
-        h: 300,
-        ...(it.layout?.desktop ?? it.layout ?? {}),
-      };
+  const layout: Rect = {
+    x: 0,
+    y: 0,
+    w: 400,
+    h: 300,
+    ...(it.layout ?? {}),
+  };
   // 坐标异常会使块丢失，所以一律归 0
   layout.x = typeof layout.x === "number" ? layout.x : 0;
   layout.y = typeof layout.y === "number" ? layout.y : 0;
-  const arranged =
-    it.arranged !== false &&
-    (typeof it.arranged !== "object" || it.arranged?.desktop !== false);
+  const arranged = it.arranged !== false;
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   return markRaw({
     uuid:

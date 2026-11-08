@@ -41,7 +41,7 @@ defineProps<{ visible: boolean }>();
   .side-toolbar {
     top: auto;
     right: 50%;
-    /* 让开底部居中的画布工具栏 */
+    /* 窄屏时让开底部居中的画布工具栏 */
     bottom: 60px;
     flex-direction: row;
     transform: translateX(50%);

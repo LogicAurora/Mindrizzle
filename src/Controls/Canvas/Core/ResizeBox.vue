@@ -218,7 +218,6 @@ defineExpose({ rootEl });
 .resize-box {
   position: absolute;
   box-sizing: border-box;
-  touch-action: none;
 }
 .content-guide {
   position: absolute;
@@ -238,15 +237,5 @@ defineExpose({ rootEl });
   box-shadow: 0 0 2px rgba(var(--v-theme-on-surface), 0.4);
   /* 与 Z_LAYER.resizeHandle 一致 */
   z-index: 1003;
-}
-@media only screen and (max-width: 768px) {
-  [class*="handle-"]:before {
-    content: "";
-    left: -10px;
-    right: -10px;
-    bottom: -10px;
-    top: -10px;
-    position: absolute;
-  }
 }
 </style>

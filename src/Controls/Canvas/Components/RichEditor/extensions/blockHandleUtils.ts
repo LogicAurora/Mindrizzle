@@ -274,10 +274,6 @@ export function getPopupWidth(view: any): number {
   return w > 0 ? w : 64;
 }
 
-export function isCompactView(view: any): boolean {
-  return !!view?.dom?.closest(".editor-wrapper.compact");
-}
-
 // positioner 被 Teleport 到 .canvas（不在 .editor-wrapper 内），所以按 data-owner 在 .canvas 里找回对应实例
 export function findPositionerEl(view: any): HTMLElement | null {
   const wrapper = view?.dom?.closest?.(".editor-wrapper") as HTMLElement | null;

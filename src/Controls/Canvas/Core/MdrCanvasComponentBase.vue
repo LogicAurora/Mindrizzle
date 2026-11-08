@@ -171,7 +171,6 @@ const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   heightChangable: true,
   draggable: true,
   readOnly: false,
-  compact: false,
   active: false,
   dragging: false,
   showHandle: false,

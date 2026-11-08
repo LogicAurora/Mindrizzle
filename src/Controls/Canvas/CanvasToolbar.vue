@@ -192,7 +192,7 @@ const pasteLatest = () => {
   letter-spacing: 0;
 }
 
-/* 窄屏横排到底部，竖排会挡住本就紧张的内容宽度 */
+/* 窄屏横排到底部，避免竖排工具栏挤占画布内容宽度 */
 @media (max-width: 599px) {
   .canvas-toolbar {
     top: auto;

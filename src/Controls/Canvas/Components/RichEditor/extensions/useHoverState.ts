@@ -11,7 +11,6 @@ import {
   getPopupHeight,
   getPopupWidth,
   getView,
-  isCompactView,
   layoutToViewportSize,
   layoutToViewportX,
   layoutToViewportY,
@@ -236,7 +235,7 @@ export function useHoverState(
   }
 
   // 留出 4px 余量，避免空间判断被边界像素误差影响
-  const COMPACT_POPUP_GAP = 4;
+  const POPUP_GAP = 4;
 
   type PopupPlacement = "left" | "right" | "top" | "bottom";
   type PlacementSpaces = Record<PopupPlacement, number>;
@@ -264,7 +263,6 @@ export function useHoverState(
     view: any,
     fallback: "left" | "right",
   ): PopupPlacement[] => {
-    if (isCompactView(view)) return ["top", "bottom", "left", "right"];
     const preferred = horizontalPlacementOf(view, fallback);
     const opposite = preferred === "left" ? "right" : "left";
     return [preferred, opposite, "top", "bottom"];
@@ -325,9 +323,9 @@ export function useHoverState(
     const clip = getClipRect(view);
     const popupBounds = getCanvasViewportRect(view);
     const needX =
-      layoutToViewportSize(view, getPopupWidth(view)) + COMPACT_POPUP_GAP;
+      layoutToViewportSize(view, getPopupWidth(view)) + POPUP_GAP;
     const needY =
-      layoutToViewportSize(view, getPopupHeight(view)) + COMPACT_POPUP_GAP;
+      layoutToViewportSize(view, getPopupHeight(view)) + POPUP_GAP;
     const spaces: PlacementSpaces = {
       left: row.left - popupBounds.left,
       right: popupBounds.right - row.right,

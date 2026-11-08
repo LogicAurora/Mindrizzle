@@ -19,7 +19,6 @@ export interface MdrCanvasComponentBaseProps {
   title: string;
   draggable?: boolean;
   readOnly?: boolean;
-  compact?: boolean;
   active?: boolean;
   dragging?: boolean;
   // undefined = 块自己管虚拟化（raw 旧写法）；false/true = 由壳统一渲染内容/快照

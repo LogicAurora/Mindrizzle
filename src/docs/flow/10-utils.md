@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-01 -->
+<!-- 最后验证: 2026-11-08 -->
 
 # 10 工具函数索引
 
@@ -36,7 +36,6 @@ flowchart TB
     E1["createStoreResolver"]
     E2["createOverlayStoreResolver"]
     E3["clearStoreHover"]
-    E4["isCompactView(view)"]
   end
 ```
 

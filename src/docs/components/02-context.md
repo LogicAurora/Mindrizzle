@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-24 -->
+<!-- 最后验证: 2026-11-08 -->
 
 # 02 BlockContext
 
@@ -22,7 +22,6 @@ const ctx = useBlockContext<TodoConfig>();
 | `moveBy(dx, dy)`              | 移动自身，联动联结块                                        |
 | `panBy(dx, dy)` / `zoomTo(z)` | 平移/缩放画布（`z` 范围 0.5–3）                             |
 | `readOnly`                    | 只读态（响应式 getter）                                     |
-| `isCompact`                   | 当前视口是否使用紧凑界面，不改变块布局                      |
 | `isActive`                    | 是否处于选中态                                              |
 | `setDropHandlers(handlers)`   | 注册后块才能接收画布拖入                                    |
 
@@ -67,12 +66,5 @@ onMounted(() => {
 ```
 
 `resolveDropAtElement` 返回 `null` 表示不接收该落点。卸载时传 `null` 注销。
-
-## 环境状态
-
-```ts
-<input :disabled="ctx.readOnly" />
-<div :class="{ compact: ctx.isCompact }">
-```
 
 只读态不要只靠 CSS：画布会隐藏浮层，内部编辑器也要真正禁用。

@@ -5,20 +5,18 @@
     :icon="mdiNoteText"
     :title="RICH_TEXT_LABEL"
     :height-changable="!autoHeight"
-    :width-changable="props.base.compact !== true"
   >
     <div
       v-if="!virtualized"
       ref="wrapperRef"
       class="editor-wrapper inner-component"
       :data-read-only="readOnly ? 'true' : 'false'"
-      :class="{ compact: useCompact, 'auto-height': autoHeight }"
+      :class="{ 'auto-height': autoHeight }"
       :style="{
         color: 'var(--v-theme-on-surface)',
         background: 'var(--v-theme-surface)',
       }"
       @mousedown.stop
-      @touchstart.stop
     >
       <ProseKit :editor="editor">
         <div class="editor-scroll-shell">
@@ -178,7 +176,6 @@ import {
   nextTick,
 } from "vue";
 import { ProseKit, useDocChange } from "@prosekit/vue";
-import { useDisplay } from "vuetify";
 import { mdiNoteText } from "@mdi/js";
 
 import { defineExtension } from "./extension.ts";
@@ -216,9 +213,6 @@ const props = defineProps<
   }
 >();
 
-const { xs } = useDisplay();
-const isMobile = computed(() => xs.value);
-const useCompact = computed(() => props.base.compact ?? isMobile.value);
 const readOnly = computed(() => props.base.readOnly === true);
 const richTextConfig = computed(() => props.config as RichTextConfig);
 const autoHeight = computed(() => richTextConfig.value.autoHeight === true);
@@ -879,16 +873,6 @@ onMounted(() => {
     editorMounted = true;
     syncReadOnly(readOnly.value);
     observer.observe(editorMount.value);
-    if (isMobile.value) {
-      // 默认聚焦滚动会滚动画布容器，所以用 preventScroll 聚焦根 DOM
-      setTimeout(
-        () =>
-          (editor.view?.dom as HTMLElement | undefined)?.focus({
-            preventScroll: true,
-          }),
-        100,
-      );
-    }
     if (richTextConfig.value.content) {
       applyContent(richTextConfig.value.content);
     }
@@ -983,8 +967,6 @@ defineExpose({
   height: 100%;
   overflow: visible;
   transition: border-color 0.15s ease;
-  /* 要保证触摸滚动正常 */
-  touch-action: auto;
   /* gutter 仅为视觉留白、保留命中会拦截画布框选，所以整体穿透，内容区单独恢复 */
   pointer-events: none;
 }
@@ -1028,7 +1010,6 @@ defineExpose({
   pointer-events: auto;
   background: rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 4px;
-  touch-action: none;
 }
 
 .custom-scrollbar:hover,
@@ -1082,17 +1063,6 @@ defineExpose({
   height: auto;
 }
 
-.editor-wrapper.compact {
-  margin-left: 0;
-  margin-right: 0;
-  margin-top: -44px;
-  width: 100%;
-  padding: 44px 0 0 0;
-  box-sizing: border-box;
-  /* 首行 popup 需 44px 空间才不被裁剪，所以顶部留白；border-box 下这段内边距要补回高度，否则块底空 44px */
-  height: calc(100% + 44px);
-}
-
 .editor-mount {
   outline: none;
   /* 固定 100% 高度会使末行弹不出 popup，所以高度随内容增长 */
@@ -1111,38 +1081,15 @@ defineExpose({
   padding: 0;
   outline: none;
   pointer-events: auto;
-  touch-action: auto;
   /* 只读下仍需可选中并复制文本 */
   user-select: text;
 }
 
-/* 移动端/紧凑模式也要生效，所以绑定 compact 类而非媒体查询 */
-.editor-wrapper.compact :deep(.block-handle-popup) {
-  transform: translateY(var(--block-handle-shift, 0px)) scale(1.1);
-  transform-origin: center bottom;
-}
-/* bottom 放置向下展开，缩放原点改为顶部 */
-.editor-wrapper.compact
-  :deep(.block-handle-positioner.placement-bottom .block-handle-popup) {
-  transform-origin: center top;
-}
-
-/* 放大仅针对移动端 compact，所以桌面端退化放置只应用垂直裁剪补偿 */
-.editor-wrapper:not(.compact)
+.editor-wrapper
   :deep(.block-handle-positioner.placement-top .block-handle-popup),
-.editor-wrapper:not(.compact)
+.editor-wrapper
   :deep(.block-handle-positioner.placement-bottom .block-handle-popup) {
   transform: translateY(var(--block-handle-shift, 0px));
-}
-.editor-wrapper.compact :deep(.block-handle-btn) {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
-}
-.editor-wrapper.compact :deep(.block-handle-btn svg) {
-  width: 22px;
-  height: 22px;
 }
 
 /* v-overlay__content 尺寸为 0（inset 失效），所以用 vw/vh 显式铺满并置 z 高于 scrim */
