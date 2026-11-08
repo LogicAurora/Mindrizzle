@@ -14,7 +14,7 @@ export type PrepareEditorNavigation = () => Promise<void>;
 export type StartEditorTransition = (
   target: RouteLocationRaw,
   prepare: PrepareEditorNavigation,
-) => Promise<void>;
+) => Promise<boolean>;
 
 export const noteLoadControllerKey: InjectionKey<NoteLoadController> =
   Symbol("noteLoadController");

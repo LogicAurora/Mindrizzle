@@ -38,7 +38,7 @@ export function useOpenNote() {
         );
       storePendingEditorBody(note, bodyPromise);
       await Promise.all([loadEditorComponent(), bodyPromise]);
-      await startEditorTransition(
+      const didNavigate = await startEditorTransition(
         {
           name: "editor",
           params: { fileName: note.fileName },
@@ -49,7 +49,7 @@ export function useOpenNote() {
         },
         () => Promise.resolve(),
       );
-      recordRecentNote(note);
+      if (didNavigate) recordRecentNote(note);
     } finally {
       unlisten?.();
     }

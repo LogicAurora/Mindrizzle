@@ -53,6 +53,47 @@
     >
       保存成功
     </v-snackbar>
+    <v-snackbar
+      v-if="!isLeaveDialogOpen"
+      v-model="saveFailed"
+      color="error"
+      location="top"
+      timeout="4000"
+    >
+      保存失败：{{ saveError }}
+    </v-snackbar>
+
+    <v-dialog v-model="isLeaveDialogOpen" max-width="420" persistent>
+      <v-card>
+        <v-card-title>笔记尚未保存</v-card-title>
+        <v-card-text>
+          「{{ noteRef.fileName }}」有未保存的修改，要保存后离开吗？
+          <p v-if="saveError" class="text-error text-caption mt-2">
+            保存失败：{{ saveError }}
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn :disabled="isSaving" @click="resolveNavigation(false)">
+            继续编辑
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            color="error"
+            :disabled="isSaving"
+            @click="resolveNavigation(true)"
+          >
+            不保存
+          </v-btn>
+          <v-btn
+            color="primary"
+            :loading="isSaving"
+            @click="saveAndLeave"
+          >
+            保存并离开
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
@@ -62,6 +103,11 @@ import { mdiContentSave, mdiExitToApp, mdiCheck } from "@mdi/js";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { error as logError } from "@tauri-apps/plugin-log";
+import {
+  onBeforeRouteLeave,
+  onBeforeRouteUpdate,
+  useRoute,
+} from "vue-router";
 import MdrCanvas from "../Controls/Canvas/Core/MdrCanvas.vue";
 import AddBlockPicker from "../Controls/Canvas/AddBlockPicker.vue";
 import CanvasSideToolbar from "../Controls/Canvas/CanvasToolbar.vue";
@@ -74,7 +120,6 @@ import {
 import { CANVAS_COMPONENTS } from "../Controls/Canvas/Registry/canvasComponents.ts";
 import { isDeveloperMode } from "../utils/developerMode";
 import { screenToContent } from "../utils/canvasCoords";
-import { useRoute } from "vue-router";
 import { fileOperations } from "../fileOperations";
 import { getErrorMessage } from "../utils/getErrorMessage.ts";
 import { takePendingEditorBody } from "../utils/editorRoute";
@@ -231,21 +276,58 @@ const pendingEditorBody = takePendingEditorBody(noteRef);
 
 const isSaving = ref(false);
 const saved = ref(false);
+const saveFailed = ref(false);
+const saveError = ref("");
+const isLeaveDialogOpen = ref(false);
+let lastSavedContent: string | null = null;
+let resolveNavigationDecision: ((shouldLeave: boolean) => void) | null = null;
+
 const save = async () => {
   isSaving.value = true;
+  saveError.value = "";
+  saveFailed.value = false;
   try {
-    await fileOperations.setNoteBody(
-      noteRef,
-      MdrCRef.value?.save() ?? "",
-    );
+    const content = MdrCRef.value?.save() ?? "";
+    await fileOperations.setNoteBody(noteRef, content);
+    lastSavedContent = content;
     touchNoteSetUpdatedAt(noteRef.fileName, dir);
+    saved.value = true;
+    return true;
   } catch (error) {
-    logError(getErrorMessage(error));
+    saveError.value = getErrorMessage(error);
+    saveFailed.value = !isLeaveDialogOpen.value;
+    if (isTauri()) await logError(saveError.value);
+    return false;
   } finally {
     isSaving.value = false;
-    saved.value = true;
   }
 };
+
+const hasUnsavedChanges = () =>
+  lastSavedContent !== null &&
+  (MdrCRef.value?.save() ?? "") !== lastSavedContent;
+
+const confirmNavigation = () => {
+  if (!hasUnsavedChanges()) return true;
+  return new Promise<boolean>((resolve) => {
+    resolveNavigationDecision = resolve;
+    isLeaveDialogOpen.value = true;
+  });
+};
+
+const resolveNavigation = (shouldLeave: boolean) => {
+  const resolve = resolveNavigationDecision;
+  resolveNavigationDecision = null;
+  isLeaveDialogOpen.value = false;
+  resolve?.(shouldLeave);
+};
+
+const saveAndLeave = async () => {
+  if (await save()) resolveNavigation(true);
+};
+
+onBeforeRouteLeave(confirmNavigation);
+onBeforeRouteUpdate(confirmNavigation);
 
 const load = async () => {
   const raw = pendingEditorBody
@@ -253,6 +335,7 @@ const load = async () => {
     : await fileOperations.getNoteBody(noteRef, isDebugLoadingEnabled.value);
   if ("error" in raw) throw raw.error;
   await MdrCRef.value?.load(raw.content ?? "");
+  lastSavedContent = MdrCRef.value?.save() ?? "";
 };
 
 const deleteSelected = () => {

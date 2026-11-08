@@ -151,11 +151,11 @@ async function openEditor(noteSet: NoteSetItem) {
     ...(note.filePath ? { path: note.filePath } : {}),
   };
   try {
-    await startEditorTransition(
+    const didNavigate = await startEditorTransition(
       { name: "editor", params: { fileName: note.fileName }, query },
       () => prepareEditor(note),
     );
-    recordRecentNote(note);
+    if (didNavigate) recordRecentNote(note);
   } finally {
     noteSet.loading = false;
   }

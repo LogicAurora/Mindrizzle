@@ -9,7 +9,6 @@ import {
   mdiHelpCircleOutline,
   mdiHistory,
   mdiMagnify,
-  mdiWeatherPouring,
 } from "@mdi/js";
 import appIconUrl from "../../app-icon.svg";
 import { useRouter } from "vue-router";
@@ -38,7 +37,6 @@ import {
   workspaceDirectories,
 } from "../utils/workspaceStore";
 import { getErrorMessage } from "../utils/getErrorMessage";
-import { BRAND_CHINESE_TAGLINE } from "../utils/brandCopy";
 
 const RECENT_LIMIT = 5;
 const HEATMAP_DAYS = 90;

@@ -25,7 +25,12 @@ import { isTauri } from "@tauri-apps/api/core";
 
 import { attachConsole } from "@tauri-apps/plugin-log";
 import { useDisplay } from "vuetify";
-import { useRoute, useRouter, type RouteLocationRaw } from "vue-router";
+import {
+  isNavigationFailure,
+  useRoute,
+  useRouter,
+  type RouteLocationRaw,
+} from "vue-router";
 import { error as logError } from "@tauri-apps/plugin-log";
 
 import QuickOpenPalette from "./Controls/QuickOpenPalette.vue";
@@ -153,7 +158,7 @@ async function runEditorTransition(
   target: RouteLocationRaw,
   prepare: () => Promise<void>,
   finishPromise: Promise<void>,
-) {
+): Promise<boolean> {
   const preparation = prepare();
   const shouldCover =
     isDebugLoadingEnabled.value ||
@@ -163,9 +168,11 @@ async function runEditorTransition(
     ]));
   if (shouldCover) await coverCurtain();
   await preparation;
-  await router.push(target);
+  const navigationFailure = await router.push(target);
+  if (isNavigationFailure(navigationFailure)) return false;
   await nextTick();
   await finishPromise;
+  return true;
 }
 
 async function waitForMinimumCurtainDuration() {
@@ -192,14 +199,14 @@ async function resetEditorTransition() {
 async function startEditorTransition(
   target: RouteLocationRaw,
   prepare: () => Promise<void>,
-) {
-  if (isEditorNavigationPending || curtainState.value !== "idle") return;
+): Promise<boolean> {
+  if (isEditorNavigationPending || curtainState.value !== "idle") return false;
   isEditorNavigationPending = true;
   progress.value = 0;
   loadingName.value = "";
   const finishPromise = createFinishPromise();
   try {
-    await runEditorTransition(target, prepare, finishPromise);
+    return await runEditorTransition(target, prepare, finishPromise);
   } finally {
     await resetEditorTransition();
     isEditorNavigationPending = false;
