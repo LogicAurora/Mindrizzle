@@ -17,8 +17,7 @@ export interface Point {
 }
 
 // 亚像素会模糊，所以对齐到整数视觉像素（返回 content 值）
-export const roundToVisual = (zoom: number, v: number): number =>
-  Math.round(v * zoom) / zoom;
+export const roundToVisual = (zoom: number, v: number): number => Math.round(v * zoom) / zoom;
 
 export const contentToScreen = (
   t: CanvasTransform,
@@ -40,22 +39,8 @@ export const screenToContent = (
   y: (clientY - vp.top - t.pan.y - t.origin.y) / t.zoom,
 });
 
-export const screenToCanvasContent = (
-  zoom: number,
-  canvasOrigin: ViewportOrigin,
-  clientX: number,
-  clientY: number,
-): Point => ({
-  x: (clientX - canvasOrigin.left) / zoom,
-  y: (clientY - canvasOrigin.top) / zoom,
-});
-
 // content → 视觉像素（.canvas 内定位用，不含容器偏移）
-export const contentToVisual = (
-  t: CanvasTransform,
-  x: number,
-  y: number,
-): Point => ({
+export const contentToVisual = (t: CanvasTransform, x: number, y: number): Point => ({
   x: Math.round(x * t.zoom) + Math.round(t.origin.x + t.pan.x),
   y: Math.round(y * t.zoom) + Math.round(t.origin.y + t.pan.y),
 });

@@ -57,11 +57,7 @@
       />
 
       <v-fade-transition :duration="120">
-        <div
-          v-if="selectionBox"
-          class="selection-box"
-          :style="selectionBoxStyle"
-        ></div>
+        <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle"></div>
       </v-fade-transition>
 
       <!-- 描边需在拖拽栏之上保持连贯，所以用独立高层 overlay 渲染（data-uuid 供拖拽期命令式跟随） -->
@@ -164,9 +160,7 @@
         class="add-preview"
         :style="addPreviewStyle"
       >
-        <span class="add-preview-label">{{
-          componentLabelOf(addPreviewKey)
-        }}</span>
+        <span class="add-preview-label">{{ componentLabelOf(addPreviewKey) }}</span>
       </div>
     </div>
     <AnnotationToolbar
@@ -196,7 +190,7 @@ export type {
   CodeBlockConfig,
   ImageBlockConfig,
   WidgetConfig,
-} from "../Registry/canvasComponents.ts";
+} from '../Registry/canvasComponents.ts';
 </script>
 
 <script setup lang="ts">
@@ -213,9 +207,9 @@ import {
   useId,
   type Component,
   type CSSProperties,
-} from "vue";
+} from 'vue';
 
-import { mdiPaperclip, mdiArrowUp } from "@mdi/js";
+import { mdiPaperclip, mdiArrowUp } from '@mdi/js';
 import {
   CANVAS_COMPONENTS,
   DEFAULT_COMPONENT_KEY,
@@ -228,10 +222,10 @@ import {
   type ComponentController,
   type Rect,
   type WidgetConfig,
-} from "../Registry/canvasComponents.ts";
-import { blockDefinitionOf, embeddedBlockOf } from "../Sdk/blockRegistry.ts";
-import type { AnyBlockDefinition, BlockEnv } from "../Sdk/block.types.ts";
-import PluginBlockHost from "../Sdk/PluginBlockHost.vue";
+} from '../Registry/canvasComponents.ts';
+import { blockDefinitionOf, embeddedBlockOf } from '../Sdk/blockRegistry.ts';
+import type { AnyBlockDefinition, BlockEnv } from '../Sdk/block.types.ts';
+import PluginBlockHost from '../Sdk/PluginBlockHost.vue';
 import {
   handleBarStyleOf,
   sideSettingsStyleOf,
@@ -241,50 +235,49 @@ import {
   OUTLINE_PX,
   type EdgeMask,
   type HandlePlacement,
-} from "./blockFloatGeometry.ts";
+} from './blockFloatGeometry.ts';
 import type {
   BlockInteractionHandlers,
   BlockSize,
   CanvasViewData,
-} from "./canvasComponentControllers.ts";
-import type { MdrCanvasComponentShellProps } from "./MdrCanvasComponentBase.types.ts";
-import type { ResizeConstraints } from "../Registry/resizeConstraints.ts";
-import { Z_LAYER } from "./zIndex.ts";
-import AnnotationLayer from "./AnnotationLayer.vue";
-import AnnotationToolbar from "../AnnotationToolbar.vue";
+} from './canvasComponentControllers.ts';
+import type { MdrCanvasComponentShellProps } from './MdrCanvasComponentBase.types.ts';
+import type { ResizeConstraints } from '../Registry/resizeConstraints.ts';
+import { Z_LAYER } from './zIndex.ts';
+import AnnotationLayer from './AnnotationLayer.vue';
+import AnnotationToolbar from '../AnnotationToolbar.vue';
 import {
   normalizeAnnotations,
   type AnnotationBlock,
   type AnnotationItem,
   type AnnotationTool,
-} from "./annotationModel.ts";
-import { isTauri } from "@tauri-apps/api/core";
-import { error as logError } from "@tauri-apps/plugin-log";
+} from './annotationModel.ts';
+import { isTauri } from '@tauri-apps/api/core';
+import { error as logError } from '@tauri-apps/plugin-log';
 import {
   roundToVisual,
   contentToScreen,
   screenToContent,
-  screenToCanvasContent,
   contentToVisual,
   type CanvasTransform,
   type Point,
   type ViewportOrigin,
-} from "../../../utils/canvasCoords.ts";
-import { generateBlockUuid } from "../../../utils/blockUuid.ts";
+} from '../../../utils/canvasCoords.ts';
+import { generateBlockUuid } from '../../../utils/blockUuid.ts';
 import type {
   ClipboardBlock,
   ClipboardEntry,
   ClipboardSnapshot,
   ClipboardSource,
-} from "../../../utils/blockClipboard.ts";
-import { copyComponentFiles } from "../../../utils/componentDataStore.ts";
-import { getErrorMessage } from "../../../utils/getErrorMessage.ts";
-import { getCurrentNote } from "../../../utils/noteContext.ts";
+} from '../../../utils/blockClipboard.ts';
+import { copyComponentFiles } from '../../../utils/componentDataStore.ts';
+import { getErrorMessage } from '../../../utils/getErrorMessage.ts';
+import { getCurrentNote } from '../../../utils/noteContext.ts';
 import {
   getVisibleBlockRect,
   isFullyVisibleInCanvas,
   invalidateCanvasScaleCache,
-} from "../Components/RichEditor/extensions/blockHandleUtils.ts";
+} from '../Components/RichEditor/extensions/blockHandleUtils.ts';
 
 // #region 编辑模式
 const isEditMode = ref(true);
@@ -329,13 +322,12 @@ const blockZ = (id: string): number => {
   return Math.max(itemZ(id), isDragging ? Z_LAYER.dragHandle : base);
 };
 
-const isActive = (id: string): boolean =>
-  isEditMode.value && state.selectedIds.has(id);
+const isActive = (id: string): boolean => isEditMode.value && state.selectedIds.has(id);
 
 // #region 批注
 const annotations = ref<AnnotationItem[]>([]);
 const isAnnotationMode = ref(false);
-const annotationTool = ref<AnnotationTool>("pen");
+const annotationTool = ref<AnnotationTool>('pen');
 
 const annotationBlocks = computed<AnnotationBlock[]>(() => {
   void layoutVersion.value;
@@ -355,7 +347,7 @@ const addAnnotation = (item: AnnotationItem) => {
 };
 
 const hasAnnotationConnectors = (): boolean =>
-  annotations.value.some((item) => item.kind === "connector");
+  annotations.value.some((item) => item.kind === 'connector');
 
 const eraseAnnotation = (id: string) => {
   annotations.value = annotations.value.filter((item) => item.id !== id);
@@ -380,15 +372,14 @@ const setAnnotationMode = (enabled: boolean) => {
 const pruneAnnotationConnectors = (removedIds: Set<string>) => {
   const kept = annotations.value.filter(
     (item) =>
-      item.kind === "stroke" ||
-      (!removedIds.has(item.fromUuid) && !removedIds.has(item.toUuid)),
+      item.kind === 'stroke' || (!removedIds.has(item.fromUuid) && !removedIds.has(item.toUuid)),
   );
   if (kept.length !== annotations.value.length) annotations.value = kept;
 };
 
 const serializeAnnotations = (offsetX: number, offsetY: number) =>
   annotations.value.map((item) =>
-    item.kind === "stroke"
+    item.kind === 'stroke'
       ? {
           ...item,
           points: item.points.map((point) => ({
@@ -404,7 +395,6 @@ const serializeAnnotations = (offsetX: number, offsetY: number) =>
 const componentRefs = ref<Record<string, ComponentController | undefined>>({});
 const canvasRef = ref<HTMLElement | null>(null);
 const canvasContainerRef = ref<HTMLElement | null>(null);
-const canvasScreenOrigin = ref<ViewportOrigin | null>(null);
 
 // Vuetify 组件 ref 是实例而非 DOM，所以经 $el 取根元素
 const setCanvasContainerRef = (el: unknown) => {
@@ -421,15 +411,7 @@ const viewRect = ref<{
 } | null>(null);
 const refreshViewRect = () => {
   const cr = canvasContainerRef.value?.getBoundingClientRect();
-  viewRect.value = cr
-    ? { left: cr.left, top: cr.top, right: cr.right, bottom: cr.bottom }
-    : null;
-};
-const refreshCanvasScreenOrigin = () => {
-  const rect = canvasRef.value?.getBoundingClientRect();
-  canvasScreenOrigin.value = rect
-    ? { left: rect.left, top: rect.top }
-    : null;
+  viewRect.value = cr ? { left: cr.left, top: cr.top, right: cr.right, bottom: cr.bottom } : null;
 };
 // #endregion 画布状态与 z 层
 
@@ -458,7 +440,7 @@ const rebaseOrigin = (offset: { x: number; y: number }) => {
   });
   // 批注共用块坐标系，重定位时须同步平移，否则批注会与块错位
   annotations.value = annotations.value.map((item) =>
-    item.kind === "stroke"
+    item.kind === 'stroke'
       ? {
           ...item,
           points: item.points.map((point) => ({
@@ -486,12 +468,7 @@ const maybeRebaseOrigin = () => {
     if (l.x > maxX) maxX = l.x;
     if (l.y > maxY) maxY = l.y;
   });
-  const maxAbs = Math.max(
-    Math.abs(minX),
-    Math.abs(maxX),
-    Math.abs(minY),
-    Math.abs(maxY),
-  );
+  const maxAbs = Math.max(Math.abs(minX), Math.abs(maxX), Math.abs(minY), Math.abs(maxY));
   if (maxAbs <= ORIGIN_REBASE_THRESHOLD) return;
   rebaseOrigin({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
 };
@@ -522,9 +499,7 @@ watch(zoom, (z2) => {
   if (!cont) return;
   const w = cont.clientWidth;
   const h = cont.clientHeight;
-  pan.x = Math.round(
-    pan.x + (w / 2 - (pan.x + origin.x)) * (1 - z2 / z1),
-  );
+  pan.x = Math.round(pan.x + (w / 2 - (pan.x + origin.x)) * (1 - z2 / z1));
   pan.y = Math.round(pan.y + (h / 2 - (pan.y + origin.y)) * (1 - z2 / z1));
 });
 
@@ -536,7 +511,7 @@ watch(
     invalidateCanvasScaleCache();
     // pan 纯平移不影响高度，所以仅 zoom 变化需重测
     window.dispatchEvent(
-      new CustomEvent("Mindrizzle:canvas-transform", {
+      new CustomEvent('Mindrizzle:canvas-transform', {
         detail: { zoom: zoom.value },
       }),
     );
@@ -545,20 +520,15 @@ watch(
     // 可见集随平移/缩放变化，所以此处同步重算（延到 rAF 会让快照多留一帧）
     reconcileVirtualBlocks();
   },
-  { flush: "post" },
+  { flush: 'post' },
 );
 
 // 保留 translate 小数，避免 zoom 放大前取整造成画布相对指针偏移
 const canvasStyle = computed<CSSProperties>(() => ({
   zoom: zoom.value,
   transform: `translate(${(pan.x + origin.x) / zoom.value}px, ${(pan.y + origin.y) / zoom.value}px)`,
-  transformOrigin: "0 0",
+  transformOrigin: '0 0',
 }));
-watch(
-  () => [pan.x, pan.y, origin.x, origin.y, zoom.value],
-  refreshCanvasScreenOrigin,
-  { flush: "post" },
-);
 // #endregion 缩放与画布变换
 
 // 点阵需随 pan 平移且附着内容网格，所以周期取 tile*zoom，按 (pan+origin+extend) 对周期取余对齐原点
@@ -580,8 +550,8 @@ const dotsStyle = computed<CSSProperties>(() => {
 
 const containerStyle = computed<CSSProperties>(() => ({
   // scoped CSS 的 min-height:0 在 v-sheet 上未生效，所以 inline 强制允许收缩（否则溢出处竖向滚动条）
-  minHeight: "0",
-  "--canvas-zoom": zoom.value,
+  minHeight: '0',
+  '--canvas-zoom': zoom.value,
 }));
 // #endregion 点阵背景与容器样式
 
@@ -597,13 +567,9 @@ const mouseScreen = ref({ x: -9999, y: -9999 });
 
 const updateMousePos = (e: MouseEvent) => {
   const target = e.target as HTMLElement;
-  const isCanvasTarget =
-    target.closest?.(".canvas-container") === canvasContainerRef.value;
+  const isCanvasTarget = target.closest?.('.canvas-container') === canvasContainerRef.value;
   const hasActivePointerSession =
-    selectionState.active ||
-    customDrag.active ||
-    !!resizeSession ||
-    panSession.active;
+    selectionState.active || customDrag.active || !!resizeSession || panSession.active;
   if (!isCanvasTarget && !hasActivePointerSession) return;
   lastMouse.x = e.clientX;
   lastMouse.y = e.clientY;
@@ -617,10 +583,7 @@ const updateMousePos = (e: MouseEvent) => {
 };
 
 // 往调小方向滚会让块达钳制后偏离鼠标，所以按被拖边过滤；该轴已钳制则整轴禁滚
-const restrictResizeAutoPan = (
-  vx: number,
-  vy: number,
-): { vx: number; vy: number } => {
+const restrictResizeAutoPan = (vx: number, vy: number): { vx: number; vy: number } => {
   const rs = resizeSession;
   if (!rs) return { vx, vy };
   const item = state.items.find((it) => it.uuid === rs.uuid);
@@ -632,20 +595,16 @@ const restrictResizeAutoPan = (
   const minH = (c.minHeight ?? 0) + 8,
     maxH = c.maxHeight ?? null;
   // 组件已按 min/max 钳制 lastBase，所以带 0.5 容差防浮点抖动
-  const wClamped =
-    rs.lastBase.w <= minW + 0.5 ||
-    (maxW != null && rs.lastBase.w >= maxW - 0.5);
-  const hClamped =
-    rs.lastBase.h <= minH + 0.5 ||
-    (maxH != null && rs.lastBase.h >= maxH - 0.5);
+  const wClamped = rs.lastBase.w <= minW + 0.5 || (maxW != null && rs.lastBase.w >= maxW - 0.5);
+  const hClamped = rs.lastBase.h <= minH + 0.5 || (maxH != null && rs.lastBase.h >= maxH - 0.5);
   // 对角线手柄含两方向，所以水平按 r/l、垂直按 b/t 分别处理
   if (vx) {
-    if (handle.includes("r") && (vx > 0 || wClamped)) vx = 0;
-    else if (handle.includes("l") && (vx < 0 || wClamped)) vx = 0;
+    if (handle.includes('r') && (vx > 0 || wClamped)) vx = 0;
+    else if (handle.includes('l') && (vx < 0 || wClamped)) vx = 0;
   }
   if (vy) {
-    if (handle.includes("b") && (vy > 0 || hClamped)) vy = 0;
-    else if (handle.includes("t") && (vy < 0 || hClamped)) vy = 0;
+    if (handle.includes('b') && (vy > 0 || hClamped)) vy = 0;
+    else if (handle.includes('t') && (vy < 0 || hClamped)) vy = 0;
   }
   return { vx, vy };
 };
@@ -764,13 +723,8 @@ const trackLeftButtonUp = () => {
 // 容器监听会随重挂载失效且编辑器会拦截右键，所以在 window 捕获阶段统一处理
 const onGlobalMouseDownCapture = (e: MouseEvent) => {
   if (e.button !== 2) return;
-  if (!(e.target as HTMLElement).closest?.(".canvas-container")) return;
-  if (
-    customDrag.active ||
-    resizeSession ||
-    selectionState.active ||
-    leftButtonDown
-  ) {
+  if (!(e.target as HTMLElement).closest?.('.canvas-container')) return;
+  if (customDrag.active || resizeSession || selectionState.active || leftButtonDown) {
     e.preventDefault();
     e.stopPropagation();
     return;
@@ -783,13 +737,7 @@ const onGlobalMouseDownCapture = (e: MouseEvent) => {
 const handleCanvasMouseDownCapture = (e: MouseEvent) => {
   if (e.button !== 2) return;
   // 左键会话进行中按右键会干扰操作，所以忽略右键
-  if (
-    customDrag.active ||
-    resizeSession ||
-    selectionState.active ||
-    leftButtonDown
-  )
-    return;
+  if (customDrag.active || resizeSession || selectionState.active || leftButtonDown) return;
   startPan(e);
   e.stopPropagation();
 };
@@ -841,9 +789,7 @@ const onCanvasPanEvent = (e: Event) => {
 // #endregion 手动平移（右键拖拽）
 
 // #region 框选状态
-const selectionBox = ref<{ x: number; y: number; w: number; h: number } | null>(
-  null,
-);
+const selectionBox = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 const selectionState = reactive({
   active: false,
   startX: 0,
@@ -924,14 +870,11 @@ const setComponentRef = (id: string, el: any) => {
 
 // 壳层由宿主统一提供，插件块只声明内容与设置；历史块自带壳，按原样挂载
 const EMPTY_COMPONENT_PROPS = {};
-const definitionPropsCache = new WeakMap<
-  CanvasItem,
-  { definition: AnyBlockDefinition }
->();
+const definitionPropsCache = new WeakMap<CanvasItem, { definition: AnyBlockDefinition }>();
 
 const blockHostOf = (item: CanvasItem): Component => {
   const definition = blockDefinitionOf(item.component);
-  return definition?.kind === "raw"
+  return definition?.kind === 'raw'
     ? (definition.rawComponent ?? PluginBlockHost)
     : PluginBlockHost;
 };
@@ -939,7 +882,7 @@ const blockHostOf = (item: CanvasItem): Component => {
 // 每次渲染新建对象会让宿主 props 逐帧变化，所以按块缓存
 const blockDefinitionPropsOf = (item: CanvasItem) => {
   const definition = blockDefinitionOf(item.component);
-  if (!definition || definition.kind === "raw") return EMPTY_COMPONENT_PROPS;
+  if (!definition || definition.kind === 'raw') return EMPTY_COMPONENT_PROPS;
   const cached = definitionPropsCache.get(item);
   if (cached && cached.definition === definition) return cached;
   const props = { definition };
@@ -951,8 +894,7 @@ const blockEnvOf = (): BlockEnv => ({
   isReadOnly: !isEditMode.value,
 });
 
-const layoutOf = (item: CanvasItem): Rect =>
-  item.layout;
+const layoutOf = (item: CanvasItem): Rect => item.layout;
 // #endregion 组件数据读写
 
 // 接触段要融合、露出段保留边框，所以为每块生成接触段同色遮罩（块内相对坐标）
@@ -970,24 +912,22 @@ const computeEdgeMasks = (): Record<string, EdgeMask[]> => {
     for (const b of items) {
       if (a.uuid === b.uuid) continue;
       const rb = layoutOf(b);
-      const yOverlap =
-        Math.max(ra.y, rb.y) < Math.min(ra.y + ra.h, rb.y + rb.h);
-      const xOverlap =
-        Math.max(ra.x, rb.x) < Math.min(ra.x + ra.w, rb.x + rb.w);
+      const yOverlap = Math.max(ra.y, rb.y) < Math.min(ra.y + ra.h, rb.y + rb.h);
+      const xOverlap = Math.max(ra.x, rb.x) < Math.min(ra.x + ra.w, rb.x + rb.w);
       if (yOverlap && Math.abs(rb.x + rb.w - ra.x) <= EDGE_TOL) {
         const y0 = Math.max(ra.y, rb.y);
         const len = Math.min(ra.y + ra.h, rb.y + rb.h) - y0;
         if (len > 0) {
-          map[a.uuid].push({ side: "l", start: y0 - ra.y, len });
-          map[b.uuid].push({ side: "r", start: y0 - rb.y, len });
+          map[a.uuid].push({ side: 'l', start: y0 - ra.y, len });
+          map[b.uuid].push({ side: 'r', start: y0 - rb.y, len });
         }
       }
       if (xOverlap && Math.abs(rb.y + rb.h - ra.y) <= EDGE_TOL) {
         const x0 = Math.max(ra.x, rb.x);
         const len = Math.min(ra.x + ra.w, rb.x + rb.w) - x0;
         if (len > 0) {
-          map[a.uuid].push({ side: "t", start: x0 - ra.x, len });
-          map[b.uuid].push({ side: "b", start: x0 - rb.x, len });
+          map[a.uuid].push({ side: 't', start: x0 - ra.x, len });
+          map[b.uuid].push({ side: 'b', start: x0 - rb.x, len });
         }
       }
     }
@@ -1003,10 +943,7 @@ const computeCornerHits = (): Record<
   string,
   { tl: boolean; tr: boolean; bl: boolean; br: boolean }
 > => {
-  const map: Record<
-    string,
-    { tl: boolean; tr: boolean; bl: boolean; br: boolean }
-  > = {};
+  const map: Record<string, { tl: boolean; tr: boolean; bl: boolean; br: boolean }> = {};
   const items = state.items;
   items.forEach((it) => {
     map[it.uuid] = { tl: false, tr: false, bl: false, br: false };
@@ -1015,13 +952,13 @@ const computeCornerHits = (): Record<
     const { w, h } = layoutOf(it);
     (edgeMasksMap.value[it.uuid] ?? []).forEach((m) => {
       const endHit = m.start + m.len;
-      if (m.side === "l") {
+      if (m.side === 'l') {
         if (m.start <= EDGE_TOL) map[it.uuid].tl = true;
         if (endHit >= h - EDGE_TOL) map[it.uuid].bl = true;
-      } else if (m.side === "r") {
+      } else if (m.side === 'r') {
         if (m.start <= EDGE_TOL) map[it.uuid].tr = true;
         if (endHit >= h - EDGE_TOL) map[it.uuid].br = true;
-      } else if (m.side === "t") {
+      } else if (m.side === 't') {
         if (m.start <= EDGE_TOL) map[it.uuid].tl = true;
         if (endHit >= w - EDGE_TOL) map[it.uuid].tr = true;
       } else {
@@ -1040,8 +977,7 @@ const cornerStyleOf = (id: string): CSSProperties => {
   if (!c) return {};
   const r = (hit: boolean) => (hit ? 0 : ROUNDED);
   const radius = `${r(c.tl)}px ${r(c.tr)}px ${r(c.br)}px ${r(c.bl)}px`;
-  if (radius === `${ROUNDED}px ${ROUNDED}px ${ROUNDED}px ${ROUNDED}px`)
-    return {};
+  if (radius === `${ROUNDED}px ${ROUNDED}px ${ROUNDED}px ${ROUNDED}px`) return {};
   return { borderRadius: radius };
 };
 
@@ -1066,14 +1002,12 @@ const scheduleGeometryRefresh = () => {
 // 块贴近视口顶部时上方放不下手柄，所以按块视觉位置决定放上/下方
 // #region 手柄与描边样式
 const handlePlacementOf = (item: CanvasItem): HandlePlacement =>
-  visualY(layoutOf(item).y) < Math.round(HANDLE_HEIGHT * zoom.value)
-    ? "bottom"
-    : "top";
+  visualY(layoutOf(item).y) < Math.round(HANDLE_HEIGHT * zoom.value) ? 'bottom' : 'top';
 
 // 拖拽中块位置持续变化会让上方空间翻转、手柄与块分离，所以拖拽期锁定放置
 const placementOf = (item: CanvasItem): HandlePlacement => {
   if (customDrag.active && customDrag.sourceUuid === item.uuid) {
-    return customDrag.placementLocked ? "bottom" : "top";
+    return customDrag.placementLocked ? 'bottom' : 'top';
   }
   return handlePlacementOf(item);
 };
@@ -1082,10 +1016,7 @@ const placementOf = (item: CanvasItem): HandlePlacement => {
 const selectedOutlineStyle = (item: CanvasItem): CSSProperties => {
   const l = layoutOf(item);
   // 归属块拖拽栏需盖住别的块高亮又不遮断自己，所以其描边环用 outline（1002）
-  const zIndex =
-    outlineOwnerId.value === item.uuid
-      ? Z_LAYER.outline
-      : Z_LAYER.dragHandle - 1;
+  const zIndex = outlineOwnerId.value === item.uuid ? Z_LAYER.outline : Z_LAYER.dragHandle - 1;
   return {
     left: `${roundToPx(l.x) - roundToPx(OUTLINE_PX)}px`,
     top: `${roundToPx(l.y) - roundToPx(OUTLINE_PX)}px`,
@@ -1142,7 +1073,7 @@ const setRichTextDrop = (next: RichTextDrop | null) => {
 };
 const richTextDropLineStyle = computed<CSSProperties>(() => {
   const drop = richTextDrop.value;
-  if (!drop) return { display: "none" };
+  if (!drop) return { display: 'none' };
   return {
     left: `${roundToPx(drop.left)}px`,
     width: `${Math.max(2 / zoom.value, roundToPx(drop.right - drop.left))}px`,
@@ -1152,7 +1083,7 @@ const richTextDropLineStyle = computed<CSSProperties>(() => {
 const richTextDropTargetStyle = computed<CSSProperties>(() => {
   const id = richTextDropTargetId.value;
   const item = id ? state.items.find((target) => target.uuid === id) : null;
-  if (!item) return { display: "none" };
+  if (!item) return { display: 'none' };
   const layout = layoutOf(item);
   return {
     left: `${roundToPx(layout.x) - 4}px`,
@@ -1166,11 +1097,11 @@ let customDragGroup: Record<string, { x: number; y: number }> = {};
 let customDragItems = new Map<string, CanvasItem>();
 // 曲别针粘贴的块对（key 为两 id 排序后 join），拖动一个时另一块跟着动
 const linkedPairs = ref<Set<string>>(new Set());
-const pairKey = (a: string, b: string) => [a, b].sort().join("|");
+const pairKey = (a: string, b: string) => [a, b].sort().join('|');
 const linkedNeighborMap = computed(() => {
   const neighbors = new Map<string, string[]>();
   linkedPairs.value.forEach((key) => {
-    const [firstId, secondId] = key.split("|");
+    const [firstId, secondId] = key.split('|');
     const firstNeighbors = neighbors.get(firstId) ?? [];
     const secondNeighbors = neighbors.get(secondId) ?? [];
     firstNeighbors.push(secondId);
@@ -1196,18 +1127,11 @@ const roundConnectionPoint = (point: ConnectionPoint): ConnectionPoint => ({
   y: roundToVisual(zoom.value, point.y),
 });
 
-const connectionPoints = (
-  a: Rect,
-  b: Rect,
-): { start: ConnectionPoint; end: ConnectionPoint } => {
+const connectionPoints = (a: Rect, b: Rect): { start: ConnectionPoint; end: ConnectionPoint } => {
   const verticalGap = b.x - (a.x + a.w);
   const reverseVerticalGap = a.x - (b.x + b.w);
-  const verticalOverlap =
-    (Math.max(a.y, b.y) + Math.min(a.y + a.h, b.y + b.h)) / 2;
-  if (
-    Math.abs(verticalGap) <= SNAP_TOLERANCE ||
-    Math.abs(reverseVerticalGap) <= SNAP_TOLERANCE
-  ) {
+  const verticalOverlap = (Math.max(a.y, b.y) + Math.min(a.y + a.h, b.y + b.h)) / 2;
+  if (Math.abs(verticalGap) <= SNAP_TOLERANCE || Math.abs(reverseVerticalGap) <= SNAP_TOLERANCE) {
     const aOnLeft = Math.abs(verticalGap) <= SNAP_TOLERANCE;
     const aX = aOnLeft ? a.x + a.w : a.x;
     const bX = aOnLeft ? b.x : b.x + b.w;
@@ -1218,8 +1142,7 @@ const connectionPoints = (
   }
   const horizontalGap = b.y - (a.y + a.h);
   const reverseHorizontalGap = a.y - (b.y + b.h);
-  const horizontalOverlap =
-    (Math.max(a.x, b.x) + Math.min(a.x + a.w, b.x + b.w)) / 2;
+  const horizontalOverlap = (Math.max(a.x, b.x) + Math.min(a.x + a.w, b.x + b.w)) / 2;
   if (
     Math.abs(horizontalGap) <= SNAP_TOLERANCE ||
     Math.abs(reverseHorizontalGap) <= SNAP_TOLERANCE
@@ -1249,7 +1172,7 @@ interface ConnSegment {
 const mergeConnSegments = (segments: ConnSegment[]): LinkedConnection[] => {
   const groups = new Map<string, ConnSegment[]>();
   segments.forEach((seg) => {
-    const groupKey = `${seg.horizontal ? "h" : "v"}:${seg.axis}`;
+    const groupKey = `${seg.horizontal ? 'h' : 'v'}:${seg.axis}`;
     const group = groups.get(groupKey);
     if (group) group.push(seg);
     else groups.set(groupKey, [seg]);
@@ -1261,8 +1184,7 @@ const mergeConnSegments = (segments: ConnSegment[]): LinkedConnection[] => {
     for (let i = 1; i < group.length; i++) {
       const next = group[i];
       // 贴合/微缝都算连续，所以间隔小于容差视为同一共享边缘
-      if (next.from - current.to <= SNAP_TOLERANCE)
-        current.to = Math.max(current.to, next.to);
+      if (next.from - current.to <= SNAP_TOLERANCE) current.to = Math.max(current.to, next.to);
       else {
         merged.push(toConnection(current));
         current = { ...next };
@@ -1274,7 +1196,7 @@ const mergeConnSegments = (segments: ConnSegment[]): LinkedConnection[] => {
 };
 
 const toConnection = (seg: ConnSegment): LinkedConnection => {
-  const key = `${seg.horizontal ? "h" : "v"}:${seg.axis}:${seg.from}-${seg.to}`;
+  const key = `${seg.horizontal ? 'h' : 'v'}:${seg.axis}:${seg.from}-${seg.to}`;
   if (seg.horizontal) {
     return {
       key,
@@ -1295,7 +1217,7 @@ const linkedConnections = computed<LinkedConnection[]>(() => {
   const itemMap = new Map(state.items.map((item) => [item.uuid, item]));
   const segments: ConnSegment[] = [];
   linkedPairs.value.forEach((key) => {
-    const [startId, endId] = key.split("|");
+    const [startId, endId] = key.split('|');
     const startItem = itemMap.get(startId);
     const endItem = itemMap.get(endId);
     if (!startItem || !endItem) return;
@@ -1372,9 +1294,9 @@ const hideAllBlockHandles = () => {
     clientY: -9999,
     pointerId: 1,
   };
-  document.querySelectorAll<HTMLElement>(".ProseMirror").forEach((dom) => {
-    dom.dispatchEvent(new PointerEvent("pointermove", emptyPoint));
-    dom.dispatchEvent(new PointerEvent("pointerout", emptyPoint));
+  document.querySelectorAll<HTMLElement>('.ProseMirror').forEach((dom) => {
+    dom.dispatchEvent(new PointerEvent('pointermove', emptyPoint));
+    dom.dispatchEvent(new PointerEvent('pointerout', emptyPoint));
   });
 };
 
@@ -1423,13 +1345,13 @@ const indexBands = (root: Element, selector: string) => {
 };
 
 const cacheUnionOutlineDom = (canvas: HTMLElement) => {
-  const svg = canvas.querySelector<SVGSVGElement>(".selected-outline-union");
+  const svg = canvas.querySelector<SVGSVGElement>('.selected-outline-union');
   if (!svg) return null;
   return {
-    mask: svg.querySelector("mask"),
-    fill: svg.querySelector<SVGRectElement>(".selected-outline-union-fill"),
-    outers: indexBands(svg, ".outline-band-outer"),
-    inners: indexBands(svg, ".outline-band-inner"),
+    mask: svg.querySelector('mask'),
+    fill: svg.querySelector<SVGRectElement>('.selected-outline-union-fill'),
+    outers: indexBands(svg, '.outline-band-outer'),
+    inners: indexBands(svg, '.outline-band-inner'),
   };
 };
 
@@ -1440,8 +1362,8 @@ const cacheDragDom = () => {
   dragSettingsEl = null;
   unionOutlineDom = null;
   if (!canvas) return;
-  const wrappers = indexByUuid(canvas, ".drag-wrapper");
-  const outlines = indexByUuid(canvas, ".selected-outline");
+  const wrappers = indexByUuid(canvas, '.drag-wrapper');
+  const outlines = indexByUuid(canvas, '.selected-outline');
   const sourceId = customDrag.sourceUuid;
   customDragItems.forEach((_, id) => {
     dragDom.set(id, {
@@ -1449,21 +1371,17 @@ const cacheDragDom = () => {
       outline: outlines.get(id) ?? null,
     });
   });
-  dragHandleEl = sourceId
-    ? (indexByUuid(canvas, ".floating-handle").get(sourceId) ?? null)
-    : null;
-  dragSettingsEl = sourceId
-    ? (indexByUuid(canvas, ".side-settings").get(sourceId) ?? null)
-    : null;
+  dragHandleEl = sourceId ? (indexByUuid(canvas, '.floating-handle').get(sourceId) ?? null) : null;
+  dragSettingsEl = sourceId ? (indexByUuid(canvas, '.side-settings').get(sourceId) ?? null) : null;
   unionOutlineDom = cacheUnionOutlineDom(canvas);
 };
 
 const setRectAttrs = (el: Element | null, rect: Rect) => {
   if (!el) return;
-  el.setAttribute("x", String(rect.x));
-  el.setAttribute("y", String(rect.y));
-  el.setAttribute("width", String(rect.w));
-  el.setAttribute("height", String(rect.h));
+  el.setAttribute('x', String(rect.x));
+  el.setAttribute('y', String(rect.y));
+  el.setAttribute('width', String(rect.w));
+  el.setAttribute('height', String(rect.h));
 };
 
 // 多选轮廓的遮罩同属 layout 派生，拖拽期需与块同步平移，否则轮廓会被旧的遮罩边界裁掉
@@ -1490,9 +1408,7 @@ const syncDragDom = () => {
     if (dom.wrapper) dom.wrapper.style.transform = translateOf(layoutOf(item));
     if (dom.outline) applyElStyle(dom.outline, selectedOutlineStyle(item));
   });
-  const source = customDrag.sourceUuid
-    ? customDragItems.get(customDrag.sourceUuid)
-    : null;
+  const source = customDrag.sourceUuid ? customDragItems.get(customDrag.sourceUuid) : null;
   if (!source) return;
   // zoom 变化会让子组件用冻结的 prop 重写 transform，所以拖拽中按最新 layout 补写浮层位置
   const geometry = {
@@ -1501,8 +1417,7 @@ const syncDragDom = () => {
     round: roundToPx,
   };
   if (dragHandleEl) applyElStyle(dragHandleEl, handleBarStyleOf(geometry));
-  if (dragSettingsEl)
-    applyElStyle(dragSettingsEl, sideSettingsStyleOf(geometry));
+  if (dragSettingsEl) applyElStyle(dragSettingsEl, sideSettingsStyleOf(geometry));
   syncUnionOutlineDom();
 };
 
@@ -1532,7 +1447,7 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
   customDragLastY = e.clientY;
   customDrag.panStartX = pan.x;
   customDrag.panStartY = pan.y;
-  customDrag.placementLocked = handlePlacementOf(item) === "bottom";
+  customDrag.placementLocked = handlePlacementOf(item) === 'bottom';
   customDragGroup = {};
   customDragItems = new Map();
   getSelectedUuids(item).forEach((id) => {
@@ -1552,21 +1467,21 @@ const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
     }
   });
   // 编辑器 hover 自解析在 zoom≠1 时会 stopPropagation，所以用捕获阶段监听
-  window.addEventListener("pointermove", onCustomDragMove, true);
-  window.addEventListener("pointerup", onCustomDragUp);
+  window.addEventListener('pointermove', onCustomDragMove, true);
+  window.addEventListener('pointerup', onCustomDragUp);
   // 拖拽期间 layout 不触发重渲染，所以块本体与跟随浮层靠命令式写 DOM，链接线/批注连接线等派生浮层退回逐帧重渲染
   dragNeedsRender = linkedPairs.value.size > 0 || hasAnnotationConnectors();
   cacheDragDom();
-  window.addEventListener("mousemove", onCustomDragMove, true);
-  window.addEventListener("mouseup", onCustomDragUp);
+  window.addEventListener('mousemove', onCustomDragMove, true);
+  window.addEventListener('mouseup', onCustomDragUp);
   customDrag.draggingUuids = new Set(Object.keys(customDragGroup));
   e.preventDefault();
-  document.body.classList.add("block-handle-dragging");
+  document.body.classList.add('block-handle-dragging');
   // 只加 body 类要等下次 state-change 才收起，所以立即向所有编辑器派发块外指针事件
   hideAllBlockHandles();
   // 拖拽中块可能超出视口出现滚动条，所以临时锁 html/body 滚动
-  document.documentElement.style.overflow = "hidden";
-  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
   startAutoPan();
 };
 
@@ -1585,9 +1500,7 @@ const onCustomDragMove = (e: MouseEvent) => {
 };
 
 const findRichTextDropTarget = (): string | null => {
-  const source = state.items.find(
-    (item) => item.uuid === customDrag.sourceUuid,
-  );
+  const source = state.items.find((item) => item.uuid === customDrag.sourceUuid);
   const viewport = viewRect.value;
   if (!source || !componentNodeOf(source) || !viewport) return null;
   const sourceLayout = layoutOf(source);
@@ -1605,11 +1518,7 @@ const findRichTextDropTarget = (): string | null => {
   );
   for (const target of state.items) {
     // 只有声明可接收落点的组件才参与命中（如富文本）
-    if (
-      target.uuid === source.uuid ||
-      !componentMetaOf(target.component)?.acceptsDrop
-    )
-      continue;
+    if (target.uuid === source.uuid || !componentMetaOf(target.component)?.acceptsDrop) continue;
     const targetLayout = layoutOf(target);
     const targetTopLeft = contentToScreen(
       canvasTransform(),
@@ -1637,10 +1546,7 @@ const findRichTextDropTarget = (): string | null => {
 // 块内滚动后落点会变，所以由 rAF 每帧重算；各浏览器 BCR 是否含 zoom 不一致，所以以目标块 DOM 矩形为参照反推 content 坐标
 interface RichTextTarget {
   id: string;
-  resolveDropAtElement: (
-    el: HTMLElement | null,
-    preferBefore: boolean,
-  ) => number | null;
+  resolveDropAtElement: (el: HTMLElement | null, preferBefore: boolean) => number | null;
   scrollContent?: (deltaY: number) => void;
   pmEl: HTMLElement;
   blockRect: DOMRect;
@@ -1652,11 +1558,9 @@ interface RichTextTarget {
 
 const richTextTargetOf = (id: string): RichTextTarget | null => {
   const item = state.items.find((it) => it.uuid === id);
-  const wrapper = document.querySelector<HTMLElement>(
-    `.drag-wrapper[data-uuid="${id}"]`,
-  );
-  const scroll = wrapper?.querySelector<HTMLElement>(".editor-scroll") ?? null;
-  const pm = wrapper?.querySelector<HTMLElement>(".ProseMirror") ?? null;
+  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"]`);
+  const scroll = wrapper?.querySelector<HTMLElement>('.editor-scroll') ?? null;
+  const pm = wrapper?.querySelector<HTMLElement>('.ProseMirror') ?? null;
   const { resolveDropAtElement, scrollContent } = componentRefs.value[id] ?? {};
   if (!item || !wrapper || !scroll || !pm || !resolveDropAtElement) return null;
   const blockLayout = layoutOf(item);
@@ -1669,10 +1573,7 @@ const richTextTargetOf = (id: string): RichTextTarget | null => {
     blockRect,
     blockLayout,
     // 浏览器 BCR 是否含 zoom 不一致，所以用实测比例反推
-    domScale:
-      blockLayout.w > 0 && blockRect.width > 0
-        ? blockRect.width / blockLayout.w
-        : 1,
+    domScale: blockLayout.w > 0 && blockRect.width > 0 ? blockRect.width / blockLayout.w : 1,
     pmRect: pm.getBoundingClientRect(),
     scrollRect: scroll.getBoundingClientRect(),
   };
@@ -1682,12 +1583,8 @@ const richTextTargetOf = (id: string): RichTextTarget | null => {
 let rtTargetFrame = 0;
 let rtTargetId: string | null = null;
 let rtTargetValue: RichTextTarget | null = null;
-const richTextTargetForFrame = (
-  id: string,
-  frame: number,
-): RichTextTarget | null => {
-  if (frame > 0 && frame === rtTargetFrame && id === rtTargetId)
-    return rtTargetValue;
+const richTextTargetForFrame = (id: string, frame: number): RichTextTarget | null => {
+  if (frame > 0 && frame === rtTargetFrame && id === rtTargetId) return rtTargetValue;
   rtTargetFrame = frame;
   rtTargetId = id;
   rtTargetValue = richTextTargetOf(id);
@@ -1697,12 +1594,8 @@ const richTextTargetForFrame = (
 let rtVisibleFrame = 0;
 let rtVisibleEl: HTMLElement | null = null;
 let rtVisibleValue = false;
-const isTargetVisibleForFrame = (
-  el: HTMLElement | null,
-  frame: number,
-): boolean => {
-  if (frame > 0 && frame === rtVisibleFrame && el === rtVisibleEl)
-    return rtVisibleValue;
+const isTargetVisibleForFrame = (el: HTMLElement | null, frame: number): boolean => {
+  if (frame > 0 && frame === rtVisibleFrame && el === rtVisibleEl) return rtVisibleValue;
   rtVisibleFrame = frame;
   rtVisibleEl = el;
   rtVisibleValue = isFullyVisibleInCanvas(el);
@@ -1710,44 +1603,24 @@ const isTargetVisibleForFrame = (
 };
 
 const domRectToContent = (target: RichTextTarget, rect: DOMRect) => ({
-  left:
-    target.blockLayout.x +
-    (rect.left - target.blockRect.left) / target.domScale,
-  right:
-    target.blockLayout.x +
-    (rect.right - target.blockRect.left) / target.domScale,
-  top:
-    target.blockLayout.y + (rect.top - target.blockRect.top) / target.domScale,
-  bottom:
-    target.blockLayout.y +
-    (rect.bottom - target.blockRect.top) / target.domScale,
+  left: target.blockLayout.x + (rect.left - target.blockRect.left) / target.domScale,
+  right: target.blockLayout.x + (rect.right - target.blockRect.left) / target.domScale,
+  top: target.blockLayout.y + (rect.top - target.blockRect.top) / target.domScale,
+  bottom: target.blockLayout.y + (rect.bottom - target.blockRect.top) / target.domScale,
 });
 
 // 离块太远会一直滚，所以仅贴边带内按距离比例滚动（步进按视觉像素折算，各缩放手感一致）
 const RT_SCROLL_EDGE = 40;
 const RT_SCROLL_MAX = 12;
-const isPointerInsideRichText = (
-  target: RichTextTarget,
-  point: Point,
-): boolean => {
+const isPointerInsideRichText = (target: RichTextTarget, point: Point): boolean => {
   const rect = domRectToContent(target, target.pmRect);
   return (
-    point.x >= rect.left &&
-    point.x <= rect.right &&
-    point.y >= rect.top &&
-    point.y <= rect.bottom
+    point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
   );
 };
 
-const autoScrollRichText = (
-  target: RichTextTarget,
-  point: Point,
-  frame: number,
-) => {
-  if (
-    !isTargetVisibleForFrame(target.pmEl, frame) ||
-    !isPointerInsideRichText(target, point)
-  )
+const autoScrollRichText = (target: RichTextTarget, point: Point, frame: number) => {
+  if (!isTargetVisibleForFrame(target.pmEl, frame) || !isPointerInsideRichText(target, point))
     return;
   const { x, y } = point;
   const area = domRectToContent(target, target.scrollRect);
@@ -1766,16 +1639,12 @@ const autoScrollRichText = (
 const blockElementAt = (el: HTMLElement | null, pmEl: HTMLElement) => {
   if (!el || !pmEl.contains(el)) return null;
   let block: HTMLElement = el;
-  while (block.parentElement && block.parentElement !== pmEl)
-    block = block.parentElement;
+  while (block.parentElement && block.parentElement !== pmEl) block = block.parentElement;
   return block.parentElement === pmEl ? block : null;
 };
 
 // gutter/空隙处命不中块，所以按鼠标纵向取最近顶层块作参照
-const nearestBlockElement = (
-  target: RichTextTarget,
-  cy: number,
-): HTMLElement | null => {
+const nearestBlockElement = (target: RichTextTarget, cy: number): HTMLElement | null => {
   let best: HTMLElement | null = null;
   let bestDistance = Infinity;
   for (const child of Array.from(target.pmEl.children)) {
@@ -1794,30 +1663,17 @@ const nearestBlockElement = (
 };
 
 // posAtCoords/coordsAtPos 混用 BCR 与鼠标坐标系、zoom 下必偏移，所以改用 elementFromPoint + posAtDOM
-const resolveRichTextDrop = (
-  target: RichTextTarget,
-  point: Point,
-  viewport: ViewportOrigin,
-) => {
+const resolveRichTextDrop = (target: RichTextTarget, point: Point, viewport: ViewportOrigin) => {
   const pm = domRectToContent(target, target.pmRect);
   const area = domRectToContent(target, target.scrollRect);
   const cx = clampVal(point.x, pm.left, pm.right);
-  const cy = clampVal(
-    point.y,
-    Math.max(pm.top, area.top),
-    Math.min(pm.bottom, area.bottom),
-  );
+  const cy = clampVal(point.y, Math.max(pm.top, area.top), Math.min(pm.bottom, area.bottom));
   const screen = contentToScreen(canvasTransform(), viewport, cx, cy);
   // gutter 处 pointer-events:none 无元素，所以再贴文本区左缘探一次
-  const insideX =
-    contentToScreen(canvasTransform(), viewport, pm.left, cy).x + 2;
-  const at = (x: number) =>
-    document.elementFromPoint(x, screen.y) as HTMLElement | null;
-  const hitEl =
-    [at(screen.x), at(insideX)].find((el) => el && target.pmEl.contains(el)) ??
-    null;
-  const blockEl =
-    blockElementAt(hitEl, target.pmEl) ?? nearestBlockElement(target, cy);
+  const insideX = contentToScreen(canvasTransform(), viewport, pm.left, cy).x + 2;
+  const at = (x: number) => document.elementFromPoint(x, screen.y) as HTMLElement | null;
+  const hitEl = [at(screen.x), at(insideX)].find((el) => el && target.pmEl.contains(el)) ?? null;
+  const blockEl = blockElementAt(hitEl, target.pmEl) ?? nearestBlockElement(target, cy);
   if (!blockEl) return null;
   const blockDomRect = getVisibleBlockRect(blockEl);
   if (!blockDomRect) return null;
@@ -1851,22 +1707,15 @@ const resolveDropForTarget = (targetId: string, event?: MouseEvent) => {
 const updateRichTextDrop = (frame = 0) => {
   const viewport = viewRect.value;
   const targetId = richTextDropTargetId.value;
-  const target =
-    viewport && targetId ? richTextTargetForFrame(targetId, frame) : null;
+  const target = viewport && targetId ? richTextTargetForFrame(targetId, frame) : null;
   if (!viewport || !target) {
     setRichTextDrop(null);
     return;
   }
-  const point = screenToContent(
-    canvasTransform(),
-    viewport,
-    customDragLastX,
-    customDragLastY,
-  );
+  const point = screenToContent(canvasTransform(), viewport, customDragLastX, customDragLastY);
   // 两者同时进行会让落点乱跳，所以块未完全显示时不滚块内内容
   const canScrollInside =
-    isPointerInsideRichText(target, point) &&
-    isTargetVisibleForFrame(target.pmEl, frame);
+    isPointerInsideRichText(target, point) && isTargetVisibleForFrame(target.pmEl, frame);
   if (canScrollInside) autoScrollRichText(target, point, frame);
   setRichTextDrop(resolveRichTextDrop(target, point, viewport));
 };
@@ -1948,14 +1797,11 @@ const isAdjacent = (a: Rect, b: Rect): boolean => {
   const hasVerticalOverlap = a.y < b.y + b.h && b.y < a.y + a.h;
   const hasHorizontalOverlap = a.x < b.x + b.w && b.x < a.x + a.w;
   const touchesVerticalEdge =
-    Math.abs(a.x + a.w - b.x) <= SNAP_TOLERANCE ||
-    Math.abs(b.x + b.w - a.x) <= SNAP_TOLERANCE;
+    Math.abs(a.x + a.w - b.x) <= SNAP_TOLERANCE || Math.abs(b.x + b.w - a.x) <= SNAP_TOLERANCE;
   const touchesHorizontalEdge =
-    Math.abs(a.y + a.h - b.y) <= SNAP_TOLERANCE ||
-    Math.abs(b.y + b.h - a.y) <= SNAP_TOLERANCE;
+    Math.abs(a.y + a.h - b.y) <= SNAP_TOLERANCE || Math.abs(b.y + b.h - a.y) <= SNAP_TOLERANCE;
   return (
-    (touchesVerticalEdge && hasVerticalOverlap) ||
-    (touchesHorizontalEdge && hasHorizontalOverlap)
+    (touchesVerticalEdge && hasVerticalOverlap) || (touchesHorizontalEdge && hasHorizontalOverlap)
   );
 };
 
@@ -1965,11 +1811,10 @@ const pruneDetachedLinks = () => {
   const itemMap = new Map(state.items.map((item) => [item.uuid, item]));
   const kept = new Set<string>();
   linkedPairs.value.forEach((key) => {
-    const [firstId, secondId] = key.split("|");
+    const [firstId, secondId] = key.split('|');
     const first = itemMap.get(firstId);
     const second = itemMap.get(secondId);
-    if (first && second && isAdjacent(layoutOf(first), layoutOf(second)))
-      kept.add(key);
+    if (first && second && isAdjacent(layoutOf(first), layoutOf(second))) kept.add(key);
   });
   if (kept.size !== linkedPairs.value.size) linkedPairs.value = kept;
 };
@@ -1983,8 +1828,8 @@ const connectionPoint = (a: Rect, b: Rect): { x: number; y: number } => {
 // 层级已在 zIndex.ts 固定，所以曲别针无需运行时降 z
 
 // 每次渲染返回新数组会让 ResizeBox 判定 props 变更而重渲染，所以复用常量数组
-const HANDLES_NO_TOP_MIDDLE = ["tl", "tr", "ml", "mr", "bl", "bm", "br"];
-const HANDLES_ALL = ["tl", "tm", "tr", "ml", "mr", "bl", "bm", "br"];
+const HANDLES_NO_TOP_MIDDLE = ['tl', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'];
+const HANDLES_ALL = ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'];
 
 // 手柄已 Teleport 脱离 .drag-wrapper（CSS 隐藏规则失效），所以按 popup 显隐过滤 tm 手柄；可变形由 base 按 changable 收窄
 const resizeHandlesOf = (item: CanvasItem): string[] => {
@@ -2039,16 +1884,8 @@ const resizeBlockTo = (item: CanvasItem, size: Partial<BlockSize>) => {
   if (!isEditMode.value) return;
   const c = constraintsOf(item);
   const layout = layoutOf(item);
-  const width = clampVal(
-    Math.round(size.width ?? layout.w),
-    (c.minWidth ?? 0) + 8,
-    c.maxWidth,
-  );
-  const height = clampVal(
-    Math.round(size.height ?? layout.h),
-    (c.minHeight ?? 0) + 8,
-    c.maxHeight,
-  );
+  const width = clampVal(Math.round(size.width ?? layout.w), (c.minWidth ?? 0) + 8, c.maxWidth);
+  const height = clampVal(Math.round(size.height ?? layout.h), (c.minHeight ?? 0) + 8, c.maxHeight);
   applyBlockSize(item, width, height);
 };
 
@@ -2072,10 +1909,7 @@ const canvasViewOf = (item: CanvasItem): CanvasViewData => ({
 });
 
 // 回调逐次渲染换引用会让块组件重渲染，所以按块缓存
-const interactionHandlerCache = new WeakMap<
-  CanvasItem,
-  BlockInteractionHandlers
->();
+const interactionHandlerCache = new WeakMap<CanvasItem, BlockInteractionHandlers>();
 const interactionHandlersOf = (item: CanvasItem): BlockInteractionHandlers => {
   const cached = interactionHandlerCache.get(item);
   if (cached) return cached;
@@ -2104,10 +1938,7 @@ interface PaperclipCandidate {
 }
 
 // popup 上侧开启会盖住曲别针，所以此时清空
-const paperclipCandidateOf = (
-  first: CanvasItem,
-  second: CanvasItem,
-): PaperclipCandidate | null => {
+const paperclipCandidateOf = (first: CanvasItem, second: CanvasItem): PaperclipCandidate | null => {
   const key = pairKey(first.uuid, second.uuid);
   const linked = linkedPairs.value.has(key);
   const rectA = layoutOf(first);
@@ -2159,8 +1990,7 @@ const resolveDragConflict = () => {
     if (!draggedIds.has(target.uuid)) return;
     const layout = layoutOf(target);
     const conflict = state.items.some((other) => {
-      if (other.uuid === target.uuid || draggedIds.has(other.uuid))
-        return false;
+      if (other.uuid === target.uuid || draggedIds.has(other.uuid)) return false;
       const ol = layoutOf(other);
       return (
         layout.x < ol.x + ol.w &&
@@ -2180,9 +2010,7 @@ const resolveDragConflict = () => {
 // 块配置 → 富文本节点由注册项声明，画布不感知具体组件类型
 const componentNodeOf = (item: CanvasItem) => {
   const embed = componentMetaOf(item.component)?.embed;
-  return embed
-    ? { name: embed.nodeName, props: embed.toProps(item.config) }
-    : null;
+  return embed ? { name: embed.nodeName, props: embed.toProps(item.config) } : null;
 };
 
 const insertDraggedComponent = (
@@ -2198,12 +2026,7 @@ const insertDraggedComponent = (
   // 沿用源块 uuid，附件类块的组件数据目录不必搬家
   const inserted =
     (pos != null &&
-      commands?.insertVueComponentAt?.(
-        pos,
-        component.name,
-        component.props,
-        sourceId,
-      )) ||
+      commands?.insertVueComponentAt?.(pos, component.name, component.props, sourceId)) ||
     !!commands?.insertVueComponent?.(component.name, component.props, sourceId);
   if (!inserted) return false;
   const removedIds = new Set([sourceId]);
@@ -2212,7 +2035,7 @@ const insertDraggedComponent = (
   delete componentRefs.value[sourceId];
   linkedPairs.value = new Set(
     [...linkedPairs.value].filter((key) => {
-      const [first, second] = key.split("|");
+      const [first, second] = key.split('|');
       return !removedIds.has(first) && !removedIds.has(second);
     }),
   );
@@ -2229,9 +2052,7 @@ const onCustomDragUp = (e?: MouseEvent) => {
   const sourceId = customDrag.sourceUuid;
   const drop = targetId ? resolveDropForTarget(targetId, e) : null;
   const inserted =
-    targetId && sourceId
-      ? insertDraggedComponent(targetId, sourceId, drop?.pos ?? null)
-      : false;
+    targetId && sourceId ? insertDraggedComponent(targetId, sourceId, drop?.pos ?? null) : false;
   richTextDropTargetId.value = null;
   setRichTextDrop(null);
   // 清空后 draggedIds 为空集，所以冲突检测须在清空 customDragGroup 前执行
@@ -2249,14 +2070,14 @@ const onCustomDragUp = (e?: MouseEvent) => {
     cancelAnimationFrame(customDragRafId);
     customDragRafId = 0;
   }
-  window.removeEventListener("pointermove", onCustomDragMove, true);
-  window.removeEventListener("pointerup", onCustomDragUp);
-  window.removeEventListener("mousemove", onCustomDragMove, true);
-  window.removeEventListener("mouseup", onCustomDragUp);
+  window.removeEventListener('pointermove', onCustomDragMove, true);
+  window.removeEventListener('pointerup', onCustomDragUp);
+  window.removeEventListener('mousemove', onCustomDragMove, true);
+  window.removeEventListener('mouseup', onCustomDragUp);
   stopAutoPan();
-  document.body.classList.remove("block-handle-dragging");
-  document.documentElement.style.overflow = "";
-  document.body.style.overflow = "";
+  document.body.classList.remove('block-handle-dragging');
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
   maybeRebaseOrigin();
   recomputeMasks();
   markLayoutDirty();
@@ -2289,13 +2110,11 @@ const applyPanCorrection = (
   const minH = (c.minHeight ?? 0) + 8,
     maxH = c.maxHeight ?? null;
   // 组件上报的 base 已按 min/max 钳制，所以带 0.5 容差防浮点抖动
-  const wClamped =
-    base.w <= minW + 0.5 || (maxW != null && base.w >= maxW - 0.5);
-  const hClamped =
-    base.h <= minH + 0.5 || (maxH != null && base.h >= maxH - 0.5);
+  const wClamped = base.w <= minW + 0.5 || (maxW != null && base.w >= maxW - 0.5);
+  const hClamped = base.h <= minH + 0.5 || (maxH != null && base.h >= maxH - 0.5);
   if (dpY && !hClamped) {
     // 拖 t 改 y+height、拖 b 改 height；补偿后按 min/max 钳制（锚定边保持 y+h 不变）
-    if (handle.includes("t")) {
+    if (handle.includes('t')) {
       const rawH = out.h + dpY;
       const nh = clampVal(rawH, minH, maxH);
       out.y = out.y - dpY + (rawH - nh);
@@ -2305,7 +2124,7 @@ const applyPanCorrection = (
     }
   }
   if (dpX && !wClamped) {
-    if (handle.includes("l")) {
+    if (handle.includes('l')) {
       const rawW = out.w + dpX;
       const nw = clampVal(rawW, minW, maxW);
       out.x = out.x - dpX + (rawW - nw);
@@ -2318,11 +2137,7 @@ const applyPanCorrection = (
 };
 
 // 按被拖边对齐其他块的边/中线，仅调被拖边、保持 min/max 钳制
-const snapResizeEdges = (
-  handle: string,
-  rect: Rect,
-  c: Required<ResizeConstraints>,
-): Rect => {
+const snapResizeEdges = (handle: string, rect: Rect, c: Required<ResizeConstraints>): Rect => {
   const out = { ...rect };
   const minW = (c.minWidth ?? 0) + 8,
     maxW = c.maxWidth ?? null;
@@ -2349,9 +2164,8 @@ const snapResizeEdges = (
     xs.push(o.x, o.x + o.w, o.x + o.w / 2);
     ys.push(o.y, o.y + o.h, o.y + o.h / 2);
   });
-  if (handle.includes("r"))
-    out.w = clampVal(out.w + nearest(out.x + out.w, xs), minW, maxW);
-  if (handle.includes("l")) {
+  if (handle.includes('r')) out.w = clampVal(out.w + nearest(out.x + out.w, xs), minW, maxW);
+  if (handle.includes('l')) {
     const d = nearest(out.x, xs);
     if (d !== 0) {
       const nw = clampVal(out.w - d, minW, maxW);
@@ -2359,9 +2173,8 @@ const snapResizeEdges = (
       out.w = nw;
     }
   }
-  if (handle.includes("b"))
-    out.h = clampVal(out.h + nearest(out.y + out.h, ys), minH, maxH);
-  if (handle.includes("t")) {
+  if (handle.includes('b')) out.h = clampVal(out.h + nearest(out.y + out.h, ys), minH, maxH);
+  if (handle.includes('t')) {
     const d = nearest(out.y, ys);
     if (d !== 0) {
       const nh = clampVal(out.h - d, minH, maxH);
@@ -2394,8 +2207,7 @@ const applyResizeLayout = (item: CanvasItem, propagate: boolean) => {
   layout.y = Math.round(snapped.y);
   layout.w = Math.round(snapped.w);
   layout.h = Math.round(snapped.h);
-  if (propagate)
-    syncLinkedEdges(item, snapped.x, snapped.y, snapped.w, snapped.h);
+  if (propagate) syncLinkedEdges(item, snapped.x, snapped.y, snapped.w, snapped.h);
   // resize 全走纯 layout 写入，而块内尺寸必须即时重排，所以每帧显式刷新
   markLayoutDirty();
 };
@@ -2414,13 +2226,7 @@ const clampVal = (v: number, min: number, max: number | null) => {
   return v;
 };
 
-const syncLinkedEdges = (
-  item: CanvasItem,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-) => {
+const syncLinkedEdges = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
   const rs = resizeSession;
   if (!rs || rs.uuid !== item.uuid) return;
   propagateLinkedEdges(item, { x, y, w, h }, rs.starts);
@@ -2457,12 +2263,8 @@ const propagateLinkedEdges = (
       if (!nStart || !target) return;
       const c = constraintsOf(target);
       // 宽/高不可变的块只跟随平移，不参与对应轴重算
-      const fixedW = widthChangableOf(target, env)
-        ? null
-        : (positions[nid]?.w ?? nStart.w);
-      const fixedH = heightChangableOf(target, env)
-        ? null
-        : (positions[nid]?.h ?? nStart.h);
+      const fixedW = widthChangableOf(target, env) ? null : (positions[nid]?.w ?? nStart.w);
+      const fixedH = heightChangableOf(target, env) ? null : (positions[nid]?.h ?? nStart.h);
       const minW = fixedW ?? (c.minWidth ?? 0) + 8,
         maxW = fixedW ?? c.maxWidth ?? null;
       const minH = fixedH ?? (c.minHeight ?? 0) + 8;
@@ -2538,8 +2340,7 @@ const propagateLinkedEdges = (
     if (!target) return;
     const p = positions[id];
     const tl = layoutOf(target);
-    if (p.x !== tl.x || p.y !== tl.y || p.w !== tl.w || p.h !== tl.h)
-      changedIds.add(id);
+    if (p.x !== tl.x || p.y !== tl.y || p.w !== tl.w || p.h !== tl.h) changedIds.add(id);
     tl.x = Math.round(p.x);
     tl.y = Math.round(p.y);
     tl.w = Math.round(p.w);
@@ -2569,13 +2370,7 @@ const onResizeStart = (item: CanvasItem, handle: string) => {
 };
 
 // resize 到视口边缘时启动 autoPan（startAutoPan 幂等）
-const onResizing = (
-  item: CanvasItem,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-) => {
+const onResizing = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
   const rs = resizeSession;
   if (!rs || rs.uuid !== item.uuid) return;
   rs.lastBase = { x, y, w, h };
@@ -2585,13 +2380,7 @@ const onResizing = (
   startAutoPan();
 };
 
-const onResizeStop = (
-  item: CanvasItem,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-) => {
+const onResizeStop = (item: CanvasItem, x: number, y: number, w: number, h: number) => {
   const rs = resizeSession;
   if (rs && rs.uuid === item.uuid) {
     rs.lastBase = { x, y, w, h };
@@ -2620,7 +2409,7 @@ interface LinkedShift {
   moved: Set<string>;
 }
 
-type PushAxis = "x" | "y";
+type PushAxis = 'x' | 'y';
 
 interface AxisShift {
   delta: number;
@@ -2639,8 +2428,7 @@ const isOverlappingY = (a: Rect, b: Rect) => a.y < b.y + b.h && a.y + a.h > b.y;
 // 与位移块保持横向贴合的邻居分两类：正下方贴合、以及上缘齐的同行块（后者不跟则下方横跨块会脱开）
 const touchesVertically = (from: Rect, to: Rect): boolean => {
   const belowAttached =
-    isOverlappingX(from, to) &&
-    Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE;
+    isOverlappingX(from, to) && Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE;
   const sameRowAttached =
     Math.abs(to.y - from.y) <= SNAP_TOLERANCE &&
     (Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE ||
@@ -2651,8 +2439,7 @@ const touchesVertically = (from: Rect, to: Rect): boolean => {
 // 横向推挤的跟随规则与纵向镜像：正右侧贴合、以及左缘齐的同列块
 const touchesHorizontally = (from: Rect, to: Rect): boolean => {
   const rightAttached =
-    isOverlappingY(from, to) &&
-    Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE;
+    isOverlappingY(from, to) && Math.abs(to.x - (from.x + from.w)) <= SNAP_TOLERANCE;
   const sameColumnAttached =
     Math.abs(to.x - from.x) <= SNAP_TOLERANCE &&
     (Math.abs(to.y - (from.y + from.h)) <= SNAP_TOLERANCE ||
@@ -2660,22 +2447,16 @@ const touchesHorizontally = (from: Rect, to: Rect): boolean => {
   return rightAttached || sameColumnAttached;
 };
 
-const axisAlong = (rect: Rect, axis: PushAxis) =>
-  axis === "x" ? rect.x : rect.y;
-const axisSize = (rect: Rect, axis: PushAxis) =>
-  axis === "x" ? rect.w : rect.h;
+const axisAlong = (rect: Rect, axis: PushAxis) => (axis === 'x' ? rect.x : rect.y);
+const axisSize = (rect: Rect, axis: PushAxis) => (axis === 'x' ? rect.w : rect.h);
 const setAxis = (rect: Rect, axis: PushAxis, value: number) => {
-  if (axis === "x") rect.x = value;
+  if (axis === 'x') rect.x = value;
   else rect.y = value;
 };
 
 // 尺寸推挤时整片联结群一起搬运，链才会一直闭合
-const shiftLinkedGroup = (
-  rootId: string,
-  step: AxisShift,
-  shift: LinkedShift,
-) => {
-  const touches = step.axis === "x" ? touchesHorizontally : touchesVertically;
+const shiftLinkedGroup = (rootId: string, step: AxisShift, shift: LinkedShift) => {
+  const touches = step.axis === 'x' ? touchesHorizontally : touchesVertically;
   const queue = [rootId];
   while (queue.length) {
     const id = queue.shift()!;
@@ -2687,11 +2468,7 @@ const shiftLinkedGroup = (
       const neighbor = shift.itemMap.get(neighborId);
       if (!neighborStart || !neighbor) return;
       if (!touches(source, neighborStart)) return;
-      setAxis(
-        layoutOf(neighbor),
-        step.axis,
-        axisAlong(neighborStart, step.axis) + step.delta,
-      );
+      setAxis(layoutOf(neighbor), step.axis, axisAlong(neighborStart, step.axis) + step.delta);
       shift.moved.add(neighborId);
       queue.push(neighborId);
     });
@@ -2699,25 +2476,15 @@ const shiftLinkedGroup = (
 };
 
 // 尺寸增长后按变更前方位推挤：右侧块右推、下方块下推，变宽新产生的横向重叠不能被误判成下方块
-const pushAxisOverlap = (
-  root: CanvasItem,
-  shift: LinkedShift,
-  axis: PushAxis,
-) => {
+const pushAxisOverlap = (root: CanvasItem, shift: LinkedShift, axis: PushAxis) => {
   const rootLayout = layoutOf(root);
   const rootStart = shift.starts.get(root.uuid);
   if (!rootStart) return;
-  const crosses = axis === "x" ? isOverlappingY : isOverlappingX;
-  const startLimit =
-    axisAlong(rootStart, axis) + axisSize(rootStart, axis) - EDGE_TOL;
+  const crosses = axis === 'x' ? isOverlappingY : isOverlappingX;
+  const startLimit = axisAlong(rootStart, axis) + axisSize(rootStart, axis) - EDGE_TOL;
   const targets = state.items
-    .filter(
-      (other) =>
-        other.uuid !== root.uuid && crosses(rootLayout, layoutOf(other)),
-    )
-    .sort(
-      (a, b) => axisAlong(layoutOf(a), axis) - axisAlong(layoutOf(b), axis),
-    );
+    .filter((other) => other.uuid !== root.uuid && crosses(rootLayout, layoutOf(other)))
+    .sort((a, b) => axisAlong(layoutOf(a), axis) - axisAlong(layoutOf(b), axis));
   let cursor = axisAlong(rootLayout, axis) + axisSize(rootLayout, axis);
   targets.forEach((other) => {
     const layout = layoutOf(other);
@@ -2725,10 +2492,7 @@ const pushAxisOverlap = (
     // 只推变更前就贴在右侧/下方的块，原本重叠的块保持原位
     if (!start || axisAlong(start, axis) < startLimit) return;
     if (shift.moved.has(other.uuid)) {
-      cursor = Math.max(
-        cursor,
-        axisAlong(layout, axis) + axisSize(layout, axis),
-      );
+      cursor = Math.max(cursor, axisAlong(layout, axis) + axisSize(layout, axis));
       return;
     }
     const pos = axisAlong(layout, axis);
@@ -2746,8 +2510,8 @@ const pushOverlapped = (shift: LinkedShift) => {
     .map((id) => shift.itemMap.get(id))
     .filter((item): item is CanvasItem => !!item)
     .sort((a, b) => layoutOf(a).y - layoutOf(b).y);
-  seeds.forEach((seed) => pushAxisOverlap(seed, shift, "x"));
-  seeds.forEach((seed) => pushAxisOverlap(seed, shift, "y"));
+  seeds.forEach((seed) => pushAxisOverlap(seed, shift, 'x'));
+  seeds.forEach((seed) => pushAxisOverlap(seed, shift, 'y'));
 };
 
 // 尺寸变更复用 resize 的共享边传播，再消解增长造成的重叠
@@ -2759,9 +2523,7 @@ const applyBlockSize = (item: CanvasItem, width: number, height: number) => {
   layout.w = width;
   layout.h = height;
   if (linkedPairs.value.size > 0) {
-    propagateLinkedEdges(item, layout, shift.starts).forEach((id) =>
-      shift.moved.add(id),
-    );
+    propagateLinkedEdges(item, layout, shift.starts).forEach((id) => shift.moved.add(id));
   }
   pushOverlapped(shift);
   // 手柄会话中途的 layout 还可能被下一帧重算，等 onResizeStop 落定后再剔除失效链接
@@ -2824,9 +2586,9 @@ const startSelection = (e: MouseEvent) => {
   if (e.button !== 0) return;
   if (isAnnotationMode.value) return;
   if (
-    target.closest(".drag-wrapper") ||
-    target.closest(".drag-handle") ||
-    target.closest(".toolbar")
+    target.closest('.drag-wrapper') ||
+    target.closest('.drag-handle') ||
+    target.closest('.toolbar')
   )
     return;
 
@@ -2850,8 +2612,7 @@ const startSelection = (e: MouseEvent) => {
 // 独立出"由坐标刷新框选"，供 autoPan 每帧调用（鼠标可能停住）
 const updateSelectionAt = (clientX: number, clientY: number) => {
   if (!selectionState.active) return;
-  const rect =
-    viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect();
+  const rect = viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect();
   if (!rect) return;
   const pt = screenToContent(canvasTransform(), rect, clientX, clientY);
   selectionState.currentX = pt.x;
@@ -2873,7 +2634,7 @@ const onCanvasMousemove = (e: MouseEvent) => {
 };
 
 // 预览跟随鼠标：落位解析每帧 O(N)，所以节流到 ~30fps；拖拽/框选会话激活时清空
-const addPreviewKey = ref<CanvasItem["component"] | null>(null);
+const addPreviewKey = ref<CanvasItem['component'] | null>(null);
 const addPreviewPos = ref<{ x: number; y: number } | null>(null);
 let previewRafId = 0;
 let previewClientX = 0;
@@ -2897,14 +2658,10 @@ const applyAddPreview = () => {
     addPreviewPos.value = null;
     return;
   }
-  const canvasOrigin = canvasScreenOrigin.value;
-  if (canvasOrigin)
-    addPreviewPos.value = screenToCanvasContent(
-      zoom.value,
-      canvasOrigin,
-      previewClientX,
-      previewClientY,
-    );
+  // `.canvas` 的 BCR 在 Chromium 下是"视觉 ÷ zoom"，WebKit 下才是视觉值，两种语义都对不上 clientX，所以只按坐标模型反解
+  const rect = canvasContainerRef.value?.getBoundingClientRect();
+  if (rect)
+    addPreviewPos.value = screenToContent(canvasTransform(), rect, previewClientX, previewClientY);
 };
 
 const updateAddPreview = (e: MouseEvent) => {
@@ -2925,7 +2682,7 @@ const updateAddPreview = (e: MouseEvent) => {
 };
 
 // 经方法设置，避免直接暴露 ref 的类型解包问题
-const setAddPreview = (key: CanvasItem["component"] | null) => {
+const setAddPreview = (key: CanvasItem['component'] | null) => {
   cancelPreviewFrame();
   addPreviewKey.value = key;
   if (!key) addPreviewPos.value = null;
@@ -2939,7 +2696,7 @@ const addPreviewSpot = computed(() => {
   return resolveAddSpot(key, pos).spot;
 });
 
-const previewWidthOf = (key: CanvasItem["component"]): number => {
+const previewWidthOf = (key: CanvasItem['component']): number => {
   const meta = componentMetaOf(key);
   return meta?.defaultSize.w ?? 0;
 };
@@ -2968,12 +2725,7 @@ const previewVisible = computed(() => {
   const g = previewGeometry.value;
   const cr = viewRect.value;
   if (!g || !cr) return false;
-  return (
-    g.left < cr.right &&
-    g.right > cr.left &&
-    g.top < cr.bottom &&
-    g.bottom > cr.top
-  );
+  return g.left < cr.right && g.right > cr.left && g.top < cr.bottom && g.bottom > cr.top;
 });
 // 预览框在视口外时需指示方向，所以按预览中心相对鼠标的方向角定位箭头
 const previewArrowStyle = computed<CSSProperties>(() => {
@@ -3018,12 +2770,12 @@ const focusBlockContent = (id: string) => {
   nextTick(() => {
     resetCanvasScroll();
     const wrapper = document.querySelector(`.drag-wrapper[data-uuid="${id}"]`);
-    const pm = wrapper?.querySelector(".ProseMirror") as HTMLElement | null;
+    const pm = wrapper?.querySelector('.ProseMirror') as HTMLElement | null;
     if (pm) {
       pm.focus({ preventScroll: true });
       return;
     }
-    const ta = wrapper?.querySelector("textarea") as HTMLElement | null;
+    const ta = wrapper?.querySelector('textarea') as HTMLElement | null;
     if (ta) ta.focus({ preventScroll: true });
   });
 };
@@ -3040,11 +2792,7 @@ const onBlockPopupChange = (e: Event) => {
   // 旧块关闭事件会误清新块状态，所以仅当 uuid 匹配时才清除
   if (detail.open && detail.uuid) {
     popupBlockUuid.value = detail.uuid;
-  } else if (
-    !detail.open &&
-    detail.uuid &&
-    popupBlockUuid.value === detail.uuid
-  ) {
+  } else if (!detail.open && detail.uuid && popupBlockUuid.value === detail.uuid) {
     popupBlockUuid.value = null;
   }
 };
@@ -3059,11 +2807,7 @@ const onBlockHandleActiveChange = (e: Event) => {
   // 旧块关闭事件会误清新块状态，所以仅当 uuid 匹配时才清除
   if (detail.active && detail.uuid) {
     popupActiveUuid.value = detail.uuid;
-  } else if (
-    !detail.active &&
-    detail.uuid &&
-    popupActiveUuid.value === detail.uuid
-  ) {
+  } else if (!detail.active && detail.uuid && popupActiveUuid.value === detail.uuid) {
     popupActiveUuid.value = null;
   }
 };
@@ -3086,12 +2830,7 @@ interface ScreenRect {
   bottom: number;
 }
 
-type ScreenRectFactory = (
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-) => ScreenRect | null;
+type ScreenRectFactory = (x: number, y: number, w: number, h: number) => ScreenRect | null;
 
 // 逐 mousemove 读 DOM 矩形会强制同步布局，所以用公式直接换算屏幕矩形（误差 ≤0.5px）
 const screenRectFactory = (): ScreenRectFactory => {
@@ -3109,30 +2848,18 @@ const screenRectFactory = (): ScreenRectFactory => {
   };
 };
 
-const insideScreenRect = (
-  rect: ScreenRect,
-  clientX: number,
-  clientY: number,
-): boolean =>
-  clientX >= rect.left &&
-  clientX <= rect.right &&
-  clientY >= rect.top &&
-  clientY <= rect.bottom;
+const insideScreenRect = (rect: ScreenRect, clientX: number, clientY: number): boolean =>
+  clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
 
 // 命中测试不读真实 DOM 矩形，所以复用设置栏同一套几何公式
-const settingsBarRectOf = (
-  rectOf: ScreenRectFactory,
-  item: CanvasItem,
-): ScreenRect | null => {
+const settingsBarRectOf = (rectOf: ScreenRectFactory, item: CanvasItem): ScreenRect | null => {
   const rect = settingsBarRectOfContent(layoutOf(item), placementOf(item));
   return rectOf(rect.x, rect.y, rect.w, rect.h);
 };
 
 // 三个命中判定都只在选中块里找，所以先取选中块小集合（原实现每次 pointermove 都遍历全量块、随块数线性劣化）
 const selectedBlockItems = (): CanvasItem[] =>
-  state.selectedIds.size === 0
-    ? []
-    : state.items.filter((it) => state.selectedIds.has(it.uuid));
+  state.selectedIds.size === 0 ? [] : state.items.filter((it) => state.selectedIds.has(it.uuid));
 
 const hitSettingsBar = (clientX: number, clientY: number): string | null => {
   const rectOf = screenRectFactory();
@@ -3148,18 +2875,15 @@ const RESIZE_HANDLE_HIT_MARGIN = 2;
 // 常量要与 ResizeBox 的 HANDLE_POS/HANDLE_SIZE 保持一致
 const HANDLE_SIZE = 8;
 const HANDLE_OUTSET = 5;
-const handleContentPos = (
-  handle: string,
-  l: Rect,
-): { x: number; y: number } => ({
-  x: handle.includes("l")
+const handleContentPos = (handle: string, l: Rect): { x: number; y: number } => ({
+  x: handle.includes('l')
     ? l.x - HANDLE_OUTSET
-    : handle.includes("r")
+    : handle.includes('r')
       ? l.x + l.w - HANDLE_OUTSET
       : l.x + l.w / 2 - HANDLE_SIZE / 2,
-  y: handle.includes("t")
+  y: handle.includes('t')
     ? l.y - HANDLE_OUTSET
-    : handle.includes("b")
+    : handle.includes('b')
       ? l.y + l.h - HANDLE_OUTSET
       : l.y + l.h / 2 - HANDLE_SIZE / 2,
 });
@@ -3184,17 +2908,12 @@ const makeResizeHandleHitTest = (clientX: number, clientY: number) => {
 
 const hitResizeHandle = (clientX: number, clientY: number): string | null => {
   const test = makeResizeHandleHitTest(clientX, clientY);
-  return (
-    selectedBlockItems().find((item) => isActive(item.uuid) && test(item))
-      ?.uuid ?? null
-  );
+  return selectedBlockItems().find((item) => isActive(item.uuid) && test(item))?.uuid ?? null;
 };
 
 const hitHandle = (clientX: number, clientY: number): string | null => {
   for (const item of selectedBlockItems()) {
-    const el = document.querySelector<HTMLElement>(
-      `.floating-handle[data-uuid="${item.uuid}"]`,
-    );
+    const el = document.querySelector<HTMLElement>(`.floating-handle[data-uuid="${item.uuid}"]`);
     if (!el) continue;
     const rect = el.getBoundingClientRect();
     if (
@@ -3205,11 +2924,10 @@ const hitHandle = (clientX: number, clientY: number): string | null => {
     )
       return item.uuid;
     const inGapY =
-      handlePlacementOf(item) === "top"
+      handlePlacementOf(item) === 'top'
         ? clientY >= rect.bottom && clientY <= rect.bottom + HANDLE_GAP
         : clientY <= rect.top && clientY >= rect.top - HANDLE_GAP;
-    if (clientX >= rect.left && clientX <= rect.right && inGapY)
-      return item.uuid;
+    if (clientX >= rect.left && clientX <= rect.right && inGapY) return item.uuid;
   }
   return null;
 };
@@ -3217,23 +2935,13 @@ const hitHandle = (clientX: number, clientY: number): string | null => {
 // 鼠标移向 popup 会经过块间空隙被判为块外，所以按坐标（4px 容差）命中 popup
 const POPUP_HIT_MARGIN = 4;
 // 遍历全部 popup 读矩形会强制布局，所以只按 id 定向查询已激活的 popup
-const popupHitUuid = (
-  id: string | null,
-  clientX: number,
-  clientY: number,
-): string | null => {
+const popupHitUuid = (id: string | null, clientX: number, clientY: number): string | null => {
   if (!id) return null;
-  const el = document.querySelector<HTMLElement>(
-    `.block-handle-popup[data-uuid="${id}"]`,
-  );
+  const el = document.querySelector<HTMLElement>(`.block-handle-popup[data-uuid="${id}"]`);
   const r = el?.getBoundingClientRect();
   if (!r) return null;
-  const inX =
-    clientX >= r.left - POPUP_HIT_MARGIN &&
-    clientX <= r.right + POPUP_HIT_MARGIN;
-  const inY =
-    clientY >= r.top - POPUP_HIT_MARGIN &&
-    clientY <= r.bottom + POPUP_HIT_MARGIN;
+  const inX = clientX >= r.left - POPUP_HIT_MARGIN && clientX <= r.right + POPUP_HIT_MARGIN;
+  const inY = clientY >= r.top - POPUP_HIT_MARGIN && clientY <= r.bottom + POPUP_HIT_MARGIN;
   return inX && inY ? id : null;
 };
 
@@ -3245,7 +2953,7 @@ const hitPopupBlock = (clientX: number, clientY: number): string | null =>
 const resolvePointerHit = (e: MouseEvent): string | null => {
   const target = e.target as HTMLElement;
   const directId = target.closest<HTMLElement>(
-    ".side-settings, .handle, .drag-handle, .drag-wrapper",
+    '.side-settings, .handle, .drag-handle, .drag-wrapper',
   )?.dataset.uuid;
   if (directId) return directId;
   return (
@@ -3257,10 +2965,7 @@ const resolvePointerHit = (e: MouseEvent): string | null => {
 };
 
 // 按鼠标到各选中块矩形的最小距离取最近者（仅空白命中时调用）
-const nearestSelectedUuid = (
-  clientX: number,
-  clientY: number,
-): string | null => {
+const nearestSelectedUuid = (clientX: number, clientY: number): string | null => {
   // 预览开启时高频触发，所以无选中块时短路
   if (state.selectedIds.size === 0) return null;
   if (!viewRect.value) return null;
@@ -3306,9 +3011,7 @@ const floatingHandleItem = computed(() => {
 // 设置栏是否出现由块组件自身是否提供设置插槽决定
 const sideSettingsItem = computed(() => floatingOwnerItem.value);
 const selectedOutlineItems = computed(() =>
-  isEditMode.value
-    ? state.items.filter((it) => state.selectedIds.has(it.uuid))
-    : [],
+  isEditMode.value ? state.items.filter((it) => state.selectedIds.has(it.uuid)) : [],
 );
 
 // 描边环外扩 OUTLINE_PX，外圆角须同步变大才不露块自身的尖角
@@ -3361,9 +3064,7 @@ const outlineBands = computed<OutlineBand[]>(() => {
   return items.length > 1 ? items.map(outlineBandOf) : [];
 });
 const outlineBounds = computed(() =>
-  outlineBands.value.length
-    ? outlineBoundsOf(outlineBands.value)
-    : { x: 0, y: 0, w: 0, h: 0 },
+  outlineBands.value.length ? outlineBoundsOf(outlineBands.value) : { x: 0, y: 0, w: 0, h: 0 },
 );
 const outlineRingItems = computed(() =>
   outlineBands.value.length ? [] : selectedOutlineItems.value,
@@ -3375,15 +3076,9 @@ const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
 };
 
 // 归属块必须是选中块，否则取最近选中块，避免鼠标扫过未选中块时拖拽栏全消失
-const applyFloatingOwner = (
-  hitId: string | null,
-  clientX: number,
-  clientY: number,
-) => {
+const applyFloatingOwner = (hitId: string | null, clientX: number, clientY: number) => {
   const owner =
-    hitId && state.selectedIds.has(hitId)
-      ? hitId
-      : nearestSelectedUuid(clientX, clientY);
+    hitId && state.selectedIds.has(hitId) ? hitId : nearestSelectedUuid(clientX, clientY);
   if (owner !== hoveredUuid.value) hoveredUuid.value = owner;
 };
 
@@ -3435,9 +3130,7 @@ const FOCUS_SKIP_SELECTOR =
   'button, a, input, select, textarea, [contenteditable="true"], [role="button"], .v-btn, .v-menu, .v-overlay, .block-handle-positioner';
 
 const focusBlockOnClick = (id: string, target: HTMLElement) => {
-  const wrapper = document.querySelector<HTMLElement>(
-    `.drag-wrapper[data-uuid="${id}"]`,
-  );
+  const wrapper = document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${id}"]`);
   if (!wrapper || wrapper.contains(document.activeElement)) return;
   if (target.closest(FOCUS_SKIP_SELECTOR)) return;
   focusBlockContent(id);
@@ -3450,13 +3143,8 @@ const handleCanvasClick = (e: MouseEvent) => {
     dragJustFinished = false;
     return;
   }
-  if (
-    target.closest(
-      ".handle, .drag-handle, .side-settings, .snap-paperclip, .toolbar",
-    )
-  )
-    return;
-  const id = target.closest<HTMLElement>(".drag-wrapper")?.dataset.uuid;
+  if (target.closest('.handle, .drag-handle, .side-settings, .snap-paperclip, .toolbar')) return;
+  const id = target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid;
   if (id && state.items.some((item) => item.uuid === id)) {
     if (!isEditMode.value) return;
     selectOnClick(id, e);
@@ -3471,9 +3159,7 @@ const handleCanvasClick = (e: MouseEvent) => {
 
 // 选中由 click 统一处理，所以 focusin 只提升层级
 const handleCanvasFocusin = (e: FocusEvent) => {
-  const wrapper = (e.target as HTMLElement).closest<HTMLElement>(
-    ".drag-wrapper",
-  );
+  const wrapper = (e.target as HTMLElement).closest<HTMLElement>('.drag-wrapper');
   const id = wrapper?.dataset.uuid;
   if (!id || !isEditMode.value) return;
   if (!state.items.some((item) => item.uuid === id)) return;
@@ -3513,9 +3199,7 @@ watch(
   (ids) => {
     const idSet = new Set(ids);
     linkedPairs.value = new Set(
-      Array.from(linkedPairs.value).filter((k) =>
-        k.split("|").every((id) => idSet.has(id)),
-      ),
+      Array.from(linkedPairs.value).filter((k) => k.split('|').every((id) => idSet.has(id))),
     );
     // 块删除后其滚动记录也失效，所以一并清理
     Array.from(virtualScrolls.keys()).forEach((id) => {
@@ -3527,10 +3211,10 @@ watch(
 
 // 编辑器嵌在块内拿不到画布选中态，所以选中集变化时派发全局事件
 watch(
-  () => [...state.selectedIds].sort().join(","),
+  () => [...state.selectedIds].sort().join(','),
   () =>
     window.dispatchEvent(
-      new CustomEvent("Mindrizzle:block-selection", {
+      new CustomEvent('Mindrizzle:block-selection', {
         detail: { uuids: [...state.selectedIds] },
       }),
     ),
@@ -3538,7 +3222,6 @@ watch(
 
 const onResize = () => {
   refreshViewRect();
-  refreshCanvasScreenOrigin();
   refreshLayout();
   invalidateCanvasScaleCache();
   recomputeMasks();
@@ -3553,8 +3236,7 @@ const autoArrangeDesktop = () => {
   if (pending.length === 0) return;
   let cursorY = ARRANGE_TOP;
   state.items.forEach((it) => {
-    if (it.arranged)
-      cursorY = Math.max(cursorY, it.layout.y + it.layout.h);
+    if (it.arranged) cursorY = Math.max(cursorY, it.layout.y + it.layout.h);
   });
   const maxX = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2);
   let cursorX = ARRANGE_LEFT;
@@ -3590,9 +3272,7 @@ const freeSpotFor = (w: number, h: number): { x: number; y: number } => {
   const vy = Math.round(-(origin.y + pan.y) / zoom.value);
   const viewW = Math.max(canvasWidth.value / zoom.value, ARRANGE_LEFT * 2);
   // vx 随 panToBlock 漂移会让连续添加的块逐次左偏，所以 x 起点对齐既有块最左 x
-  const leftBase = placed.length
-    ? Math.min(...placed.map((p) => p.x))
-    : vx + ARRANGE_LEFT;
+  const leftBase = placed.length ? Math.min(...placed.map((p) => p.x)) : vx + ARRANGE_LEFT;
   // 有块时只取各块底部贴底，无块时用视口顶
   const candidateYs = placed.length
     ? placed.map((p) => p.y + p.h + ARRANGE_GAP).sort((a, b) => a - b)
@@ -3601,20 +3281,13 @@ const freeSpotFor = (w: number, h: number): { x: number; y: number } => {
     let cursorX = leftBase;
     while (cursorX + w <= leftBase + viewW - ARRANGE_LEFT) {
       const overlap = placed.some(
-        (p) =>
-          cursorX < p.x + p.w &&
-          cursorX + w > p.x &&
-          cy < p.y + p.h &&
-          cy + h > p.y,
+        (p) => cursorX < p.x + p.w && cursorX + w > p.x && cy < p.y + p.h && cy + h > p.y,
       );
       if (!overlap) return { x: Math.round(cursorX), y: Math.round(cy) };
       cursorX += w + ARRANGE_GAP;
     }
   }
-  const maxBottom = state.items.reduce(
-    (m, it) => Math.max(m, layoutOf(it).y + layoutOf(it).h),
-    vy,
-  );
+  const maxBottom = state.items.reduce((m, it) => Math.max(m, layoutOf(it).y + layoutOf(it).h), vy);
   return { x: leftBase, y: Math.round(maxBottom + ARRANGE_GAP) };
 };
 
@@ -3638,12 +3311,7 @@ const isRectVisibleInViewport = (rect: Rect): boolean => {
   if (!cont) return true;
   const cr = cont.getBoundingClientRect();
   const tl = contentToScreen(canvasTransform(), cr, rect.x, rect.y);
-  const br = contentToScreen(
-    canvasTransform(),
-    cr,
-    rect.x + rect.w,
-    rect.y + rect.h,
-  );
+  const br = contentToScreen(canvasTransform(), cr, rect.x + rect.w, rect.y + rect.h);
   return tl.x < cr.right && br.x > cr.left && tl.y < cr.bottom && br.y > cr.top;
 };
 
@@ -3668,7 +3336,7 @@ const itemsBounds = computed(() => {
 
 // 鼠标处不重叠用鼠标处、重叠则自动排列；添加与预览共用
 const resolveAddSpot = (
-  key: CanvasItem["component"],
+  key: CanvasItem['component'],
   at?: { x: number; y: number },
 ): { spot: { x: number; y: number } } => {
   const meta = componentMetaOf(key);
@@ -3677,8 +3345,7 @@ const resolveAddSpot = (
   const { w, h } = meta.defaultSize;
   const overlapsAt = (x: number, y: number) => {
     const b = itemsBounds.value;
-    if (b && (x + w <= b.minX || x >= b.maxX || y + h <= b.minY || y >= b.maxY))
-      return false;
+    if (b && (x + w <= b.minX || x >= b.maxX || y + h <= b.minY || y >= b.maxY)) return false;
     return state.items.some((it) => {
       const l = layoutOf(it);
       return x < l.x + l.w && x + w > l.x && y < l.y + l.h && y + h > l.y;
@@ -3689,7 +3356,7 @@ const resolveAddSpot = (
 };
 
 const addComponent = (
-  key: CanvasItem["component"],
+  key: CanvasItem['component'],
   at?: { x: number; y: number },
   config?: WidgetConfig,
   // 插入块抽出时沿用原 uuid，组件数据目录直接复用，不用等异步复制
@@ -3755,8 +3422,7 @@ const onExtractComponent = (event: Event) => {
   // uuid 被占用（节点被复制过）或旧节点没有 uuid 时只能另起一个目录，这时才需要搬文件
   if (detail.uuid && detail.uuid !== id) {
     void copyComponentFiles(detail.uuid, id).catch((cause) => {
-      if (isTauri())
-        void logError(`迁移组件数据失败：${getErrorMessage(cause)}`);
+      if (isTauri()) void logError(`迁移组件数据失败：${getErrorMessage(cause)}`);
     });
   }
   // 抽出后新块置为选中以给反馈，并对随之补发的 click 置标记，避免被当"点击空白"清掉选中
@@ -3771,8 +3437,7 @@ const VIRTUAL_MARGIN = 400;
 
 // 快照表既是"已虚拟化"的标记也是占位内容：从未渲染过的块存空串，回视口时按 config 重建
 const virtualSnapshots = shallowRef<Record<string, string>>({});
-const isVirtualized = (id: string): boolean =>
-  virtualSnapshots.value[id] !== undefined;
+const isVirtualized = (id: string): boolean => virtualSnapshots.value[id] !== undefined;
 
 interface ScrollRecord {
   selector: string;
@@ -3788,12 +3453,7 @@ const isBlockNearViewport = (item: CanvasItem): boolean => {
   const viewport = viewRect.value;
   if (!viewport) return true;
   const layout = layoutOf(item);
-  const topLeft = contentToScreen(
-    canvasTransform(),
-    viewport,
-    layout.x,
-    layout.y,
-  );
+  const topLeft = contentToScreen(canvasTransform(), viewport, layout.x, layout.y);
   const bottomRight = contentToScreen(
     canvasTransform(),
     viewport,
@@ -3810,9 +3470,8 @@ const isBlockNearViewport = (item: CanvasItem): boolean => {
 
 // 焦点在块内时销毁实例会丢光标与未提交输入，所以按 activeElement 反查（整轮只查一次）
 const focusedUuid = (): string | null =>
-  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
-    ".drag-wrapper",
-  )?.dataset.uuid ?? null;
+  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.drag-wrapper')?.dataset
+    .uuid ?? null;
 
 // 选中/拖拽/resize/popup/联结落点都依赖活实例，所以在可见性之外额外固定
 const isBlockPinned = (item: CanvasItem): boolean =>
@@ -3825,25 +3484,23 @@ const isBlockPinned = (item: CanvasItem): boolean =>
 
 // 克隆里残留的 contenteditable/tabindex 会让快照仍可聚焦与输入，所以要剔除
 const sanitizeSnapshot = (html: string): string => {
-  const holder = document.createElement("template");
+  const holder = document.createElement('template');
   holder.innerHTML = html;
-  holder.content
-    .querySelectorAll("[contenteditable], [tabindex]")
-    .forEach((el) => {
-      el.removeAttribute("contenteditable");
-      el.removeAttribute("tabindex");
-    });
+  holder.content.querySelectorAll('[contenteditable], [tabindex]').forEach((el) => {
+    el.removeAttribute('contenteditable');
+    el.removeAttribute('tabindex');
+  });
   return holder.innerHTML;
 };
 
 // 可滚动层的类名在两种组件里都稳定（.editor-scroll / .edit-layer / .highlight-layer），所以按类名 + 序号定位
 const scrollRecordsOf = (root: HTMLElement): ScrollRecord[] => {
   const records: ScrollRecord[] = [];
-  Array.from(root.querySelectorAll<HTMLElement>("*")).forEach((el) => {
+  Array.from(root.querySelectorAll<HTMLElement>('*')).forEach((el) => {
     if (el.scrollTop <= 0 && el.scrollLeft <= 0) return;
     const selector = Array.from(el.classList)
       .map((name) => `.${name}`)
-      .join("");
+      .join('');
     if (!selector) return;
     const peers = Array.from(root.querySelectorAll<HTMLElement>(selector));
     records.push({
@@ -3861,7 +3518,7 @@ const virtualizeBlock = (item: CanvasItem): string => {
   const root = canvasRef.value?.querySelector<HTMLElement>(
     `.drag-wrapper[data-uuid="${item.uuid}"] .inner-component`,
   );
-  if (!root) return "";
+  if (!root) return '';
   const inst = componentRefs.value[item.uuid];
   const config = inst?.flushConfig?.() ?? inst?.saveConfig?.();
   if (config) item.config = { ...item.config, ...config } as WidgetConfig;
@@ -3872,15 +3529,10 @@ const virtualizeBlock = (item: CanvasItem): string => {
   return sanitizeSnapshot(custom ? custom : root.outerHTML);
 };
 
-const applyScrollRecords = (
-  root: HTMLElement | null,
-  records: ScrollRecord[],
-): void => {
+const applyScrollRecords = (root: HTMLElement | null, records: ScrollRecord[]): void => {
   if (!root) return;
   records.forEach((record) => {
-    const target = root.querySelectorAll<HTMLElement>(record.selector)[
-      record.index
-    ];
+    const target = root.querySelectorAll<HTMLElement>(record.selector)[record.index];
     if (!target) return;
     target.scrollTop = record.top;
     target.scrollLeft = record.left;
@@ -3918,11 +3570,7 @@ const reconcileVirtualBlocks = () => {
   const nextSnapshots: Record<string, string> = {};
   const touchedIds: string[] = [];
   state.items.forEach((item) => {
-    if (
-      focused === item.uuid ||
-      isBlockPinned(item) ||
-      isBlockNearViewport(item)
-    ) {
+    if (focused === item.uuid || isBlockPinned(item) || isBlockNearViewport(item)) {
       if (isVirtualized(item.uuid)) touchedIds.push(item.uuid);
       return;
     }
@@ -3991,18 +3639,13 @@ const save = () => {
     origin: { x: cx, y: cy },
     items: serializable,
     links: Array.from(linkedPairs.value),
-    annotations: serializeAnnotations(
-      origin.x + pan.x - cx,
-      origin.y + pan.y - cy,
-    ),
+    annotations: serializeAnnotations(origin.x + pan.x - cx, origin.y + pan.y - cy),
   });
 };
 
 // 对缺失字段兜底
 const normalizeLoadedItem = (it: any): CanvasItem => {
-  const component: CanvasItem["component"] = blockDefinitionOf(
-    it.component as string,
-  )
+  const component: CanvasItem['component'] = blockDefinitionOf(it.component as string)
     ? (it.component as string)
     : DEFAULT_COMPONENT_KEY;
   const layout: Rect = {
@@ -4013,17 +3656,14 @@ const normalizeLoadedItem = (it: any): CanvasItem => {
     ...(it.layout ?? {}),
   };
   // 坐标异常会使块丢失，所以一律归 0
-  layout.x = typeof layout.x === "number" ? layout.x : 0;
-  layout.y = typeof layout.y === "number" ? layout.y : 0;
+  layout.x = typeof layout.x === 'number' ? layout.x : 0;
+  layout.y = typeof layout.y === 'number' ? layout.y : 0;
   const arranged = it.arranged !== false;
   // 块对象须保持原始对象（拖拽逐帧写 layout 不该触发重渲染），所以 markRaw
   return markRaw({
-    uuid:
-      typeof it.uuid === "string" && it.uuid ? it.uuid : generateBlockUuid(),
+    uuid: typeof it.uuid === 'string' && it.uuid ? it.uuid : generateBlockUuid(),
     component,
-    config: (it.config ??
-      componentMetaOf(component)?.defaultConfig() ??
-      {}) as WidgetConfig,
+    config: (it.config ?? componentMetaOf(component)?.defaultConfig() ?? {}) as WidgetConfig,
     layout,
     arranged,
   });
@@ -4043,8 +3683,8 @@ const load = async (raw: string) => {
     origin.y = 0;
   } else if (parsed && Array.isArray(parsed.items)) {
     state.items = parsed.items.map(normalizeLoadedItem);
-    origin.x = typeof parsed.origin?.x === "number" ? parsed.origin.x : 0;
-    origin.y = typeof parsed.origin?.y === "number" ? parsed.origin.y : 0;
+    origin.x = typeof parsed.origin?.x === 'number' ? parsed.origin.x : 0;
+    origin.y = typeof parsed.origin?.y === 'number' ? parsed.origin.y : 0;
   } else {
     return;
   }
@@ -4057,9 +3697,7 @@ const load = async (raw: string) => {
   reconcileVirtualBlocks();
   // 曲别针链接随文档持久化（watcher 会过滤失效链接）
   linkedPairs.value = new Set(
-    Array.isArray(parsed.links)
-      ? parsed.links.filter((k: unknown) => typeof k === "string")
-      : [],
+    Array.isArray(parsed.links) ? parsed.links.filter((k: unknown) => typeof k === 'string') : [],
   );
   annotations.value = normalizeAnnotations(
     parsed.annotations,
@@ -4096,9 +3734,7 @@ const copySelection = (): ClipboardSnapshot | null => {
       layout: { ...item.layout },
       arranged: item.arranged,
     })),
-    links: Array.from(linkedPairs.value).filter((key) =>
-      key.split("|").every((id) => ids.has(id)),
-    ),
+    links: Array.from(linkedPairs.value).filter((key) => key.split('|').every((id) => ids.has(id))),
   };
 };
 
@@ -4121,8 +3757,8 @@ const isSameNote = (source: ClipboardSource): boolean => {
   const current = getCurrentNote();
   return (
     current.fileName === source.fileName &&
-    (current.dir ?? "") === (source.dir ?? "") &&
-    (current.filePath ?? "") === (source.filePath ?? "")
+    (current.dir ?? '') === (source.dir ?? '') &&
+    (current.filePath ?? '') === (source.filePath ?? '')
   );
 };
 
@@ -4141,18 +3777,11 @@ const overlapsAt = (rect: Rect): boolean =>
   state.items.some((item) => {
     const l = layoutOf(item);
     return (
-      rect.x < l.x + l.w &&
-      rect.x + rect.w > l.x &&
-      rect.y < l.y + l.h &&
-      rect.y + rect.h > l.y
+      rect.x < l.x + l.w && rect.x + rect.w > l.x && rect.y < l.y + l.h && rect.y + rect.h > l.y
     );
   });
 
-const groupOverlaps = (
-  blocks: ClipboardBlock[],
-  dx: number,
-  dy: number,
-): boolean =>
+const groupOverlaps = (blocks: ClipboardBlock[], dx: number, dy: number): boolean =>
   blocks.some((block) => {
     const rect = block.layout;
     return overlapsAt({ x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h });
@@ -4164,16 +3793,10 @@ const resolvePasteOffset = (
   source: ClipboardSource,
 ): { dx: number; dy: number } => {
   const center = clipboardCenterOf(blocks);
-  const target = isSameNote(source)
-    ? center
-    : (viewportCenterInContent() ?? center);
+  const target = isSameNote(source) ? center : (viewportCenterInContent() ?? center);
   let dx = Math.round(target.x - center.x);
   let dy = Math.round(target.y - center.y);
-  for (
-    let attempt = 0;
-    attempt < PASTE_MAX_ATTEMPTS && groupOverlaps(blocks, dx, dy);
-    attempt++
-  ) {
+  for (let attempt = 0; attempt < PASTE_MAX_ATTEMPTS && groupOverlaps(blocks, dx, dy); attempt++) {
     dx += PASTE_OFFSET;
     dy += PASTE_OFFSET;
   }
@@ -4198,16 +3821,12 @@ const buildPastedItem = (
     arranged: block.arranged,
   });
 
-const linkPastedPairs = (
-  links: string[],
-  uuidMap: Map<string, string>,
-): void => {
+const linkPastedPairs = (links: string[], uuidMap: Map<string, string>): void => {
   links.forEach((key) => {
-    const [first, second] = key.split("|");
+    const [first, second] = key.split('|');
     const nextFirst = uuidMap.get(first);
     const nextSecond = uuidMap.get(second);
-    if (nextFirst && nextSecond)
-      linkedPairs.value.add(pairKey(nextFirst, nextSecond));
+    if (nextFirst && nextSecond) linkedPairs.value.add(pairKey(nextFirst, nextSecond));
   });
 };
 
@@ -4219,12 +3838,9 @@ const copyPastedAssets = (
   blocks.forEach((block) => {
     const uuid = uuidMap.get(block.uuid);
     if (!uuid) return;
-    void copyComponentFiles(block.uuid, uuid, source).catch(
-      (cause: unknown) => {
-        if (isTauri())
-          void logError(`粘贴组件数据失败：${getErrorMessage(cause)}`);
-      },
-    );
+    void copyComponentFiles(block.uuid, uuid, source).catch((cause: unknown) => {
+      if (isTauri()) void logError(`粘贴组件数据失败：${getErrorMessage(cause)}`);
+    });
   });
 };
 
@@ -4277,71 +3893,50 @@ const abortSessions = () => {
 
 onMounted(() => {
   refreshViewRect();
-  refreshCanvasScreenOrigin();
   nextTick(refreshLayout);
   scheduleVirtualReconcile();
-  canvasContainerRef.value?.addEventListener(
-    "mousedown",
-    handleCanvasMouseDownCapture,
-    true,
-  );
-  window.addEventListener("mousedown", onGlobalMouseDownCapture, true);
-  window.addEventListener("mousedown", trackLeftButtonDown, true);
-  window.addEventListener("mouseup", trackLeftButtonUp, true);
-  window.addEventListener("resize", onResize);
+  canvasContainerRef.value?.addEventListener('mousedown', handleCanvasMouseDownCapture, true);
+  window.addEventListener('mousedown', onGlobalMouseDownCapture, true);
+  window.addEventListener('mousedown', trackLeftButtonDown, true);
+  window.addEventListener('mouseup', trackLeftButtonUp, true);
+  window.addEventListener('resize', onResize);
   // ProseMirror 会冒泡拦截 mousemove，所以监听用捕获阶段
-  window.addEventListener("mousemove", updateSelection, true);
-  window.addEventListener("mouseup", finishSelection);
-  window.addEventListener("mousemove", updatePan, true);
-  window.addEventListener("mouseup", stopPan);
-  window.addEventListener("contextmenu", preventContextMenu);
-  window.addEventListener("mousemove", updateMousePos, true);
-  window.addEventListener("Mindrizzle:canvas-pan", onCanvasPanEvent);
-  window.addEventListener("Mindrizzle:extract-component", onExtractComponent);
-  window.addEventListener("Mindrizzle:block-popup", onBlockPopupChange);
-  window.addEventListener("Mindrizzle:block-popup-top", onBlockPopupTopChange);
-  window.addEventListener(
-    "Mindrizzle:block-handle-active",
-    onBlockHandleActiveChange,
-  );
-  window.addEventListener("blur", abortSessions);
-  window.addEventListener("pointercancel", abortSessions);
+  window.addEventListener('mousemove', updateSelection, true);
+  window.addEventListener('mouseup', finishSelection);
+  window.addEventListener('mousemove', updatePan, true);
+  window.addEventListener('mouseup', stopPan);
+  window.addEventListener('contextmenu', preventContextMenu);
+  window.addEventListener('mousemove', updateMousePos, true);
+  window.addEventListener('Mindrizzle:canvas-pan', onCanvasPanEvent);
+  window.addEventListener('Mindrizzle:extract-component', onExtractComponent);
+  window.addEventListener('Mindrizzle:block-popup', onBlockPopupChange);
+  window.addEventListener('Mindrizzle:block-popup-top', onBlockPopupTopChange);
+  window.addEventListener('Mindrizzle:block-handle-active', onBlockHandleActiveChange);
+  window.addEventListener('blur', abortSessions);
+  window.addEventListener('pointercancel', abortSessions);
 });
 
 onUnmounted(() => {
   cancelPreviewFrame();
   if (geometryRafId) cancelAnimationFrame(geometryRafId);
   if (virtualRafId) cancelAnimationFrame(virtualRafId);
-  canvasContainerRef.value?.removeEventListener(
-    "mousedown",
-    handleCanvasMouseDownCapture,
-    true,
-  );
-  window.removeEventListener("mousedown", onGlobalMouseDownCapture, true);
-  window.removeEventListener("mousedown", trackLeftButtonDown, true);
-  window.removeEventListener("mouseup", trackLeftButtonUp, true);
-  window.removeEventListener("resize", onResize);
-  window.removeEventListener("mousemove", updateSelection, true);
-  window.removeEventListener("mouseup", finishSelection);
-  window.removeEventListener("mousemove", updatePan, true);
-  window.removeEventListener("mouseup", stopPan);
-  window.removeEventListener("contextmenu", preventContextMenu);
-  window.removeEventListener("mousemove", updateMousePos, true);
-  window.removeEventListener("Mindrizzle:canvas-pan", onCanvasPanEvent);
-  window.removeEventListener(
-    "Mindrizzle:extract-component",
-    onExtractComponent,
-  );
-  window.removeEventListener("Mindrizzle:block-popup", onBlockPopupChange);
-  window.removeEventListener(
-    "Mindrizzle:block-popup-top",
-    onBlockPopupTopChange,
-  );
-  window.removeEventListener(
-    "Mindrizzle:block-handle-active",
-    onBlockHandleActiveChange,
-  );
-  window.removeEventListener("pointercancel", abortSessions);
+  canvasContainerRef.value?.removeEventListener('mousedown', handleCanvasMouseDownCapture, true);
+  window.removeEventListener('mousedown', onGlobalMouseDownCapture, true);
+  window.removeEventListener('mousedown', trackLeftButtonDown, true);
+  window.removeEventListener('mouseup', trackLeftButtonUp, true);
+  window.removeEventListener('resize', onResize);
+  window.removeEventListener('mousemove', updateSelection, true);
+  window.removeEventListener('mouseup', finishSelection);
+  window.removeEventListener('mousemove', updatePan, true);
+  window.removeEventListener('mouseup', stopPan);
+  window.removeEventListener('contextmenu', preventContextMenu);
+  window.removeEventListener('mousemove', updateMousePos, true);
+  window.removeEventListener('Mindrizzle:canvas-pan', onCanvasPanEvent);
+  window.removeEventListener('Mindrizzle:extract-component', onExtractComponent);
+  window.removeEventListener('Mindrizzle:block-popup', onBlockPopupChange);
+  window.removeEventListener('Mindrizzle:block-popup-top', onBlockPopupTopChange);
+  window.removeEventListener('Mindrizzle:block-handle-active', onBlockHandleActiveChange);
+  window.removeEventListener('pointercancel', abortSessions);
 });
 
 defineExpose({

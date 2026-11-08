@@ -66,7 +66,6 @@ flowchart LR
     A2["screenToContent(t, viewport, x, y)"]
     A3["contentToVisual(t, x, y)"]
     A4["roundToVisual(zoom, v)"]
-    A5["screenToCanvasContent(zoom, 实测画布起点, x, y)"]
   end
   subgraph 编辑器侧["blockHandleUtils.ts"]
     B1["layoutToViewportX/Y/Size"]
@@ -76,10 +75,10 @@ flowchart LR
   subgraph MdrCanvas["MdrCanvas.vue"]
     C1["roundToPx = roundToVisual(zoom, v)"]
     C2["visualY(v) = contentToVisual(t, 0, v).y"]
-    C3["预览落点：实测 .canvas BCR 起点后 screenToCanvasContent"]
+    C3["预览落点：容器矩形 + 坐标模型反解<br/>（勿用 .canvas BCR，zoom 下语义各引擎不一致）"]
     C4["canvasStyle translate 保留小数<br/>抵消 zoom 后精确等于 pan + origin"]
   end
-  A5 -->|"实测 .canvas 起点，消除变换舍入差异"| C3
+  A2 -->|"预览 / 添加块鼠标落点"| C3
   C3 -->|"视觉像素对齐"| C1
   C4 -->|"画布位移与坐标模型一致"| A1
   A1 --> C2

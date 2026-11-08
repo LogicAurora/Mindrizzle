@@ -1,9 +1,5 @@
 <template>
-  <svg
-    class="annotation-svg"
-    :style="{ zIndex: Z_LAYER.annotation }"
-    aria-hidden="true"
-  >
+  <svg class="annotation-svg" :style="{ zIndex: Z_LAYER.annotation }" aria-hidden="true">
     <template v-for="shape in renderedShapes" :key="shape.id">
       <path class="annotation-path" :d="shape.d" />
       <polygon v-if="shape.arrow" class="annotation-arrow" :points="shape.arrow" />
@@ -23,9 +19,6 @@
       class="annotation-catcher"
       :style="{ zIndex: Z_LAYER.annotationCatcher }"
       @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
       @mousedown.stop
       @click.stop
     />
@@ -33,10 +26,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref } from 'vue';
 
-import { generateBlockUuid } from "../../../utils/blockUuid.ts";
-import type { Point } from "../../../utils/canvasCoords.ts";
+import { generateBlockUuid } from '../../../utils/blockUuid.ts';
+import type { Point } from '../../../utils/canvasCoords.ts';
 import {
   arrowHeadOf,
   connectorPathOf,
@@ -47,8 +40,8 @@ import {
   type AnnotationItem,
   type AnnotationStroke,
   type AnnotationTool,
-} from "./annotationModel.ts";
-import { Z_LAYER } from "./zIndex.ts";
+} from './annotationModel.ts';
+import { Z_LAYER } from './zIndex.ts';
 
 const props = defineProps<{
   items: AnnotationItem[];
@@ -80,15 +73,11 @@ let isDrawing = false;
 let penRafId = 0;
 let pendingPoint: Point | null = null;
 
-const blockMap = computed(
-  () => new Map(props.blocks.map(({ uuid, rect }) => [uuid, rect])),
-);
+const blockMap = computed(() => new Map(props.blocks.map(({ uuid, rect }) => [uuid, rect])));
 
 const strokeShapeOf = (item: AnnotationStroke): RenderedShape | null => {
   if (item.points.length < 2) return null;
-  const d = item.points
-    .map((point) => `${Math.round(point.x)} ${Math.round(point.y)}`)
-    .join(" L ");
+  const d = item.points.map((point) => `${Math.round(point.x)} ${Math.round(point.y)}`).join(' L ');
   return { id: item.id, d: `M ${d}`, arrow: null };
 };
 
@@ -100,23 +89,21 @@ const connectorShapeOf = (item: AnnotationConnector): RenderedShape | null => {
   return {
     id: item.id,
     d: path.d,
-    arrow: item.shape === "arrow" ? arrowHeadOf(path) : null,
+    arrow: item.shape === 'arrow' ? arrowHeadOf(path) : null,
   };
 };
 
 const toRenderedShape = (item: AnnotationItem): RenderedShape | null =>
-  item.kind === "stroke" ? strokeShapeOf(item) : connectorShapeOf(item);
+  item.kind === 'stroke' ? strokeShapeOf(item) : connectorShapeOf(item);
 
 const renderedShapes = computed(() =>
-  props.items
-    .map(toRenderedShape)
-    .filter((shape): shape is RenderedShape => !!shape),
+  props.items.map(toRenderedShape).filter((shape): shape is RenderedShape => !!shape),
 );
 
 const draftShape = computed<RenderedShape | null>(() => {
   const item = draft.value;
   if (!item) return null;
-  if (item.kind === "stroke") return strokeShapeOf(item);
+  if (item.kind === 'stroke') return strokeShapeOf(item);
   const point = previewPoint.value;
   const from = blockMap.value.get(item.fromUuid);
   if (!point || !from) return null;
@@ -124,7 +111,7 @@ const draftShape = computed<RenderedShape | null>(() => {
   return {
     id: item.id,
     d: path.d,
-    arrow: item.shape === "arrow" ? arrowHeadOf(path) : null,
+    arrow: item.shape === 'arrow' ? arrowHeadOf(path) : null,
   };
 });
 
@@ -149,7 +136,7 @@ const eraseAt = (point: Point) => {
     tolerance: ERASE_TOLERANCE / props.zoom,
     blockMap: blockMap.value,
   });
-  if (id) emit("erase", id);
+  if (id) emit('erase', id);
 };
 
 const flushPenPoint = () => {
@@ -157,13 +144,9 @@ const flushPenPoint = () => {
   const point = pendingPoint;
   pendingPoint = null;
   const item = draft.value;
-  if (!item || item.kind !== "stroke" || !point) return;
+  if (!item || item.kind !== 'stroke' || !point) return;
   const last = item.points[item.points.length - 1];
-  if (
-    Math.hypot(point.x - last.x, point.y - last.y) * props.zoom <
-    MIN_POINT_STEP
-  )
-    return;
+  if (Math.hypot(point.x - last.x, point.y - last.y) * props.zoom < MIN_POINT_STEP) return;
   item.points.push(point);
 };
 
@@ -175,12 +158,12 @@ const queuePenPoint = (point: Point) => {
 
 const startDraw = (point: Point) => {
   isDrawing = true;
-  if (props.tool === "pen") {
-    draft.value = { id: generateBlockUuid(), kind: "stroke", points: [point] };
+  if (props.tool === 'pen') {
+    draft.value = { id: generateBlockUuid(), kind: 'stroke', points: [point] };
     return;
   }
   const shape = props.tool;
-  if (shape === "eraser") {
+  if (shape === 'eraser') {
     isDrawing = false;
     return;
   }
@@ -191,12 +174,26 @@ const startDraw = (point: Point) => {
   }
   draft.value = {
     id: generateBlockUuid(),
-    kind: "connector",
+    kind: 'connector',
     shape,
     fromUuid: from.uuid,
-    toUuid: "",
+    toUuid: '',
   };
   previewPoint.value = point;
+};
+
+// useHoverState 在 zoom≠1 时会在 window 捕获阶段 stopPropagation 掉真实 pointermove，
+// 元素级监听收不到移动，所以绘制会话期间改挂 window 捕获阶段（同节点捕获监听不受 stopPropagation 影响）
+const watchDrawSession = () => {
+  window.addEventListener('pointermove', onPointerMove, true);
+  window.addEventListener('pointerup', onPointerUp, true);
+  window.addEventListener('pointercancel', onPointerUp, true);
+};
+
+const unwatchDrawSession = () => {
+  window.removeEventListener('pointermove', onPointerMove, true);
+  window.removeEventListener('pointerup', onPointerUp, true);
+  window.removeEventListener('pointercancel', onPointerUp, true);
 };
 
 const onPointerDown = (e: PointerEvent) => {
@@ -205,7 +202,7 @@ const onPointerDown = (e: PointerEvent) => {
   if (!point) return;
   e.preventDefault();
   const catcher = e.currentTarget;
-  // 合成事件的 pointerId 没有活跃指针，捕获会抛错；失败时依旧靠元素内的 move/up 收尾
+  // 合成事件的 pointerId 没有活跃指针，捕获会抛错；失败时依旧靠 window 监听收尾
   if (catcher instanceof HTMLElement) {
     try {
       catcher.setPointerCapture(e.pointerId);
@@ -213,47 +210,49 @@ const onPointerDown = (e: PointerEvent) => {
       // 忽略，不影响主流程
     }
   }
-  if (props.tool === "eraser") {
+  if (props.tool === 'eraser') {
     isDrawing = true;
     eraseAt(point);
-    return;
+  } else {
+    startDraw(point);
   }
-  startDraw(point);
+  if (isDrawing) watchDrawSession();
 };
 
 const onPointerMove = (e: PointerEvent) => {
   if (!isDrawing) return;
   const point = props.toContent(e.clientX, e.clientY);
   if (!point) return;
-  if (props.tool === "eraser") {
+  if (props.tool === 'eraser') {
     eraseAt(point);
     return;
   }
   const item = draft.value;
   if (!item) return;
-  if (item.kind === "stroke") queuePenPoint(point);
+  if (item.kind === 'stroke') queuePenPoint(point);
   else previewPoint.value = point;
 };
 
 const onPointerUp = (e: PointerEvent) => {
   if (!isDrawing) return;
   isDrawing = false;
+  unwatchDrawSession();
   flushPenPoint();
   const item = draft.value;
   draft.value = null;
   previewPoint.value = null;
   if (!item) return;
-  if (item.kind === "stroke") {
-    if (item.points.length >= 2) emit("create", item);
+  if (item.kind === 'stroke') {
+    if (item.points.length >= 2) emit('create', item);
     return;
   }
   const point = props.toContent(e.clientX, e.clientY);
   const target = point ? blockAtPoint(point) : null;
-  if (target && target.uuid !== item.fromUuid)
-    emit("create", { ...item, toUuid: target.uuid });
+  if (target && target.uuid !== item.fromUuid) emit('create', { ...item, toUuid: target.uuid });
 };
 
 onUnmounted(() => {
+  unwatchDrawSession();
   if (penRafId) cancelAnimationFrame(penRafId);
 });
 </script>
