@@ -94,7 +94,7 @@ flowchart TD
 - 外部文件：传 `filePath`（绝对路径），后端直接读写该归档，保存写回原文件。
 - `fetch_file_list` / `is_file_name_valid` / `create_mdr_file` / `get|set_mdr_file_body` / 组件数据命令均接受同一组定位参数；缓存键改用归档绝对路径，避免不同工作区同名笔记互相覆盖。
 - 网页端上传的 `.mdrf` 解包后只作为**外部文件副本**存进 IndexedDB（不写文件索引），打开与保存都按副本名读写。
-- 「移动到工作区」：桌面端由 `move_mdrf_file` 把归档移进目标目录并从外部列表移除；网页端 `moveLocalNoteToWorkspace` 把副本名补进文件索引。
+- 「移动到工作区」入口在便签卡片的更多操作菜单：工作区内的笔记走 `moveNote`（`move_mdr_file`），外部文件走 `moveExternalNote`（`move_mdrf_file`）并同时从外部列表移除；网页端副本由 `moveLocalNoteToWorkspace` 把副本名补进文件索引。
 
 ## 图 8.4 跨画布剪贴板
 

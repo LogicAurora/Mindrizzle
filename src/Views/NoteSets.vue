@@ -681,7 +681,7 @@ const workspaceTargets = computed(() => [
 
 const detailTarget = ref<NoteSetItem | null>(null);
 const isDetailOpen = ref(false);
-// 外部文件没有所属工作区，移动走卡片上的既有菜单
+// 网页端只有默认工作区，跨工作区移动仅桌面端可用
 const canMoveNote = computed(
   () =>
     !isWebEnv &&
@@ -689,22 +689,32 @@ const canMoveNote = computed(
     workspaceTargets.value.length > 1,
 );
 
+const moveTargetsOf = (noteSet: NoteSetItem) =>
+  workspaceTargets.value.filter((target) => target.dir !== noteSet.dir);
+
+async function moveNoteToWorkspace(noteSet: NoteSetItem, targetDir?: string) {
+  try {
+    await fileOperations.moveNote({
+      fileName: noteSet.fileName,
+      dir: noteSet.dir,
+      targetDir,
+    });
+    invalidateNoteSetEntries();
+    await loadActiveSection();
+    showHint("已移动到工作区");
+  } catch (error) {
+    showHint(`移动失败：${getErrorMessage(error)}`);
+  }
+}
+
 function openDetail(noteSet: NoteSetItem) {
   detailTarget.value = noteSet;
   isDetailOpen.value = true;
 }
 
-// 未移动时只改当前卡片，避免整表重取把滚动位置和加载骨架一起翻出来
-async function onDetailSaved(payload: {
-  note: NoteDetailTarget;
-  isMoved: boolean;
-}) {
+// 就地更新卡片，避免整表重取把滚动位置和加载骨架一起翻出来
+async function onDetailSaved(payload: { note: NoteDetailTarget }) {
   invalidateNoteSetEntries();
-  if (payload.isMoved) {
-    await loadActiveSection();
-    showHint("已移动到工作区");
-    return;
-  }
   const entry = noteSets.value.find(
     (item) => item.fileName === payload.note.fileName,
   );
@@ -990,6 +1000,25 @@ function formatUpdatedAt(timestamp: number): string {
               :icon="mdiClose"
               variant="text"
             ></v-btn>
+            <v-menu v-if="canMoveNote" location="bottom end">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  :icon="mdiFolderMove"
+                  title="移动到工作区"
+                  variant="text"
+                />
+              </template>
+              <v-list density="compact" min-width="200">
+                <v-list-item
+                  v-for="target in moveTargetsOf(noteSet)"
+                  :key="target.id"
+                  @click="moveNoteToWorkspace(noteSet, target.dir)"
+                >
+                  <v-list-item-title>{{ target.name }}</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
             <v-spacer />
             <v-menu location="bottom end">
               <template #activator="{ props: menuProps }">
@@ -1071,8 +1100,6 @@ function formatUpdatedAt(timestamp: number): string {
     <NoteDetailDialog
       :is-open="isDetailOpen"
       :note="detailTarget"
-      :workspace-targets="workspaceTargets"
-      :is-movable="canMoveNote"
       @update:close="isDetailOpen = $event.status"
       @saved="onDetailSaved"
     />

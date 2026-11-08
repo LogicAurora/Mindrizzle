@@ -15,26 +15,17 @@ export interface NoteDetailTarget {
   tag: string[];
 }
 
-export interface NoteWorkspaceTarget {
-  id: string;
-  name: string;
-  dir?: string;
-}
-
-const DEFAULT_WORKSPACE_ID = "default";
 const TITLE_MAX_LEN = 30;
 const DESCRIPTION_MAX_LEN = 1000;
 
 const props = defineProps<{
   isOpen: boolean;
   note: NoteDetailTarget | null;
-  workspaceTargets: NoteWorkspaceTarget[];
-  isMovable: boolean;
 }>();
 
 const emit = defineEmits<{
   "update:close": [value: { status: boolean }];
-  saved: [value: { note: NoteDetailTarget; isMoved: boolean }];
+  saved: [value: { note: NoteDetailTarget }];
 }>();
 
 const dialog = ref(false);
@@ -42,7 +33,6 @@ const fileName = ref("");
 const title = ref("");
 const description = ref("");
 const tags = ref<string[]>([]);
-const workspaceId = ref(DEFAULT_WORKSPACE_ID);
 const hint = ref("");
 const isSaving = ref(false);
 const formRef = ref();
@@ -60,10 +50,6 @@ function resetDraft(note: NoteDetailTarget | null) {
   title.value = note?.name ?? "";
   description.value = note?.description ?? "";
   tags.value = [...(note?.tag ?? [])];
-  const currentTarget = props.workspaceTargets.find(
-    (target) => target.dir === note?.dir,
-  );
-  workspaceId.value = currentTarget?.id ?? DEFAULT_WORKSPACE_ID;
   hint.value = "";
   isSaving.value = false;
 }
@@ -86,12 +72,6 @@ watch(dialog, (isOpen) => {
   if (!isOpen) emit("update:close", { status: false });
 });
 
-const resolveTargetDir = (note: NoteDetailTarget): string | undefined =>
-  props.isMovable
-    ? props.workspaceTargets.find((target) => target.id === workspaceId.value)
-        ?.dir
-    : note.dir;
-
 async function persistNote(note: NoteDetailTarget) {
   const meta = {
     title: title.value.trim(),
@@ -100,16 +80,7 @@ async function persistNote(note: NoteDetailTarget) {
   };
   await fileOperations.setNoteMeta(note, meta);
   await rememberTags(meta.tag);
-  const targetDir = resolveTargetDir(note);
-  const isMoved = props.isMovable && targetDir !== note.dir;
-  if (isMoved) {
-    await fileOperations.moveNote({
-      fileName: note.fileName,
-      dir: note.dir,
-      targetDir,
-    });
-  }
-  emit("saved", { note: { ...note, ...meta, dir: targetDir }, isMoved });
+  emit("saved", { note: { ...note, ...meta } });
   dialog.value = false;
 }
 
@@ -149,14 +120,6 @@ async function submit() {
             auto-grow
           />
           <NoteTagEditor v-model="tags" />
-          <v-select
-            v-if="isMovable"
-            v-model="workspaceId"
-            :items="workspaceTargets"
-            item-title="name"
-            item-value="id"
-            label="所属工作区"
-          />
         </v-form>
         <p v-if="hint" class="text-error text-caption mt-2">{{ hint }}</p>
       </v-card-text>
