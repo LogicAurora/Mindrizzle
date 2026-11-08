@@ -21,7 +21,11 @@ export default defineConfig(async () => ({
         },
       },
     }),
-    vuetify(),
+    vuetify({
+      styles: {
+        configFile: 'src/styles/settings.scss',
+      },
+    }),
     ViteFonts({
       fontsource: {
         families: [
@@ -29,6 +33,11 @@ export default defineConfig(async () => ({
             name: 'Roboto',
             weights: [100, 300, 400, 500, 700, 900],
             styles: ['normal', 'italic'],
+          },
+          {
+            name: 'Noto Sans SC',
+            weights: [400, 500, 700],
+            styles: ['normal'],
           },
         ],
       },

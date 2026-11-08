@@ -41,6 +41,7 @@
     "prosemirror-view": "1.42.3"
   },
   "devDependencies": {
+    "@fontsource/noto-sans-sc": "^5.3.1",
     "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^26.6.6",
     "@typescript/native": "npm:typescript@^7.0.2",

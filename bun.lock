@@ -33,6 +33,7 @@
         "xe-utils": "^4.1.5",
       },
       "devDependencies": {
+        "@fontsource/noto-sans-sc": "^5.3.1",
         "@tauri-apps/cli": "^2.12.4",
         "@types/node": "^26.6.6",
         "@typescript/native": "npm:typescript@^7.0.2",
@@ -72,6 +73,8 @@
     "@floating-ui/dom": ["@floating-ui/dom@1.8.0", "https://registry.npmmirror.com/@floating-ui/dom/-/dom-1.8.0.tgz", { "dependencies": { "@floating-ui/core": "^1.8.0", "@floating-ui/utils": "^0.2.12" } }, "sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg=="],
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "https://registry.npmmirror.com/@floating-ui/utils/-/utils-0.2.12.tgz", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
+
+    "@fontsource/noto-sans-sc": ["@fontsource/noto-sans-sc@5.3.1", "https://registry.npmmirror.com/@fontsource/noto-sans-sc/-/noto-sans-sc-5.3.1.tgz", {}, "sha512-YxZ/VWAWo9FWzH08Q6fGTzIW6vYNP2TMhUFCnfhlimbhdXnWrxJLrzX3KWt2FKnV0s8XiM5vjpGHQiyFRlTj0w=="],
 
     "@fontsource/roboto": ["@fontsource/roboto@5.3.0", "https://registry.npmmirror.com/@fontsource/roboto/-/roboto-5.3.0.tgz", {}, "sha512-BapRJOWYP+LZ21zp+wBQjfpPYKRoxc4LspJ/RLuI+HSMBD5u/X4O+ESDrSvEqDSy0rAl7GwBJ+09mdc16cVQ1Q=="],
 
