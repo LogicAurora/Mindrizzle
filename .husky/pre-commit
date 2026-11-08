@@ -1,0 +1,7 @@
+# 前端代码与 Markdown 格式化（只处理暂存文件）
+bunx lint-staged
+
+# Rust 代码格式化（可选）
+if command -v cargo >/dev/null 2>&1 && [ -d "src-tauri" ]; then
+  cargo fmt --manifest-path src-tauri/Cargo.toml
+fi
