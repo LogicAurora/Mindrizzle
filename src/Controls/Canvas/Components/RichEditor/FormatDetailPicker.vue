@@ -217,8 +217,10 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   box-shadow: none;
-  /* 弹窗收起动画结束后再恢复描边，避免与收缩中的边框重叠变粗 */
-  transition: border-color 0s linear 0.18s;
+  /* 延迟恢复底色和描边，避免锚点盖住收缩中的弹窗边缘 */
+  transition:
+    background-color 0s linear 0.18s,
+    border-color 0s linear 0.18s;
 }
 
 /* 面板只能向画布内侧展开：右侧仅剩 12px，向外会被 .canvas-container 裁掉 */

@@ -156,8 +156,10 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   box-shadow: none;
-  /* 弹窗收起动画结束后再恢复描边，避免与收缩中的边框重叠变粗 */
-  transition: border-color 0s linear 0.18s;
+  /* 延迟恢复底色和描边，避免锚点盖住收缩中的弹窗边缘 */
+  transition:
+    background-color 0s linear 0.18s,
+    border-color 0s linear 0.18s;
 }
 
 /* 弹窗自带底色与描边，锚点此时透明，避免盖住弹窗右边框 */
