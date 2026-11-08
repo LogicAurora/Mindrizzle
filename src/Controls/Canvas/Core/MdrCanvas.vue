@@ -264,6 +264,7 @@ import {
   roundToVisual,
   contentToScreen,
   screenToContent,
+  screenToCanvasContent,
   contentToVisual,
   type CanvasTransform,
   type Point,
@@ -408,6 +409,7 @@ const serializeAnnotations = (offsetX: number, offsetY: number) =>
 const componentRefs = ref<Record<string, ComponentController | undefined>>({});
 const canvasRef = ref<HTMLElement | null>(null);
 const canvasContainerRef = ref<HTMLElement | null>(null);
+const canvasScreenOrigin = ref<ViewportOrigin | null>(null);
 
 // Vuetify 组件 ref 是实例而非 DOM，所以经 $el 取根元素
 const setCanvasContainerRef = (el: unknown) => {
@@ -426,6 +428,12 @@ const refreshViewRect = () => {
   const cr = canvasContainerRef.value?.getBoundingClientRect();
   viewRect.value = cr
     ? { left: cr.left, top: cr.top, right: cr.right, bottom: cr.bottom }
+    : null;
+};
+const refreshCanvasScreenOrigin = () => {
+  const rect = canvasRef.value?.getBoundingClientRect();
+  canvasScreenOrigin.value = rect
+    ? { left: rect.left, top: rect.top }
     : null;
 };
 // #endregion 画布状态与 z 层
@@ -551,6 +559,11 @@ const canvasStyle = computed<CSSProperties>(() => ({
   transform: `translate(${(pan.x + origin.x) / zoom.value}px, ${(pan.y + origin.y) / zoom.value}px)`,
   transformOrigin: "0 0",
 }));
+watch(
+  () => [pan.x, pan.y, origin.x, origin.y, zoom.value],
+  refreshCanvasScreenOrigin,
+  { flush: "post" },
+);
 // #endregion 缩放与画布变换
 
 // 点阵需随 pan 平移且附着内容网格，所以周期取 tile*zoom，按 (pan+origin+extend) 对周期取余对齐原点
@@ -2891,12 +2904,11 @@ const applyAddPreview = () => {
     addPreviewPos.value = null;
     return;
   }
-  const rect =
-    viewRect.value ?? canvasContainerRef.value?.getBoundingClientRect();
-  if (rect)
-    addPreviewPos.value = screenToContent(
-      canvasTransform(),
-      rect,
+  const canvasOrigin = canvasScreenOrigin.value;
+  if (canvasOrigin)
+    addPreviewPos.value = screenToCanvasContent(
+      zoom.value,
+      canvasOrigin,
       previewClientX,
       previewClientY,
     );
@@ -3533,6 +3545,7 @@ watch(
 
 const onResize = () => {
   refreshViewRect();
+  refreshCanvasScreenOrigin();
   refreshLayout();
   invalidateCanvasScaleCache();
   recomputeMasks();
@@ -4277,6 +4290,7 @@ const abortSessions = () => {
 
 onMounted(() => {
   refreshViewRect();
+  refreshCanvasScreenOrigin();
   nextTick(refreshLayout);
   scheduleVirtualReconcile();
   canvasContainerRef.value?.addEventListener(

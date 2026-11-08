@@ -40,6 +40,16 @@ export const screenToContent = (
   y: (clientY - vp.top - t.pan.y - t.origin.y) / t.zoom,
 });
 
+export const screenToCanvasContent = (
+  zoom: number,
+  canvasOrigin: ViewportOrigin,
+  clientX: number,
+  clientY: number,
+): Point => ({
+  x: (clientX - canvasOrigin.left) / zoom,
+  y: (clientY - canvasOrigin.top) / zoom,
+});
+
 // content → 视觉像素（.canvas 内定位用，不含容器偏移）
 export const contentToVisual = (
   t: CanvasTransform,
