@@ -17,14 +17,17 @@ import {
   mdiDeleteOutline,
   mdiDotsVertical,
   mdiDownload,
+  mdiFilterVariant,
   mdiFileDocumentOutline,
   mdiFolderMove,
   mdiInformationOutline,
+  mdiMagnify,
   mdiNoteOffOutline,
   mdiPencil,
   mdiPlus,
   mdiRenameBox,
   mdiSelectAll,
+  mdiSort,
   mdiUpload,
 } from "@mdi/js";
 import { isTauri } from "@tauri-apps/api/core";
@@ -44,6 +47,7 @@ import {
   type EditorBodyResult,
   type EditorNoteRef,
 } from "../utils/editorRoute";
+import { OPEN_COMMAND_PALETTE_EVENT } from "../utils/commandPaletteShortcut";
 import { getErrorMessage } from "../utils/getErrorMessage";
 import { recordRecentNote } from "../utils/homeActivity";
 import {
@@ -206,19 +210,139 @@ const INITIAL_VISIBLE_COUNT = 12;
 const VISIBLE_BATCH_SIZE = 12;
 const SKELETON_COUNT = 6;
 const SENTINEL_MARGIN_PX = 240;
+const SORT_OPTIONS = [
+  { value: "updated-desc", label: "最近编辑" },
+  { value: "updated-asc", label: "最早编辑" },
+  { value: "name-asc", label: "名称 A-Z" },
+  { value: "name-desc", label: "名称 Z-A" },
+] as const;
+const UPDATED_WITHIN_OPTIONS = [
+  { value: "all", label: "不限时间" },
+  { value: "7", label: "最近 7 天" },
+  { value: "30", label: "最近 30 天" },
+  { value: "90", label: "最近 90 天" },
+] as const;
+const MILLISECONDS_PER_DAY = 86_400_000;
 
 type NoteSetItem = NoteSetEntry & { loading: boolean; localName?: string };
+type NoteSetSort = (typeof SORT_OPTIONS)[number]["value"];
+type TagMatchMode = "all" | "any";
+type UpdatedWithin = (typeof UPDATED_WITHIN_OPTIONS)[number]["value"];
+
+interface NoteSetFilters {
+  tags: string[];
+  includeUntagged: boolean;
+  tagMatchMode: TagMatchMode;
+  updatedWithin: UpdatedWithin;
+}
 
 const isError = ref(false);
 const isLoading = ref(true);
 const isSectionLoading = ref(false);
 const noteSets = ref<NoteSetItem[]>([]);
 const visibleCount = ref(INITIAL_VISIBLE_COUNT);
+const sortBy = ref<NoteSetSort>("updated-desc");
+const selectedTags = ref<string[]>([]);
+const includeUntagged = ref(false);
+const tagMatchMode = ref<TagMatchMode>("all");
+const updatedWithin = ref<UpdatedWithin>("all");
+const isFilterDialogOpen = ref(false);
+const filterTagSearch = ref("");
+const draftSelectedTags = ref<string[]>([]);
+const draftIncludeUntagged = ref(false);
+const draftTagMatchMode = ref<TagMatchMode>("all");
+const draftUpdatedWithin = ref<UpdatedWithin>("all");
 const listSentinel = ref<HTMLElement | null>(null);
 let sectionLoadId = 0;
 let hasLoadedSection = false;
+const availableTags = computed(() =>
+  [...new Set(noteSets.value.flatMap((noteSet) => noteSet.tag))].sort(
+    (left, right) => left.localeCompare(right, "zh-CN"),
+  ),
+);
+const tagNoteCounts = computed(
+  () =>
+    new Map(
+      availableTags.value.map((tag) => [
+        tag,
+        noteSets.value.filter((noteSet) => noteSet.tag.includes(tag)).length,
+      ]),
+    ),
+);
+const activeFilterCount = computed(
+  () =>
+    Number(selectedTags.value.length > 0) +
+    Number(includeUntagged.value) +
+    Number(updatedWithin.value !== "all"),
+);
+const sortLabel = computed(
+  () => SORT_OPTIONS.find((option) => option.value === sortBy.value)!.label,
+);
+
+const appliedFilters = computed<NoteSetFilters>(() => ({
+  tags: selectedTags.value,
+  includeUntagged: includeUntagged.value,
+  tagMatchMode: tagMatchMode.value,
+  updatedWithin: updatedWithin.value,
+}));
+
+function matchesFilters(noteSet: NoteSetItem, filters: NoteSetFilters): boolean {
+  const { tags, includeUntagged: includeNoTags, tagMatchMode, updatedWithin } =
+    filters;
+  const matchesTag =
+    tags.length === 0
+      ? !includeNoTags || noteSet.tag.length === 0
+      : (tagMatchMode === "all"
+          ? tags.every((tag) => noteSet.tag.includes(tag))
+          : tags.some((tag) => noteSet.tag.includes(tag))) ||
+        (includeNoTags && noteSet.tag.length === 0);
+  if (!matchesTag) return false;
+  if (updatedWithin === "all") return true;
+  const cutoff = Date.now() - Number(updatedWithin) * MILLISECONDS_PER_DAY;
+  return noteSet.updatedAt >= cutoff;
+}
+
+function sortNoteSets(items: NoteSetItem[]): NoteSetItem[] {
+  return [...items].sort((left, right) => {
+    if (sortBy.value === "name-asc" || sortBy.value === "name-desc") {
+      const direction = sortBy.value === "name-asc" ? 1 : -1;
+      return direction * left.name.localeCompare(right.name, "zh-CN");
+    }
+    const direction = sortBy.value === "updated-desc" ? -1 : 1;
+    return (
+      direction * (left.updatedAt - right.updatedAt) ||
+      left.name.localeCompare(right.name, "zh-CN")
+    );
+  });
+}
+
+const filteredNoteSets = computed(() => {
+  const matchingItems = noteSets.value.filter((noteSet) =>
+    matchesFilters(noteSet, appliedFilters.value),
+  );
+  return sortNoteSets(matchingItems);
+});
+const visibleFilterTags = computed(() => {
+  const keyword = filterTagSearch.value.trim().toLocaleLowerCase();
+  return keyword
+    ? availableTags.value.filter((tag) =>
+        tag.toLocaleLowerCase().includes(keyword),
+      )
+    : availableTags.value;
+});
+const draftFilterCount = computed(
+  () =>
+    noteSets.value.filter((noteSet) =>
+      matchesFilters(noteSet, {
+        tags: draftSelectedTags.value,
+        includeUntagged: draftIncludeUntagged.value,
+        tagMatchMode: draftTagMatchMode.value,
+        updatedWithin: draftUpdatedWithin.value,
+      }),
+    ).length,
+);
 const visibleNoteSets = computed(() =>
-  noteSets.value.slice(0, visibleCount.value),
+  filteredNoteSets.value.slice(0, visibleCount.value),
 );
 
 // 一次性建几百张卡片会把首屏主线程占满，所以按需追加；不能按条数夹取，否则复制/导入后新增的卡片会被截在可见区外
@@ -231,7 +355,7 @@ let listObserver: IntersectionObserver | null = null;
 // 哨兵一直留在视口内时观察器不会再次回调，所以主动把视口填满
 async function fillListViewport(): Promise<void> {
   const sentinel = listSentinel.value;
-  if (!sentinel || visibleCount.value >= noteSets.value.length) return;
+  if (!sentinel || visibleCount.value >= filteredNoteSets.value.length) return;
   await nextTick();
   if (
     sentinel.getBoundingClientRect().top >
@@ -241,6 +365,68 @@ async function fillListViewport(): Promise<void> {
   growVisibleNoteSets();
   await fillListViewport();
 }
+
+function toggleDraftTag(tag: string) {
+  draftSelectedTags.value = draftSelectedTags.value.includes(tag)
+    ? draftSelectedTags.value.filter((selectedTag) => selectedTag !== tag)
+    : [...draftSelectedTags.value, tag];
+}
+
+function toggleVisibleDraftTags() {
+  const visibleTags = visibleFilterTags.value;
+  const areAllVisibleSelected = visibleTags.every((tag) =>
+    draftSelectedTags.value.includes(tag),
+  );
+  draftSelectedTags.value = areAllVisibleSelected
+    ? draftSelectedTags.value.filter((tag) => !visibleTags.includes(tag))
+    : [...new Set([...draftSelectedTags.value, ...visibleTags])];
+}
+
+function openFilterDialog() {
+  draftSelectedTags.value = [...selectedTags.value];
+  draftIncludeUntagged.value = includeUntagged.value;
+  draftTagMatchMode.value = tagMatchMode.value;
+  draftUpdatedWithin.value = updatedWithin.value;
+  filterTagSearch.value = "";
+  isFilterDialogOpen.value = true;
+}
+
+function applyFilters() {
+  selectedTags.value = [...draftSelectedTags.value];
+  includeUntagged.value = draftIncludeUntagged.value;
+  tagMatchMode.value = draftTagMatchMode.value;
+  updatedWithin.value = draftUpdatedWithin.value;
+  isFilterDialogOpen.value = false;
+}
+
+function openCommandPalette() {
+  window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+}
+
+function clearTagFilters() {
+  selectedTags.value = [];
+  includeUntagged.value = false;
+  tagMatchMode.value = "all";
+  updatedWithin.value = "all";
+}
+
+function clearAllFilters() {
+  clearTagFilters();
+  draftSelectedTags.value = [];
+  draftIncludeUntagged.value = false;
+  draftTagMatchMode.value = "all";
+  draftUpdatedWithin.value = "all";
+  isFilterDialogOpen.value = false;
+}
+
+watch(
+  [selectedTags, includeUntagged, tagMatchMode, updatedWithin],
+  async () => {
+    visibleCount.value = INITIAL_VISIBLE_COUNT;
+    await nextTick();
+    void fillListViewport();
+  },
+);
 
 async function loadExternalItems(): Promise<NoteSetItem[]> {
   const items = await Promise.all(
@@ -301,6 +487,7 @@ async function loadActiveSection() {
 
 watch(activeSectionId, () => {
   visibleCount.value = INITIAL_VISIBLE_COUNT;
+  clearTagFilters();
   exitSelectMode();
   void loadActiveSection();
 });
@@ -851,6 +1038,41 @@ function formatUpdatedAt(timestamp: number): string {
 </script>
 <template>
   <v-sheet class="note-sets-page" elevation="0">
+    <Teleport to="#title-right-actions" defer>
+      <v-btn color="white"
+        :icon="mdiMagnify"
+        title="搜索（打开命令面板）"
+        variant="text"
+        @click="openCommandPalette"
+      />
+      <v-menu location="bottom end">
+        <template #activator="{ props: menuProps }">
+          <v-btn color="white"
+            v-bind="menuProps"
+            :icon="mdiSort"
+            :title="`排序：${sortLabel}`"
+            variant="text"
+          />
+        </template>
+        <v-list density="compact" min-width="160">
+          <v-list-item
+            v-for="option in SORT_OPTIONS"
+            :key="option.value"
+            :active="sortBy === option.value"
+            @click="sortBy = option.value"
+          >
+            <v-list-item-title>{{ option.label }}</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+      <v-btn
+        color="white"
+        :icon="mdiFilterVariant"
+        :title="activeFilterCount ? `筛选（${activeFilterCount}）` : '筛选'"
+        variant="text"
+        @click="openFilterDialog"
+      />
+    </Teleport>
     <Teleport to="#toolbar-actions" defer>
       <template v-if="isSelectMode">
         <v-btn
@@ -901,6 +1123,137 @@ function formatUpdatedAt(timestamp: number): string {
     <v-snackbar v-model="isHintOpen" timeout="2500">
       {{ hint }}
     </v-snackbar>
+    <v-dialog
+      v-model="isFilterDialogOpen"
+      max-width="520"
+      scrollable
+    >
+      <v-card>
+        <v-card-title>筛选便签</v-card-title>
+        <v-card-text class="note-filter-dialog__content">
+          <div class="text-subtitle-2 mb-2">标签</div>
+          <v-text-field
+            v-model="filterTagSearch"
+            :prepend-inner-icon="mdiMagnify"
+            label="查找标签"
+            placeholder="输入标签名称"
+            density="compact"
+            hide-details
+            clearable
+          />
+          <div class="d-flex align-center justify-space-between mt-2 mb-1">
+            <span class="text-body-2">
+              已选 {{ draftSelectedTags.length }} 个标签
+            </span>
+            <div class="d-flex">
+              <v-btn
+                :disabled="visibleFilterTags.length === 0"
+                size="small"
+                variant="text"
+                @click="toggleVisibleDraftTags"
+              >
+                {{
+                  visibleFilterTags.length &&
+                  visibleFilterTags.every((tag) =>
+                    draftSelectedTags.includes(tag),
+                  )
+                    ? "取消当前列表"
+                    : "全选当前列表"
+                }}
+              </v-btn>
+              <v-btn
+                size="small"
+                variant="text"
+                :disabled="draftSelectedTags.length === 0"
+                @click="draftSelectedTags = []"
+              >
+                清空
+              </v-btn>
+            </div>
+          </div>
+          <div class="note-filter-dialog__tags">
+            <v-list v-if="visibleFilterTags.length" density="compact">
+              <v-list-item
+                v-for="tag in visibleFilterTags"
+                :key="tag"
+                :title="tag"
+                @click="toggleDraftTag(tag)"
+              >
+                <template #prepend>
+                  <v-checkbox-btn
+                    :model-value="draftSelectedTags.includes(tag)"
+                    @click.stop="toggleDraftTag(tag)"
+                  />
+                </template>
+                <template #append>
+                  <v-chip
+                    :color="resolveTagColor(tag)"
+                    size="x-small"
+                    variant="tonal"
+                  >
+                    {{ tagNoteCounts.get(tag) ?? 0 }}
+                  </v-chip>
+                </template>
+              </v-list-item>
+            </v-list>
+            <div v-else class="text-medium-emphasis text-body-2 pa-4 text-center">
+              {{ availableTags.length ? "没有匹配的标签" : "当前工作区还没有标签" }}
+            </div>
+          </div>
+          <v-checkbox
+            v-model="draftIncludeUntagged"
+            class="mt-1"
+            density="compact"
+            hide-details
+            label="包含无标签的便签"
+          />
+          <div class="text-subtitle-2 mt-4 mb-2">标签匹配</div>
+          <v-btn-toggle
+            v-model="draftTagMatchMode"
+            class="note-filter-dialog__match-mode"
+            color="primary"
+            density="compact"
+            divided
+            mandatory
+          >
+            <v-btn value="all">匹配全部标签</v-btn>
+            <v-btn value="any">匹配任一标签</v-btn>
+          </v-btn-toggle>
+          <div class="text-caption text-medium-emphasis mt-1">
+            匹配全部时，便签必须同时包含所选标签；无标签选项会额外包含空标签便签。
+          </div>
+          <div class="text-subtitle-2 mt-4 mb-2">编辑时间</div>
+          <v-select
+            v-model="draftUpdatedWithin"
+            :items="UPDATED_WITHIN_OPTIONS"
+            item-title="label"
+            item-value="value"
+            density="compact"
+            hide-details
+          />
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="note-filter-dialog__actions">
+          <v-btn variant="text" @click="clearAllFilters">
+            清除条件
+          </v-btn>
+          <v-spacer />
+          <span class="text-medium-emphasis text-body-2">
+            匹配 {{ draftFilterCount }} 条
+          </span>
+          <v-btn
+            color="primary"
+            variant="text"
+            @click="isFilterDialogOpen = false"
+          >
+            取消
+          </v-btn>
+          <v-btn color="primary" variant="text" @click="applyFilters">
+            应用
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
     <div class="note-sets-scroll pa-4">
       <div v-if="isLoading" class="note-sets-grid">
         <v-skeleton-loader
@@ -926,6 +1279,12 @@ function formatUpdatedAt(timestamp: number): string {
             ? '点击右下角按钮打开 .mdrf 文件'
             : '点击右下角的按钮创建新的便签集'
         "
+      />
+      <v-empty-state
+        v-else-if="filteredNoteSets.length === 0"
+        :icon="mdiFilterVariant"
+        title="没有符合条件的便签"
+        text="请调整右上角的标签过滤条件"
       />
       <div
         v-else
@@ -1234,6 +1593,32 @@ function formatUpdatedAt(timestamp: number): string {
     auto,
     100% 100%,
     100% 28px;
+}
+
+.note-filter-dialog__content {
+  min-width: 0;
+}
+
+.note-filter-dialog__tags {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 4px;
+}
+
+.note-filter-dialog__match-mode {
+  display: flex;
+  width: 100%;
+}
+
+.note-filter-dialog__match-mode :deep(.v-btn) {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: normal;
+}
+
+.note-filter-dialog__actions {
+  flex-wrap: wrap;
 }
 
 /* VFab 的 app 定位在 speed dial 的 activator 插槽里拿不到 VApp 布局上下文，所以自己固定在右下角 */
