@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-25 -->
+<!-- 最后验证: 2026-11-08 -->
 
 # 画布块开发
 
@@ -51,8 +51,8 @@ Components/
 </template>
 
 <script setup lang="ts">
-import BlockShell from "../Sdk/BlockShell.vue";
-import { useBlockContext } from "../Sdk/blockContext.ts";
+import BlockShell from '../Sdk/BlockShell.vue';
+import { useBlockContext } from '../Sdk/blockContext.ts';
 
 const ctx = useBlockContext<{ text: string }>();
 </script>
@@ -66,6 +66,7 @@ const ctx = useBlockContext<{ text: string }>();
 | ------------------- | -------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `RichTextEditor`    | 富文本   | `config.content`                                                           | ProseMirror 文档；可接收拖入                                                                                                                                                                                                   |
 | `EditableCodeBlock` | 代码块   | `config.code` / `language`                                                 | 可拖进富文本（`embed`）                                                                                                                                                                                                        |
+| `MermaidBlock`      | Mermaid  | `config.code`                                                              | 编辑源码、缩放/拖动画布、导出 PNG                                                                                                                                                                                              |
 | `ImageBlock`        | 图片     | `config.path` + `ctx.files`                                                | 平铺与自动尺寸                                                                                                                                                                                                                 |
 | `FileBlock`         | 附件     | `config.name` / `mime` / `size` + `ctx.files`                              | 归档内固定 `file.bin`；图片内联预览，桌面端可另存                                                                                                                                                                              |
 | `LinkBlock`         | 链接     | `config.url` / `title` / `description` / `imageUrl`                        | 前端抓 og 标签，跨域失败退回手填                                                                                                                                                                                               |

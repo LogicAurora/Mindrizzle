@@ -40,6 +40,7 @@
     "dompurify": "^3.4.17",
     "highlight.js": "^11.12.0",
     "katex": "^0.19.1",
+    "mermaid": "^12.3.0",
     "prosekit": "^0.23.0",
     "prosemirror-model": "^1.25.12",
     "prosemirror-state": "^1.4.4",

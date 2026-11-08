@@ -19,11 +19,7 @@
           v-for="(option, row) in wheelRows"
           :key="option.label"
           class="mode-wheel-row text-body-2"
-          :class="
-            row === CURRENT_ROW
-              ? 'text-primary font-weight-medium'
-              : 'text-medium-emphasis'
-          "
+          :class="row === CURRENT_ROW ? 'text-primary font-weight-medium' : 'text-medium-emphasis'"
         >
           <span>{{ option.label }}</span>
           <OptionGlyph
@@ -31,21 +27,30 @@
             :color="option.swatch"
             :custom="option.custom"
             :style="{
-              visibility:
-                row === CURRENT_ROW && !expanded ? 'hidden' : 'visible',
+              visibility: row === CURRENT_ROW && !expanded ? 'hidden' : 'visible',
             }"
           />
         </div>
       </TransitionGroup>
     </v-sheet>
   </Transition>
+  <div class="mode-wheel-measurer" aria-hidden="true">
+    <span
+      v-for="option in options"
+      :key="option.label"
+      ref="measureLabels"
+      class="mode-wheel-measure text-body-2"
+    >
+      {{ option.label }}
+    </span>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
-import OptionGlyph from "./OptionGlyph.vue";
-import { wrapWheelIndex, type WheelOption } from "./wheelSwitch.ts";
+import OptionGlyph from './OptionGlyph.vue';
+import { wrapWheelIndex, type WheelOption } from './wheelSwitch.ts';
 
 const props = defineProps<{
   options: readonly WheelOption[];
@@ -54,43 +59,46 @@ const props = defineProps<{
   instantClose?: boolean;
 }>();
 
-const emit = defineEmits<{ (e: "update:modelValue", index: number): void }>();
+const emit = defineEmits<{ (e: 'update:modelValue', index: number): void }>();
 
 // 触摸板一次滑动会连发几十个 wheel，40ms 内视为同一手势，保证一格一格地滚
 const WHEEL_GESTURE_MS = 40;
 const ROW_COUNT = 3;
 // 三行固定为上一 / 当前 / 下一，中行即当前模式
 const CURRENT_ROW = 1;
-const WHEEL_CHAR_WIDTH = 14;
 const WHEEL_ICON_SIZE = 20;
-const WHEEL_GAP = 10;
-const WHEEL_PADDING_LEFT = 12;
+const WHEEL_GAP = 4;
+const WHEEL_PADDING_LEFT = 4;
 // 图标中心要压在锚点中心上：边框 1 + 右侧内边距 7 + 半个图标 10
 const WHEEL_PADDING_RIGHT = 7;
 const WHEEL_BORDER_WIDTH = 2;
-const WHEEL_WIDTH_SLACK = 4;
+const WHEEL_WIDTH_SLACK = 0;
 
 const rollDirection = ref<1 | -1>(1);
+const measureLabels = ref<HTMLElement[]>([]);
+const measuredLabelWidths = ref<number[]>([]);
 let lastWheelAt = 0;
 
 // 弹窗固定三行：上一项 / 当前项 / 下一项，循环取模
 const wheelRows = computed(() =>
   Array.from(
     { length: ROW_COUNT },
-    (_, row) =>
-      props.options[
-        wrapWheelIndex(props.modelValue + row - 1, props.options.length)
-      ],
+    (_, row) => props.options[wrapWheelIndex(props.modelValue + row - 1, props.options.length)],
   ),
 );
 
-// 宽度按最长文案估算，图标列始终贴右，宽度随选项文案自适应
-const wheelWidth = computed(() => {
-  const longest = Math.max(
-    ...props.options.map((option) => [...option.label].length),
+const measureOptionLabels = async () => {
+  await nextTick();
+  measuredLabelWidths.value = measureLabels.value.map(
+    (label) => label.getBoundingClientRect().width,
   );
+};
+
+// 依据和实际标签相同的字体测量宽度，避免中英混排时按字数估算失真
+const wheelWidth = computed(() => {
+  const longest = Math.max(0, ...measuredLabelWidths.value);
   return (
-    longest * WHEEL_CHAR_WIDTH +
+    longest +
     WHEEL_GAP +
     WHEEL_ICON_SIZE +
     WHEEL_PADDING_LEFT +
@@ -100,11 +108,14 @@ const wheelWidth = computed(() => {
   );
 });
 
+watch(() => props.options.map((option) => option.label), measureOptionLabels, {
+  flush: 'post',
+});
+
 const onWheel = (event: WheelEvent) => {
   if (!props.expanded) return;
   // 只接管画布内的滚轮，页面其它区域的滚轮保持原行为
-  if (!(event.target as HTMLElement | null)?.closest(".canvas-container"))
-    return;
+  if (!(event.target as HTMLElement | null)?.closest('.canvas-container')) return;
   if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
   event.preventDefault();
   event.stopPropagation();
@@ -113,21 +124,20 @@ const onWheel = (event: WheelEvent) => {
   lastWheelAt = now;
   rollDirection.value = event.deltaY > 0 ? 1 : -1;
   emit(
-    "update:modelValue",
-    wrapWheelIndex(
-      props.modelValue + rollDirection.value,
-      props.options.length,
-    ),
+    'update:modelValue',
+    wrapWheelIndex(props.modelValue + rollDirection.value, props.options.length),
   );
 };
 
 onMounted(() => {
+  void measureOptionLabels();
+  void document.fonts.ready.then(measureOptionLabels);
   // 捕获阶段：内容与滚动条的 wheel 会 stopPropagation，必须抢在它们前面
-  window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+  window.addEventListener('wheel', onWheel, { passive: false, capture: true });
 });
 
 onUnmounted(() => {
-  window.removeEventListener("wheel", onWheel, true);
+  window.removeEventListener('wheel', onWheel, true);
 });
 </script>
 
@@ -148,6 +158,21 @@ onUnmounted(() => {
   contain: layout paint;
 }
 
+.mode-wheel-measurer {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mode-wheel-measure {
+  display: block;
+  width: max-content;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* 轨道独立居中，边框伸缩时当前行始终压在锚点上 */
 .mode-wheel-track {
   position: absolute;
@@ -166,10 +191,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 4px;
   flex: none;
   height: 36px;
-  padding-left: 12px;
+  padding-left: 4px;
   padding-right: 7px;
   white-space: nowrap;
 }

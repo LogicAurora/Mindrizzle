@@ -1,17 +1,10 @@
-import type { NodeJSON } from "@prosekit/core";
-import { defineAsyncComponent, type AsyncComponentLoader } from "vue";
+import type { NodeJSON } from '@prosekit/core';
+import { defineAsyncComponent, type AsyncComponentLoader } from 'vue';
 
-import type { EditorCommands } from "../Components/RichEditor/extension.ts";
-import {
-  blockDefinitionOf,
-  blockDefinitions,
-  registerBlocks,
-} from "../Sdk/blockRegistry.ts";
-import type { AnyBlockDefinition, BlockEnv } from "../Sdk/block.types.ts";
-import {
-  normalizeConstraints,
-  type ResizeConstraints,
-} from "./resizeConstraints.ts";
+import type { EditorCommands } from '../Components/RichEditor/extension.ts';
+import { blockDefinitionOf, blockDefinitions, registerBlocks } from '../Sdk/blockRegistry.ts';
+import type { AnyBlockDefinition, BlockEnv } from '../Sdk/block.types.ts';
+import { normalizeConstraints, type ResizeConstraints } from './resizeConstraints.ts';
 
 // config 由块自定义，画布只按不透明字典搬运与持久化
 export type WidgetConfig = Record<string, unknown>;
@@ -26,13 +19,17 @@ export type CodeBlockConfig = WidgetConfig & {
   language: string;
 };
 
+export type MermaidBlockConfig = WidgetConfig & {
+  code: string;
+};
+
 export type TestBenchConfig = WidgetConfig & {
   counter: number;
   note: string;
   showViewport?: boolean;
 };
 
-export type ImageFit = "contain" | "cover" | "fill" | "tile";
+export type ImageFit = 'contain' | 'cover' | 'fill' | 'tile';
 
 export type ImageBlockConfig = WidgetConfig & {
   // 归档内的相对路径，读取时再经 ComponentDataStore 拼成 mdrfcd://
@@ -59,7 +56,7 @@ export type LinkBlockConfig = WidgetConfig & {
   imageUrl: string;
 };
 
-import type { TableMerge } from "../Components/TableBlock/tableRows.ts";
+import type { TableMerge } from '../Components/TableBlock/tableRows.ts';
 
 export type TableBlockConfig = WidgetConfig & {
   rows: string[][];
@@ -89,10 +86,7 @@ export interface ComponentController {
   applyConfig?: (config: WidgetConfig) => void;
   snapshotHtml?: () => string;
   commands?: EditorCommands;
-  resolveDropAtElement?: (
-    el: HTMLElement | null,
-    preferBefore: boolean,
-  ) => number | null;
+  resolveDropAtElement?: (el: HTMLElement | null, preferBefore: boolean) => number | null;
   scrollContent?: (deltaY: number) => void;
 }
 
@@ -112,22 +106,20 @@ export interface CanvasItem {
 }
 
 // 新增块只需在 Components 下放一对同名文件（Xxx.block.ts + Xxx.vue），注册表自动收集
-const blockMetaModules = import.meta.glob("../Components/**/*.block.ts", {
+const blockMetaModules = import.meta.glob('../Components/**/*.block.ts', {
   eager: true,
 });
 // 只扫块本身所在目录；子目录（RichEditor/、CodeBlock/）由各自的 .block.ts 直接引用，避免被异步包装
-const blockComponentModules = import.meta.glob("../Components/*.vue");
+const blockComponentModules = import.meta.glob('../Components/*.vue');
 
 const loadBuiltinBlocks = (): AnyBlockDefinition[] =>
   Object.entries(blockMetaModules)
     .map(([metaPath, module]) => {
       const meta = (module as { default: AnyBlockDefinition }).default;
       // 自带壳的块必须保留真实实例，否则 expose（commands / saveConfig）会被异步包装挡住
-      if (meta.kind === "raw") return meta;
-      const loader =
-        blockComponentModules[metaPath.replace(/\.block\.ts$/, ".vue")];
-      if (!loader)
-        throw new Error(`块 ${meta.key} 缺少同名组件文件：${metaPath}`);
+      if (meta.kind === 'raw') return meta;
+      const loader = blockComponentModules[metaPath.replace(/\.block\.ts$/, '.vue')];
+      if (!loader) throw new Error(`块 ${meta.key} 缺少同名组件文件：${metaPath}`);
       return {
         ...meta,
         component: defineAsyncComponent(loader as AsyncComponentLoader),
@@ -135,8 +127,7 @@ const loadBuiltinBlocks = (): AnyBlockDefinition[] =>
     })
     .sort(
       (first, second) =>
-        (first.order ?? 0) - (second.order ?? 0) ||
-        first.key.localeCompare(second.key),
+        (first.order ?? 0) - (second.order ?? 0) || first.key.localeCompare(second.key),
     );
 
 registerBlocks(loadBuiltinBlocks());
@@ -145,27 +136,23 @@ export const CANVAS_COMPONENTS = blockDefinitions();
 
 export type ComponentKey = string;
 
-export const DEFAULT_COMPONENT_KEY: ComponentKey = "RichTextEditor";
+export const DEFAULT_COMPONENT_KEY: ComponentKey = 'RichTextEditor';
 
 export const componentMetaOf = (key: string): AnyBlockDefinition | undefined =>
   blockDefinitionOf(key);
 
-export const componentLabelOf = (key: string) =>
-  componentMetaOf(key)?.title ?? key;
+export const componentLabelOf = (key: string) => componentMetaOf(key)?.title ?? key;
 
 // 注册项声明自身尺寸可变性，画布据此判断联结该不该改它
 export const heightChangableOf = (
-  item: Pick<CanvasItem, "component" | "config">,
+  item: Pick<CanvasItem, 'component' | 'config'>,
   env: BlockEnv,
-): boolean =>
-  componentMetaOf(item.component)?.heightChangableOf?.(item.config, env) ??
-  true;
+): boolean => componentMetaOf(item.component)?.heightChangableOf?.(item.config, env) ?? true;
 
 export const widthChangableOf = (
-  item: Pick<CanvasItem, "component" | "config">,
+  item: Pick<CanvasItem, 'component' | 'config'>,
   env: BlockEnv,
-): boolean =>
-  componentMetaOf(item.component)?.widthChangableOf?.(item.config, env) ?? true;
+): boolean => componentMetaOf(item.component)?.widthChangableOf?.(item.config, env) ?? true;
 
 const CANVAS_DEFAULT_CONSTRAINTS: Required<ResizeConstraints> = {
   minWidth: 100,
@@ -174,9 +161,7 @@ const CANVAS_DEFAULT_CONSTRAINTS: Required<ResizeConstraints> = {
   maxHeight: null,
 };
 
-export const constraintsOf = (
-  item: Pick<CanvasItem, "component">,
-): Required<ResizeConstraints> => {
+export const constraintsOf = (item: Pick<CanvasItem, 'component'>): Required<ResizeConstraints> => {
   const raw = componentMetaOf(item.component)?.constraints;
   return raw ? normalizeConstraints(raw) : CANVAS_DEFAULT_CONSTRAINTS;
 };
