@@ -68,6 +68,7 @@ import {
 } from "../utils/routeTransition";
 import {
   loadTagLibrary,
+  rememberTags,
   resolveTagColor,
   sanitizeTags,
   type TagLibraryChange,
@@ -208,9 +209,12 @@ type NoteSetItem = NoteSetEntry & { loading: boolean; localName?: string };
 
 const isError = ref(false);
 const isLoading = ref(true);
+const isSectionLoading = ref(false);
 const noteSets = ref<NoteSetItem[]>([]);
 const visibleCount = ref(INITIAL_VISIBLE_COUNT);
 const listSentinel = ref<HTMLElement | null>(null);
+let sectionLoadId = 0;
+let hasLoadedSection = false;
 const visibleNoteSets = computed(() =>
   noteSets.value.slice(0, visibleCount.value),
 );
@@ -237,14 +241,14 @@ async function fillListViewport(): Promise<void> {
 }
 
 async function loadExternalItems(): Promise<NoteSetItem[]> {
-  return Promise.all(
+  const items = await Promise.all(
     externalNotes.value.map(async (record) => {
       const { fileName, localName } = record;
+      let entry: NoteSetEntry;
       try {
-        const entry = record.path
+        entry = record.path
           ? await fetchNoteSetEntry(fileName, undefined, record.path)
           : await fetchNoteSetEntry(localName ?? fileName);
-        return { ...entry, localName, loading: false };
       } catch {
         // 外部文件可能已被移动或删除，仍保留记录让用户看到并自行移除
         return {
@@ -258,25 +262,38 @@ async function loadExternalItems(): Promise<NoteSetItem[]> {
           loading: false,
         };
       }
+      return { ...entry, localName, loading: false };
     }),
   );
+  for (const item of items) await rememberTags(item.tag);
+  return items;
 }
 
 async function loadActiveSection() {
-  isLoading.value = true;
+  const loadId = ++sectionLoadId;
+  const section = activeSection.value;
+  if (!hasLoadedSection) isLoading.value = true;
+  else isSectionLoading.value = true;
   try {
-    if (activeSection.value.kind === "external") {
-      noteSets.value = await loadExternalItems();
-    } else {
-      const entries = await loadNoteSetEntries(activeDir.value);
-      noteSets.value = entries.map((entry) => ({ ...entry, loading: false }));
-    }
+    const items =
+      section.kind === "external"
+        ? await loadExternalItems()
+        : (await loadNoteSetEntries(section.dir)).map((entry) => ({
+            ...entry,
+            loading: false,
+          }));
+    if (loadId !== sectionLoadId) return;
+    noteSets.value = items;
     // 网页端无 IPC，日志插件的 invoke 会抛错
     if (isTauri()) info(`读取笔记元信息成功，共 ${noteSets.value.length} 条`);
   } catch {
-    isError.value = true;
+    if (loadId === sectionLoadId) isError.value = true;
   } finally {
-    isLoading.value = false;
+    if (loadId === sectionLoadId) {
+      isLoading.value = false;
+      isSectionLoading.value = false;
+      hasLoadedSection = true;
+    }
   }
 }
 
@@ -908,7 +925,11 @@ function formatUpdatedAt(timestamp: number): string {
             : '点击右下角的按钮创建新的便签集'
         "
       />
-      <div v-else class="note-sets-grid">
+      <div
+        v-else
+        class="note-sets-grid"
+        :class="{ 'note-sets-grid--loading': isSectionLoading }"
+      >
         <v-card
           v-for="noteSet in visibleNoteSets"
           :key="noteSetKeyOf(noteSet)"
@@ -935,6 +956,13 @@ function formatUpdatedAt(timestamp: number): string {
           </v-card-title>
           <v-card-subtitle>
             上次编辑：{{ formatUpdatedAt(noteSet.updatedAt) }} 文件名：{{ noteSet.fileName }}.mdrf
+          </v-card-subtitle>
+          <v-card-subtitle
+            v-if="activeSection.kind === 'external'"
+            class="note-sets-card__location text-truncate"
+            :title="noteSet.filePath ?? '浏览器本地存储'"
+          >
+            文件位置：{{ noteSet.filePath ?? "浏览器本地存储" }}
           </v-card-subtitle>
           <v-card-text>
             {{ noteSet.description }}
@@ -1228,6 +1256,18 @@ function formatUpdatedAt(timestamp: number): string {
   flex-direction: column;
 }
 
+.note-sets-grid {
+  transition: opacity 160ms ease;
+}
+
+.note-sets-grid--loading {
+  opacity: 0.72;
+}
+
+.note-sets-card__location {
+  min-width: 0;
+}
+
 /* 多选时整卡是热区，要挡住文本选择让点击稳定落成切换 */
 .note-sets-card--selecting {
   cursor: pointer;
@@ -1274,6 +1314,12 @@ function formatUpdatedAt(timestamp: number): string {
 @media (max-width: 599px) {
   .note-sets-grid {
     gap: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-sets-grid {
+    transition-duration: 1ms;
   }
 }
 </style>

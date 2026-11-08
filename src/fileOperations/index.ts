@@ -14,6 +14,7 @@ import type {
   NoteFileLocation,
   RenameNoteRequest,
 } from "./types";
+import { rememberTags } from "../utils/tagStore";
 
 const route = <T>(native: () => Promise<T>, browser: () => Promise<T>) =>
   isTauri() ? native() : browser();
@@ -53,8 +54,9 @@ export const fileOperations: FileOperations = {
         }),
       () => browserFileOperations.setNoteMeta(location, meta),
     ),
-  createNote: (request: CreateNoteRequest) =>
-    route(
+  createNote: (request: CreateNoteRequest) => {
+    rememberTags(request.meta.tag ?? []);
+    return route(
       () =>
         invoke<string>("create_mdr_file", {
           fileName: request.fileName,
@@ -62,7 +64,8 @@ export const fileOperations: FileOperations = {
           mdrFileInfo: request.meta,
         }),
       () => browserFileOperations.createNote(request),
-    ),
+    )
+  },
   moveNote: (request: MoveNoteRequest) =>
     route(
       () => invoke<string>("move_mdr_file", { ...request }),
