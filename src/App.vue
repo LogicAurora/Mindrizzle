@@ -9,7 +9,7 @@ import {
   mdiCalendarBlankOutline,
   mdiCogOutline,
   mdiHomeOutline,
-} from "@mdi/js";
+} from '@mdi/js';
 import {
   computed,
   nextTick,
@@ -19,23 +19,18 @@ import {
   ref,
   shallowRef,
   watch,
-} from "vue";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isTauri } from "@tauri-apps/api/core";
+} from 'vue';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { isTauri } from '@tauri-apps/api/core';
 
-import { attachConsole } from "@tauri-apps/plugin-log";
-import { useDisplay } from "vuetify";
-import {
-  isNavigationFailure,
-  useRoute,
-  useRouter,
-  type RouteLocationRaw,
-} from "vue-router";
-import { error as logError } from "@tauri-apps/plugin-log";
+import { attachConsole } from '@tauri-apps/plugin-log';
+import { useDisplay } from 'vuetify';
+import { isNavigationFailure, useRoute, useRouter, type RouteLocationRaw } from 'vue-router';
+import { error as logError } from '@tauri-apps/plugin-log';
 
-import QuickOpenPalette from "./Controls/QuickOpenPalette.vue";
-import { getErrorMessage } from "./utils/getErrorMessage";
-import { toolbarSelectionKey } from "./utils/toolbarSelection";
+import QuickOpenPalette from './Controls/QuickOpenPalette.vue';
+import { getErrorMessage } from './utils/getErrorMessage';
+import { toolbarSelectionKey } from './utils/toolbarSelection';
 
 if (isTauri()) {
   attachConsole();
@@ -67,28 +62,21 @@ import {
   noteLoadControllerKey,
   routeTransition,
   startEditorTransitionKey,
-} from "./utils/routeTransition";
-import {
-  loadTitleRollDirection,
-  titleRollDirection,
-} from "./utils/uiPreference";
-import {
-  activeEasterEggEffect,
-  attachSecretKeyboard,
-  playEasterEgg,
-} from "./utils/easterEggs";
-import { isDeveloperMode } from "./utils/developerMode";
-import { Z_LAYER } from "./Controls/Canvas/Core/zIndex";
+} from './utils/routeTransition';
+import { loadTitleRollDirection, titleRollDirection } from './utils/uiPreference';
+import { activeEasterEggEffect, attachSecretKeyboard, playEasterEgg } from './utils/easterEggs';
+import { isDeveloperMode } from './utils/developerMode';
+import { Z_LAYER } from './Controls/Canvas/Core/zIndex';
 const transitionClassMap = {
-  VSlideXTransition: "slide-x-transition",
-  VSlideXReverseTransition: "slide-x-reverse-transition",
-  VFadeTransition: "fade-transition",
+  VSlideXTransition: 'slide-x-transition',
+  VSlideXReverseTransition: 'slide-x-reverse-transition',
+  VFadeTransition: 'fade-transition',
 } as const;
 
 const resolveTransitionName = () => transitionClassMap[routeTransition.value];
 
 function hideLeavingRoute(element: Element) {
-  (element as HTMLElement).style.setProperty("display", "none", "important");
+  (element as HTMLElement).style.setProperty('display', 'none', 'important');
 }
 
 const CURTAIN_DURATION = 560;
@@ -96,32 +84,31 @@ const CURTAIN_STAGGER = 110;
 const LOADING_THRESHOLD = 300;
 const MIN_LOADING_DURATION = 520;
 const MAX_PROGRESS = 100;
-const curtainState = ref<"idle" | "covering" | "covered" | "revealing">("idle");
+const curtainState = ref<'idle' | 'covering' | 'covered' | 'revealing'>('idle');
 const progress = ref(0);
-const loadingName = ref("");
+const loadingName = ref('');
 const loadingStage = computed(() => {
-  if (progress.value <= 2) return "正在校验笔记文件";
-  if (progress.value <= 5) return "正在识别归档格式";
-  if (progress.value <= 8) return "正在准备本地缓存";
-  if (progress.value <= 12) return "正在准备解包内容";
-  if (progress.value <= 70) return "正在解包笔记内容";
-  if (progress.value <= 75) return "正在读取笔记正文";
-  if (progress.value <= 85) return "正在解析笔记正文";
-  if (progress.value <= 90) return "正在完成笔记读取";
-  return "正在载入画布";
+  if (progress.value <= 2) return '正在校验笔记文件';
+  if (progress.value <= 5) return '正在识别归档格式';
+  if (progress.value <= 8) return '正在准备本地缓存';
+  if (progress.value <= 12) return '正在准备解包内容';
+  if (progress.value <= 70) return '正在解包笔记内容';
+  if (progress.value <= 75) return '正在读取笔记正文';
+  if (progress.value <= 85) return '正在解析笔记正文';
+  if (progress.value <= 90) return '正在完成笔记读取';
+  return '正在载入画布';
 });
 const curtainStyle = {
-  "--curtain-duration": `${CURTAIN_DURATION}ms`,
-  "--curtain-stagger": `${CURTAIN_STAGGER}ms`,
-  "--loading-curtain-z-index": Z_LAYER.appLoadingCurtain,
+  '--curtain-duration': `${CURTAIN_DURATION}ms`,
+  '--curtain-stagger': `${CURTAIN_STAGGER}ms`,
+  '--loading-curtain-z-index': Z_LAYER.appLoadingCurtain,
 };
 
 let resolveFinish: (() => void) | null = null;
 let curtainCoveredAt: number | null = null;
 let isEditorNavigationPending = false;
 
-const wait = (duration: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, duration));
+const wait = (duration: number) => new Promise<void>((resolve) => setTimeout(resolve, duration));
 
 function createFinishPromise() {
   let resolveCurrentFinish: () => void = () => undefined;
@@ -147,9 +134,9 @@ provide(noteLoadControllerKey, {
 });
 
 async function coverCurtain() {
-  curtainState.value = "covering";
+  curtainState.value = 'covering';
   await wait(CURTAIN_DURATION + CURTAIN_STAGGER);
-  curtainState.value = "covered";
+  curtainState.value = 'covered';
   await nextTick();
   curtainCoveredAt = performance.now();
 }
@@ -162,10 +149,7 @@ async function runEditorTransition(
   const preparation = prepare();
   const shouldCover =
     isDebugLoadingEnabled.value ||
-    (await Promise.race([
-      preparation.then(() => false),
-      wait(LOADING_THRESHOLD).then(() => true),
-    ]));
+    (await Promise.race([preparation.then(() => false), wait(LOADING_THRESHOLD).then(() => true)]));
   if (shouldCover) await coverCurtain();
   await preparation;
   const navigationFailure = await router.push(target);
@@ -185,25 +169,25 @@ async function waitForMinimumCurtainDuration() {
 async function resetEditorTransition() {
   resolveFinish?.();
   resolveFinish = null;
-  if (curtainState.value !== "idle") {
+  if (curtainState.value !== 'idle') {
     await waitForMinimumCurtainDuration();
-    curtainState.value = "revealing";
+    curtainState.value = 'revealing';
     await wait(CURTAIN_DURATION + CURTAIN_STAGGER);
-    curtainState.value = "idle";
+    curtainState.value = 'idle';
   }
   curtainCoveredAt = null;
   progress.value = 0;
-  loadingName.value = "";
+  loadingName.value = '';
 }
 
 async function startEditorTransition(
   target: RouteLocationRaw,
   prepare: () => Promise<void>,
 ): Promise<boolean> {
-  if (isEditorNavigationPending || curtainState.value !== "idle") return false;
+  if (isEditorNavigationPending || curtainState.value !== 'idle') return false;
   isEditorNavigationPending = true;
   progress.value = 0;
-  loadingName.value = "";
+  loadingName.value = '';
   const finishPromise = createFinishPromise();
   try {
     return await runEditorTransition(target, prepare, finishPromise);
@@ -248,43 +232,32 @@ const RAIN_DURATION_RANGE = 900;
 
 // 雨滴位置/节奏每次随机，固定写死会在重复触发时显得一模一样
 const rainDrops = computed(() => {
-  if (activeEasterEggEffect.value !== "rain") return [];
+  if (activeEasterEggEffect.value !== 'rain') return [];
   return Array.from({ length: RAIN_DROP_COUNT }, (_, index) => ({
     id: index,
     style: {
       left: `${Math.random() * 100}%`,
       animationDelay: `${Math.random() * RAIN_DELAY_RANGE}ms`,
-      animationDuration: `${
-        RAIN_MIN_DURATION + Math.random() * RAIN_DURATION_RANGE
-      }ms`,
+      animationDuration: `${RAIN_MIN_DURATION + Math.random() * RAIN_DURATION_RANGE}ms`,
     },
   }));
 });
 
-const isRainbowTitle = computed(
-  () => activeEasterEggEffect.value === "rainbow",
-);
+const isRainbowTitle = computed(() => activeEasterEggEffect.value === 'rainbow');
 
 const menuRef = shallowRef(false);
 type ResizeDirection =
-  | "East"
-  | "North"
-  | "NorthEast"
-  | "NorthWest"
-  | "South"
-  | "SouthEast"
-  | "SouthWest"
-  | "West";
+  'East' | 'North' | 'NorthEast' | 'NorthWest' | 'South' | 'SouthEast' | 'SouthWest' | 'West';
 
 const resizeEdges: Array<{ direction: ResizeDirection; cursor: string }> = [
-  { direction: "NorthWest", cursor: "nwse-resize" },
-  { direction: "North", cursor: "ns-resize" },
-  { direction: "NorthEast", cursor: "nesw-resize" },
-  { direction: "West", cursor: "ew-resize" },
-  { direction: "East", cursor: "ew-resize" },
-  { direction: "SouthWest", cursor: "nesw-resize" },
-  { direction: "South", cursor: "ns-resize" },
-  { direction: "SouthEast", cursor: "nwse-resize" },
+  { direction: 'NorthWest', cursor: 'nwse-resize' },
+  { direction: 'North', cursor: 'ns-resize' },
+  { direction: 'NorthEast', cursor: 'nesw-resize' },
+  { direction: 'West', cursor: 'ew-resize' },
+  { direction: 'East', cursor: 'ew-resize' },
+  { direction: 'SouthWest', cursor: 'nesw-resize' },
+  { direction: 'South', cursor: 'ns-resize' },
+  { direction: 'SouthEast', cursor: 'nwse-resize' },
 ];
 
 const startResize = (direction: ResizeDirection) => {
@@ -293,12 +266,14 @@ const startResize = (direction: ResizeDirection) => {
   }
 };
 
-const APP_TITLE_FALLBACK = "Mindrizzle";
+const APP_TITLE_FALLBACK = 'Mindrizzle';
 const BOOT_TITLE_DURATION = 3_000;
 const DRAWER_SETTLE_DURATION = 260;
 // 工具栏主行 compact 密度下的实际高度（height 64 - 16）
 const TOOLBAR_ROW_HEIGHT = 48;
 const TOOLBAR_TABS_HEIGHT = 36;
+// 设置页页头的固定高度，与 Settings.vue 的 .settings-page-heading 保持一致；高度恒定才能让切 tab 只动文字不动布局
+const TOOLBAR_PAGE_HEADER_HEIGHT = 32;
 // extensionHeight 会被 compact 密度减 8，补回来才能得到 36px 的 tab 行
 const TOOLBAR_EXTENSION_HEIGHT = TOOLBAR_TABS_HEIGHT + 8;
 
@@ -317,8 +292,8 @@ onMounted(() => {
     if (isTauri()) logError(getErrorMessage(error));
   });
   detachSecretKeyboard = attachSecretKeyboard({
-    onKonami: () => playEasterEgg("rainbow"),
-    onDrizzle: () => playEasterEgg("rain"),
+    onKonami: () => playEasterEgg('rainbow'),
+    onDrizzle: () => playEasterEgg('rain'),
   });
 });
 
@@ -329,24 +304,27 @@ onBeforeUnmount(() => {
 });
 
 const titleRollName = computed(() =>
-  titleRollDirection.value === "top-down" ? "title-roll-down" : "title-roll-up",
+  titleRollDirection.value === 'top-down' ? 'title-roll-down' : 'title-roll-up',
 );
 
-// 页面把 tab 行 teleport 进工具栏后工具栏会变高，页面高度得按同一个值算
+// 页面把页头与 tab 行 teleport 进工具栏后工具栏会变高，页面高度得按同一个值算
 const hasToolbarTabs = computed(() => currentRoute.meta.toolbarTabs === true);
+const toolbarExtensionHeight = computed(
+  () => TOOLBAR_EXTENSION_HEIGHT + (hasToolbarTabs.value ? TOOLBAR_PAGE_HEADER_HEIGHT : 0),
+);
 const toolbarHeight = computed(
   () =>
-    `${TOOLBAR_ROW_HEIGHT + (hasToolbarTabs.value ? TOOLBAR_TABS_HEIGHT : 0)}px`,
+    `${TOOLBAR_ROW_HEIGHT + (hasToolbarTabs.value ? TOOLBAR_TABS_HEIGHT + TOOLBAR_PAGE_HEADER_HEIGHT : 0)}px`,
 );
 
 // 启动瞬间先立住品牌名，随后交给路由 meta；编辑页要显示具体文件名
 const appTitle = computed(() => {
   if (isSelectionMode.value) return `已选 ${selectionCount.value} 份`;
   if (isBootTitleVisible.value) return APP_TITLE_FALLBACK;
-  if (currentRoute.name === "editor")
+  if (currentRoute.name === 'editor')
     return String(currentRoute.params.fileName ?? APP_TITLE_FALLBACK);
   const title = currentRoute.meta.title;
-  return typeof title === "string" ? title : APP_TITLE_FALLBACK;
+  return typeof title === 'string' ? title : APP_TITLE_FALLBACK;
 });
 
 const displayedTitle = ref(appTitle.value);
@@ -356,10 +334,7 @@ let drawerClosedAt = 0;
 // 抽屉退场还没走完就切字，两个动画会叠在一起糊成一团
 watch(appTitle, (nextTitle) => {
   clearTimeout(titleSwitchTimer);
-  const settleDelay = Math.max(
-    0,
-    DRAWER_SETTLE_DURATION - (performance.now() - drawerClosedAt),
-  );
+  const settleDelay = Math.max(0, DRAWER_SETTLE_DURATION - (performance.now() - drawerClosedAt));
   titleSwitchTimer = window.setTimeout(() => {
     displayedTitle.value = nextTitle;
   }, settleDelay);
@@ -394,7 +369,7 @@ function navigateFromMenu(path: string) {
       :color="isSelectionMode ? 'surface-variant' : 'primary'"
       density="compact"
       :extended="hasToolbarTabs"
-      :extension-height="TOOLBAR_EXTENSION_HEIGHT"
+      :extension-height="toolbarExtensionHeight"
       style="padding: 0"
     >
       <div
@@ -410,11 +385,7 @@ function navigateFromMenu(path: string) {
       >
         <div id="title-left-actions" class="toolbar-actions" />
         <v-fade-transition hide-on-leave>
-          <v-app-bar-nav-icon
-            v-if="!isSelectionMode"
-            key="menu"
-            @click.stop="menuRef = !menuRef"
-          />
+          <v-app-bar-nav-icon v-if="!isSelectionMode" key="menu" @click.stop="menuRef = !menuRef" />
           <v-btn
             v-else
             key="close"
@@ -443,9 +414,12 @@ function navigateFromMenu(path: string) {
              VToolbar 的 VBtn 默认值走组件树，teleport 进来的按钮拿不到，需自己写 variant="text" -->
         <div id="toolbar-actions" class="toolbar-actions" />
       </div>
-      <!-- 设置页把 tab 行 teleport 到这里，用 v-tabs 的 align-tabs="title" 与上方标题同左缘 -->
+      <!-- 设置页把页头与 tab 行 teleport 到这里：页头在上、tab 行在下，两行高度恒定 -->
       <template #extension>
-        <div id="toolbar-tabs" class="toolbar-tabs" />
+        <div class="toolbar-extension">
+          <div id="toolbar-page-header" class="toolbar-page-header" />
+          <div id="toolbar-tabs" class="toolbar-tabs" />
+        </div>
       </template>
     </v-toolbar>
 
@@ -455,11 +429,7 @@ function navigateFromMenu(path: string) {
       temporary
     >
       <v-list :lines="false" density="compact" nav>
-        <v-list-item
-          :prepend-icon="mdiHomeOutline"
-          title="首页"
-          @click="navigateFromMenu('/')"
-        />
+        <v-list-item :prepend-icon="mdiHomeOutline" title="首页" @click="navigateFromMenu('/')" />
         <v-list-item
           :prepend-icon="mdiFormatListBulleted"
           title="便签集"
@@ -478,11 +448,7 @@ function navigateFromMenu(path: string) {
       </v-list>
       <v-divider v-if="isDeveloperMode" />
       <v-list v-if="isDeveloperMode" :lines="false" density="compact" nav>
-        <v-list-item
-          :prepend-icon="mdiBug"
-          title="调试页面"
-          @click="navigateFromMenu('/debug')"
-        />
+        <v-list-item :prepend-icon="mdiBug" title="调试页面" @click="navigateFromMenu('/debug')" />
       </v-list>
       <v-divider v-if="isTauri()" />
       <v-list v-if="isTauri()" :lines="false" density="compact" nav>
@@ -496,20 +462,13 @@ function navigateFromMenu(path: string) {
           title="最大化"
           @click="appWindow?.toggleMaximize()"
         />
-        <v-list-item
-          :prepend-icon="mdiWindowClose"
-          title="关闭"
-          @click="appWindow?.close()"
-        />
+        <v-list-item :prepend-icon="mdiWindowClose" title="关闭" @click="appWindow?.close()" />
       </v-list>
     </v-navigation-drawer>
 
     <v-main class="no-scrollbar">
       <router-view style="height: 100%" v-slot="{ Component, route }">
-        <Transition
-          :name="resolveTransitionName()"
-          @before-leave="hideLeavingRoute"
-        >
+        <Transition :name="resolveTransitionName()" @before-leave="hideLeavingRoute">
           <component :is="Component" :key="route.path" />
         </Transition>
       </router-view>
@@ -540,13 +499,11 @@ function navigateFromMenu(path: string) {
             color="secondary"
             bg-color="rgba(var(--v-theme-on-background), 0.12)"
           >
-            <span class="text-h6 font-weight-bold"
-              >{{ Math.round(progress) }}%</span
-            >
+            <span class="text-h6 font-weight-bold">{{ Math.round(progress) }}%</span>
           </v-loading-indicator>
           <div class="loading-curtain__stage">{{ loadingStage }}</div>
           <div class="loading-curtain__filename">
-            {{ loadingName || "正在打开笔记" }}
+            {{ loadingName || '正在打开笔记' }}
           </div>
           <v-progress-linear
             :model-value="progress"
@@ -559,12 +516,7 @@ function navigateFromMenu(path: string) {
       </div>
     </div>
     <div v-if="rainDrops.length" class="egg-rain" aria-hidden="true">
-      <span
-        v-for="drop in rainDrops"
-        :key="drop.id"
-        class="egg-rain__drop"
-        :style="drop.style"
-      />
+      <span v-for="drop in rainDrops" :key="drop.id" class="egg-rain__drop" :style="drop.style" />
     </div>
   </v-app>
 </template>
@@ -617,15 +569,7 @@ body,
 
 /* 彩蛋：流光彩虹标题，靠背景裁切到文字上 */
 .app-title.is-rainbow {
-  background-image: linear-gradient(
-    90deg,
-    #ff8a8a,
-    #ffd166,
-    #8ae9c1,
-    #8ab6ff,
-    #d08aff,
-    #ff8a8a
-  );
+  background-image: linear-gradient(90deg, #ff8a8a, #ffd166, #8ae9c1, #8ab6ff, #d08aff, #ff8a8a);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -656,11 +600,7 @@ body,
   top: -12vh;
   width: 1px;
   height: 12vh;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(138, 182, 255, 0.85)
-  );
+  background: linear-gradient(to bottom, transparent, rgba(138, 182, 255, 0.85));
   animation: egg-rain-fall 1.2s linear forwards;
 }
 
@@ -732,11 +672,38 @@ textarea {
   align-items: center;
 }
 
-.toolbar-tabs {
+.toolbar-extension {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+}
+
+.toolbar-page-header {
+  flex: none;
+  width: 100%;
+  /* 与 TOOLBAR_PAGE_HEADER_HEIGHT 同步：高度恒定，切 tab 时只有文字在滚动 */
+  height: 32px;
+  overflow: hidden;
+  display: grid;
+}
+
+/* 各 tab 的页头都 teleport 到这一格，进场/离场两份叠放，不会互相挤动 */
+#toolbar-page-header > * {
+  grid-area: 1 / 1;
+}
+
+.toolbar-tabs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   align-items: center;
+}
+
+/* VToolbar 会把整个 extension 高度发给 VTabs，页头占的那 32px 得扣掉（与 TOOLBAR_TABS_HEIGHT 同步） */
+#toolbar-tabs .v-tabs {
+  height: 36px;
 }
 
 /* tab 行铺在 primary 底上，且 teleport 后拿不到工具栏的 VBtn 默认值，所以文字自己跟标题一样用白色 */

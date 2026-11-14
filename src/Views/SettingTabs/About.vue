@@ -1,56 +1,45 @@
 <script setup lang="ts">
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import {
-  mdiCheck,
-  mdiClose,
-  mdiContentCopy,
-  mdiGithub,
-  mdiInformationOutline,
-} from "@mdi/js";
-import { computed, ref } from "vue";
+import { invoke, isTauri } from '@tauri-apps/api/core';
+import { mdiCheck, mdiClose, mdiContentCopy, mdiGithub, mdiInformationOutline } from '@mdi/js';
+import { computed, ref } from 'vue';
 
-import packageInfo from "../../../package.json";
-import appIconUrl from "../../../app-icon.svg";
-import AboutUpdatePanel from "./AboutUpdatePanel.vue";
-import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
-import { useSecretKnock } from "../../utils/easterEggs";
-import { saveDeveloperMode } from "../../utils/developerMode";
-import { pendingSettingsTab } from "../../utils/settingsTabIntent";
-import {
-  BRAND_CHINESE_TAGLINE,
-  BRAND_ENGLISH_TAGLINE,
-} from "../../utils/brandCopy";
+import packageInfo from '../../../package.json';
+import appIconUrl from '../../../app-icon.svg';
+import AboutUpdatePanel from './AboutUpdatePanel.vue';
+import MdrSettingsPageBase from './MdrSettingsPageBase.vue';
+import { useSecretKnock } from '../../utils/easterEggs';
+import { saveDeveloperMode } from '../../utils/developerMode';
+import { pendingSettingsTab } from '../../utils/settingsTabIntent';
+import { BRAND_CHINESE_TAGLINE, BRAND_ENGLISH_TAGLINE } from '../../utils/brandCopy';
 
 const isDiagnosticsOpen = ref(false);
 const isGitCommitLoaded = ref(!isTauri());
-const gitCommit = ref(isTauri() ? "读取中" : "不可用（网页预览）");
+const gitCommit = ref(isTauri() ? '读取中' : '不可用（网页预览）');
 const isCopyComplete = ref(false);
-const copyError = ref("");
+const copyError = ref('');
 const appVersion = packageInfo.version;
 const copyrightYear = new Date().getFullYear();
-const environment = computed(() =>
-  isTauri() ? "Tauri 桌面应用" : "浏览器预览",
-);
-const systemPlatform = navigator.platform || "未知";
+const environment = computed(() => (isTauri() ? 'Tauri 桌面应用' : '浏览器预览'));
+const systemPlatform = navigator.platform || '未知';
 const browserInfo = navigator.userAgent;
 const screenSize = `${window.screen.width} × ${window.screen.height}`;
 const openSourceProjects = [
-  { name: "Vue", url: "https://github.com/vuejs/core" },
-  { name: "Vuetify", url: "https://github.com/vuetifyjs/vuetify" },
-  { name: "Tauri", url: "https://github.com/tauri-apps/tauri" },
-  { name: "ProseKit", url: "https://github.com/ocavue/prosekit" },
-  { name: "ProseMirror", url: "https://github.com/ProseMirror/prosemirror" },
-  { name: "KaTeX", url: "https://github.com/KaTeX/KaTeX" },
-  { name: "highlight.js", url: "https://github.com/highlightjs/highlight.js" },
+  { name: 'Vue', url: 'https://github.com/vuejs/core' },
+  { name: 'Vuetify', url: 'https://github.com/vuetifyjs/vuetify' },
+  { name: 'Tauri', url: 'https://github.com/tauri-apps/tauri' },
+  { name: 'ProseKit', url: 'https://github.com/ocavue/prosekit' },
+  { name: 'ProseMirror', url: 'https://github.com/ProseMirror/prosemirror' },
+  { name: 'KaTeX', url: 'https://github.com/KaTeX/KaTeX' },
+  { name: 'highlight.js', url: 'https://github.com/highlightjs/highlight.js' },
 ];
 const diagnostics = computed(() => [
-  { title: "应用版本", value: appVersion },
-  { title: "Git 提交", value: gitCommit.value },
-  { title: "运行环境", value: environment.value },
-  { title: "系统平台", value: systemPlatform },
-  { title: "浏览器", value: browserInfo },
-  { title: "屏幕尺寸", value: screenSize },
-  { title: "语言", value: navigator.language },
+  { title: '应用版本', value: appVersion },
+  { title: 'Git 提交', value: gitCommit.value },
+  { title: '运行环境', value: environment.value },
+  { title: '系统平台', value: systemPlatform },
+  { title: '浏览器', value: browserInfo },
+  { title: '屏幕尺寸', value: screenSize },
+  { title: '语言', value: navigator.language },
 ]);
 const diagnosticText = computed(() =>
   [
@@ -61,7 +50,7 @@ const diagnosticText = computed(() =>
     `浏览器：${browserInfo}`,
     `屏幕尺寸：${screenSize}`,
     `语言：${navigator.language}`,
-  ].join("\n"),
+  ].join('\n'),
 );
 
 async function openDiagnostics() {
@@ -69,9 +58,9 @@ async function openDiagnostics() {
   if (!isTauri() || isGitCommitLoaded.value) return;
 
   try {
-    gitCommit.value = await invoke<string>("get_git_commit");
+    gitCommit.value = await invoke<string>('get_git_commit');
   } catch {
-    gitCommit.value = "未知";
+    gitCommit.value = '未知';
   } finally {
     isGitCommitLoaded.value = true;
   }
@@ -81,9 +70,9 @@ async function copyDiagnostics() {
   try {
     await navigator.clipboard.writeText(diagnosticText.value);
     isCopyComplete.value = true;
-    copyError.value = "";
+    copyError.value = '';
   } catch {
-    copyError.value = "无法访问剪贴板，请检查系统权限。";
+    copyError.value = '无法访问剪贴板，请检查系统权限。';
   }
 }
 
@@ -96,12 +85,16 @@ const snackbar = ref(false);
 function openDeveloperTab() {
   snackbar.value = true;
   void saveDeveloperMode(true).catch(() => undefined);
-  pendingSettingsTab.value = "developer";
+  pendingSettingsTab.value = 'developer';
 }
 </script>
 
 <template>
-  <MdrSettingsPageBase>
+  <MdrSettingsPageBase
+    title="关于"
+    subtitle="版本信息、应用更新与开源鸣谢。"
+    :icon="mdiInformationOutline"
+  >
     <!-- 关于页用品牌横幅当页头，所以顶掉默认的 title/subtitle 页头 -->
     <template #header>
       <section class="about-hero">
@@ -210,13 +203,7 @@ function openDeveloperTab() {
               :subtitle="item.value"
             />
           </v-list>
-          <v-alert
-            v-if="copyError"
-            class="mt-2"
-            density="compact"
-            type="error"
-            variant="tonal"
-          >
+          <v-alert v-if="copyError" class="mt-2" density="compact" type="error" variant="tonal">
             {{ copyError }}
           </v-alert>
         </v-card-text>
@@ -226,15 +213,13 @@ function openDeveloperTab() {
             :prepend-icon="isCopyComplete ? mdiCheck : mdiContentCopy"
             variant="text"
             @click="copyDiagnostics"
-            >{{ isCopyComplete ? "已复制" : "复制诊断信息" }}</v-btn
+            >{{ isCopyComplete ? '已复制' : '复制诊断信息' }}</v-btn
           >
           <v-btn variant="text" @click="isDiagnosticsOpen = false">关闭</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
-    <v-snackbar v-model="snackbar" :timeout="3000" location="bottom"
-      >已开启开发者模式</v-snackbar
-    >
+    <v-snackbar v-model="snackbar" :timeout="3000" location="bottom">已开启开发者模式</v-snackbar>
   </MdrSettingsPageBase>
 </template>
 
@@ -296,7 +281,7 @@ function openDeveloperTab() {
 
 .about-copy h1 {
   margin-top: 8px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 2.35rem;
   font-weight: 500;
   line-height: 1.1;
