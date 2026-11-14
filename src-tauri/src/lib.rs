@@ -9,11 +9,11 @@ mod system_theme;
 mod utils;
 
 use anyhow::Context;
-use log::info;
 use log::Record;
+use log::info;
 use std::fmt::Arguments;
 use tauri_plugin_log::{
-    fern::FormatCallback, log::LevelFilter, RotationStrategy, Target, TargetKind, TimezoneStrategy,
+    RotationStrategy, Target, TargetKind, TimezoneStrategy, fern::FormatCallback, log::LevelFilter,
 };
 use tokio::fs;
 
@@ -81,7 +81,7 @@ async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<S
     let updater = app
         .updater_builder()
         .endpoints(vec![
-            url::Url::parse(&endpoint_for(&channel)).map_err(|e| e.to_string())?
+            url::Url::parse(&endpoint_for(&channel)).map_err(|e| e.to_string())?,
         ])
         .map_err(|e| e.to_string())?
         .build()
@@ -99,7 +99,7 @@ async fn install_update(app: tauri::AppHandle, channel: String) -> Result<(), St
     let updater = app
         .updater_builder()
         .endpoints(vec![
-            url::Url::parse(&endpoint_for(&channel)).map_err(|e| e.to_string())?
+            url::Url::parse(&endpoint_for(&channel)).map_err(|e| e.to_string())?,
         ])
         .map_err(|e| e.to_string())?
         .build()

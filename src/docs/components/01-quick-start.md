@@ -9,16 +9,16 @@
 显示名、图标、默认尺寸、初始配置都在这里；文件名必须与组件同名。
 
 ```ts
-import { mdiCheckboxMarkedOutline } from "@mdi/js";
+import { mdiCheckboxMarkedOutline } from '@mdi/js';
 
-import type { TodoConfig } from "../Registry/canvasComponents.ts";
-import { defineBlock } from "../Sdk/defineBlock.ts";
+import type { TodoConfig } from '../Registry/canvasComponents.ts';
+import { defineBlock } from '../Sdk/defineBlock.ts';
 
 export default defineBlock<TodoConfig>({
-  key: "TodoBlock",
-  title: "待办",
+  key: 'TodoBlock',
+  title: '待办',
   icon: mdiCheckboxMarkedOutline,
-  addId: "add-todo",
+  addId: 'add-todo',
   order: 60,
   defaultConfig: () => ({ items: [] }),
   defaultSize: { w: 320, h: 260 },
@@ -36,11 +36,7 @@ export default defineBlock<TodoConfig>({
 <template>
   <BlockShell>
     <div class="todo-block">
-      <label
-        v-for="(item, index) in config.items"
-        :key="index"
-        class="todo-item"
-      >
+      <label v-for="(item, index) in config.items" :key="index" class="todo-item">
         <input
           type="checkbox"
           :checked="item.done"
@@ -64,13 +60,7 @@ export default defineBlock<TodoConfig>({
           />
         </v-list-item>
         <v-list-item class="d-flex justify-end">
-          <v-btn
-            size="small"
-            variant="tonal"
-            :disabled="ctx.readOnly"
-            @click="addItem"
-            >添加</v-btn
-          >
+          <v-btn size="small" variant="tonal" :disabled="ctx.readOnly" @click="addItem">添加</v-btn>
         </v-list-item>
       </v-list>
     </template>
@@ -78,15 +68,15 @@ export default defineBlock<TodoConfig>({
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref } from 'vue';
 
-import type { TodoConfig } from "../Registry/canvasComponents.ts";
-import BlockShell from "../Sdk/BlockShell.vue";
-import { useBlockContext } from "../Sdk/blockContext.ts";
+import type { TodoConfig } from '../Registry/canvasComponents.ts';
+import BlockShell from '../Sdk/BlockShell.vue';
+import { useBlockContext } from '../Sdk/blockContext.ts';
 
 const ctx = useBlockContext<TodoConfig>();
 const config = computed(() => ctx.config);
-const draft = ref("");
+const draft = ref('');
 
 const toggle = (index: number) => {
   const items = config.value.items.map((item, i) =>
@@ -99,7 +89,7 @@ const addItem = () => {
   const text = draft.value.trim();
   if (!text) return;
   ctx.setConfig({ items: [...config.value.items, { text, done: false }] });
-  draft.value = "";
+  draft.value = '';
 };
 </script>
 ```

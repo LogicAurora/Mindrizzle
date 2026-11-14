@@ -5,7 +5,7 @@
 块组件通过 `useBlockContext<TConfig>()` 拿到上下文，它只暴露语义，不暴露 DOM 坐标与画布内部结构。
 
 ```ts
-import { useBlockContext } from "../Sdk/blockContext.ts";
+import { useBlockContext } from '../Sdk/blockContext.ts';
 
 const ctx = useBlockContext<TodoConfig>();
 ```
@@ -28,7 +28,7 @@ const ctx = useBlockContext<TodoConfig>();
 ## 写配置
 
 ```ts
-ctx.setConfig({ title: "新的标题" });
+ctx.setConfig({ title: '新的标题' });
 // 数组/嵌套结构自己换新引用，别原地改
 ctx.setConfig({ items: [...ctx.config.items, nextItem] });
 ```
@@ -58,8 +58,7 @@ const refresh = () => {
 ```ts
 onMounted(() => {
   ctx.setDropHandlers({
-    resolveDropAtElement: (el, preferBefore) =>
-      resolvePosition(el, preferBefore),
+    resolveDropAtElement: (el, preferBefore) => resolvePosition(el, preferBefore),
     scrollContent: (deltaY) => listEl.value?.scrollBy(0, deltaY),
   });
 });

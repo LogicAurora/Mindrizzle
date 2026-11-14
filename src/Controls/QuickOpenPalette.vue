@@ -1,40 +1,32 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { mdiFileDocumentOutline } from "@mdi/js";
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { mdiFileDocumentOutline } from '@mdi/js';
 
-import { fetchNoteSetEntry, loadNoteSetEntries } from "../utils/noteSetStore";
-import type { NoteSetEntry } from "../utils/noteSetStore";
+import { fetchNoteSetEntry, loadNoteSetEntries } from '../utils/noteSetStore';
+import type { NoteSetEntry } from '../utils/noteSetStore';
 import {
   commandPaletteShortcut,
   loadCommandPaletteShortcut,
   matchesCommandPaletteShortcut,
   OPEN_COMMAND_PALETTE_EVENT,
-} from "../utils/commandPaletteShortcut";
-import { loadRecentNotes, type RecentNote } from "../utils/homeActivity";
-import {
-  externalNotes,
-  loadWorkspaceState,
-  workspaceDirectories,
-} from "../utils/workspaceStore";
-import { getErrorMessage } from "../utils/getErrorMessage";
-import { useOpenNote } from "../utils/useOpenNote";
+} from '../utils/commandPaletteShortcut';
+import { loadRecentNotes, type RecentNote } from '../utils/homeActivity';
+import { externalNotes, loadWorkspaceState, workspaceDirectories } from '../utils/workspaceStore';
+import { getErrorMessage } from '../utils/getErrorMessage';
+import { useOpenNote } from '../utils/useOpenNote';
 
 const notes = ref<NoteSetEntry[]>([]);
 const recentNoteRefs = ref<RecentNote[]>([]);
 const isOpen = ref(false);
 const isErrorOpen = ref(false);
-const errorMessage = ref("");
+const errorMessage = ref('');
 const openNote = useOpenNote();
 
-const noteKeyOf = (
-  note: Pick<NoteSetEntry, "fileName" | "dir" | "filePath">,
-): string =>
-  `${note.filePath ?? ""}\u0000${note.dir ?? ""}\u0000${note.fileName}`;
+const noteKeyOf = (note: Pick<NoteSetEntry, 'fileName' | 'dir' | 'filePath'>): string =>
+  `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
 
 const paletteItems = computed(() => {
-  const updatedNotes = [...notes.value].sort(
-    (left, right) => right.updatedAt - left.updatedAt,
-  );
+  const updatedNotes = [...notes.value].sort((left, right) => right.updatedAt - left.updatedAt);
   const noteByKey = new Map(updatedNotes.map((note) => [noteKeyOf(note), note]));
   const recentNotes = recentNoteRefs.value
     .map((note) => noteByKey.get(noteKeyOf(note)))
@@ -42,36 +34,29 @@ const paletteItems = computed(() => {
   const recentKeys = new Set(recentNotes.map(noteKeyOf));
   const toItem = (note: NoteSetEntry) => ({
     title: note.name,
-    subtitle: `${note.fileName}.mdrf${note.description ? ` · ${note.description}` : ""}`,
+    subtitle: `${note.fileName}.mdrf${note.description ? ` · ${note.description}` : ''}`,
     prependIcon: mdiFileDocumentOutline,
     onClick: () => void openSelectedNote(note),
   });
   return [
-    { type: "subheader" as const, title: "最近打开" },
+    { type: 'subheader' as const, title: '最近打开' },
     ...recentNotes.map(toItem),
-    { type: "divider" as const },
-    { type: "subheader" as const, title: "所有文件" },
+    { type: 'divider' as const },
+    { type: 'subheader' as const, title: '所有文件' },
     ...updatedNotes.filter((note) => !recentKeys.has(noteKeyOf(note))).map(toItem),
   ];
 });
 
 async function loadNotes(): Promise<void> {
   await loadWorkspaceState();
-  const directories = [
-    undefined,
-    ...workspaceDirectories.value.map((directory) => directory.dir),
-  ];
+  const directories = [undefined, ...workspaceDirectories.value.map((directory) => directory.dir)];
   const workspaceEntries = await Promise.all(
     directories.map((directory) => loadNoteSetEntries(directory)),
   );
   const externalEntries = await Promise.all(
     externalNotes.value.map(async (record) => {
       try {
-        return await fetchNoteSetEntry(
-          record.localName ?? record.fileName,
-          undefined,
-          record.path,
-        );
+        return await fetchNoteSetEntry(record.localName ?? record.fileName, undefined, record.path);
       } catch (error) {
         console.warn(`最近打开的文件不可用：${record.fileName}`, error);
         return null;
@@ -111,11 +96,7 @@ function openPalette(): void {
 function handleKeydown(event: KeyboardEvent): void {
   if (event.repeat) return;
   const target = event.target;
-  if (
-    target instanceof Element &&
-    target.closest("[data-shortcut-capture]")
-  )
-    return;
+  if (target instanceof Element && target.closest('[data-shortcut-capture]')) return;
   if (!matchesCommandPaletteShortcut(event)) return;
   event.preventDefault();
   event.stopPropagation();
@@ -127,18 +108,16 @@ function handleOpenEvent(): void {
 }
 
 onMounted(() => {
-  window.addEventListener("keydown", handleKeydown, true);
+  window.addEventListener('keydown', handleKeydown, true);
   window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenEvent);
-  void Promise.all([loadCommandPaletteShortcut(), loadNotes()]).catch(
-    (error: unknown) => {
-      errorMessage.value = `命令面板初始化失败：${getErrorMessage(error)}`;
-      isErrorOpen.value = true;
-    },
-  );
+  void Promise.all([loadCommandPaletteShortcut(), loadNotes()]).catch((error: unknown) => {
+    errorMessage.value = `命令面板初始化失败：${getErrorMessage(error)}`;
+    isErrorOpen.value = true;
+  });
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleKeydown, true);
+  window.removeEventListener('keydown', handleKeydown, true);
   window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenEvent);
 });
 </script>

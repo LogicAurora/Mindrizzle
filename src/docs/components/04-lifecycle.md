@@ -40,13 +40,13 @@ flowchart TD
 
 ```ts
 // 默认：克隆块内 DOM
-snapshot: "html";
+snapshot: 'html';
 
 // 自绘：canvas、WebGL、iframe 必须用这个，DOM 克隆是空白
 snapshot: (config, root) => `<div class="chart">${config.title}</div>`;
 
 // 无视觉价值：只留占位
-snapshot: "none";
+snapshot: 'none';
 ```
 
 - 快照必须**同步**返回。

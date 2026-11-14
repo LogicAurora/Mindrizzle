@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-import { ref } from "vue";
+import { ref } from 'vue';
 
-import { getSetting, setSetting } from "./settingsStore";
+import { getSetting, setSetting } from './settingsStore';
 
 export interface WorkspaceDirectory {
   id: string;
@@ -18,8 +18,8 @@ export interface ExternalNoteRecord {
   updatedAt: number;
 }
 
-const DIRECTORIES_KEY = "workspace:directories";
-const EXTERNAL_NOTES_KEY = "workspace:external-notes";
+const DIRECTORIES_KEY = 'workspace:directories';
+const EXTERNAL_NOTES_KEY = 'workspace:external-notes';
 const EXTERNAL_NOTE_LIMIT = 20;
 const WORKSPACE_NAME_MAX_LEN = 30;
 const TRAILING_SEPARATORS = /[\\/]+$/;
@@ -41,10 +41,8 @@ export const loadWorkspaceState = async (): Promise<void> => {
 };
 
 // 目录路径本身就是稳定标识，重复添加同一目录直接复用
-export const addWorkspaceDirectory = async (
-  dirPath: string,
-): Promise<WorkspaceDirectory> => {
-  const dir = dirPath.replace(TRAILING_SEPARATORS, "");
+export const addWorkspaceDirectory = async (dirPath: string): Promise<WorkspaceDirectory> => {
+  const dir = dirPath.replace(TRAILING_SEPARATORS, '');
   const existing = workspaceDirectories.value.find((item) => item.dir === dir);
   if (existing) return existing;
   const entry: WorkspaceDirectory = { id: dir, name: baseNameOf(dir), dir };
@@ -54,18 +52,13 @@ export const addWorkspaceDirectory = async (
 };
 
 export const removeWorkspaceDirectory = async (id: string): Promise<void> => {
-  workspaceDirectories.value = workspaceDirectories.value.filter(
-    (item) => item.id !== id,
-  );
+  workspaceDirectories.value = workspaceDirectories.value.filter((item) => item.id !== id);
   await setSetting(DIRECTORIES_KEY, workspaceDirectories.value);
 };
 
-export const renameWorkspaceDirectory = async (
-  id: string,
-  name: string,
-): Promise<void> => {
+export const renameWorkspaceDirectory = async (id: string, name: string): Promise<void> => {
   const resolvedName = name.trim().slice(0, WORKSPACE_NAME_MAX_LEN);
-  if (!resolvedName) throw new Error("工作区名称不能为空");
+  if (!resolvedName) throw new Error('工作区名称不能为空');
   workspaceDirectories.value = workspaceDirectories.value.map((item) =>
     item.id === id ? { ...item, name: resolvedName } : item,
   );
@@ -73,10 +66,7 @@ export const renameWorkspaceDirectory = async (
 };
 
 // 只挪显示顺序，id 仍是目录路径，切换工作区与文件寻址都不受影响
-export const moveWorkspaceDirectory = async (
-  id: string,
-  offset: number,
-): Promise<void> => {
+export const moveWorkspaceDirectory = async (id: string, offset: number): Promise<void> => {
   const directories = [...workspaceDirectories.value];
   const index = directories.findIndex((item) => item.id === id);
   const target = index + offset;
@@ -88,22 +78,16 @@ export const moveWorkspaceDirectory = async (
 };
 
 export const externalNoteKeyOf = (record: ExternalNoteRecord): string =>
-  record.path ?? record.localName ?? "";
+  record.path ?? record.localName ?? '';
 
-export const rememberExternalNote = async (
-  note: ExternalNoteRecord,
-): Promise<void> => {
+export const rememberExternalNote = async (note: ExternalNoteRecord): Promise<void> => {
   const key = externalNoteKeyOf(note);
-  const rest = externalNotes.value.filter(
-    (item) => externalNoteKeyOf(item) !== key,
-  );
+  const rest = externalNotes.value.filter((item) => externalNoteKeyOf(item) !== key);
   externalNotes.value = [note, ...rest].slice(0, EXTERNAL_NOTE_LIMIT);
   await setSetting(EXTERNAL_NOTES_KEY, externalNotes.value);
 };
 
 export const forgetExternalNote = async (key: string): Promise<void> => {
-  externalNotes.value = externalNotes.value.filter(
-    (item) => externalNoteKeyOf(item) !== key,
-  );
+  externalNotes.value = externalNotes.value.filter((item) => externalNoteKeyOf(item) !== key);
   await setSetting(EXTERNAL_NOTES_KEY, externalNotes.value);
 };

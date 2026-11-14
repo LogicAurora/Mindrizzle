@@ -21,21 +21,9 @@ export function normalizeConstraints(
 ): Required<ResizeConstraints> {
   const source = raw ?? {};
   return {
-    minWidth:
-      source.minWidth === undefined
-        ? DEFAULT_CONSTRAINTS.minWidth
-        : source.minWidth,
-    maxWidth:
-      source.maxWidth === undefined
-        ? DEFAULT_CONSTRAINTS.maxWidth
-        : source.maxWidth,
-    minHeight:
-      source.minHeight === undefined
-        ? DEFAULT_CONSTRAINTS.minHeight
-        : source.minHeight,
-    maxHeight:
-      source.maxHeight === undefined
-        ? DEFAULT_CONSTRAINTS.maxHeight
-        : source.maxHeight,
+    minWidth: source.minWidth === undefined ? DEFAULT_CONSTRAINTS.minWidth : source.minWidth,
+    maxWidth: source.maxWidth === undefined ? DEFAULT_CONSTRAINTS.maxWidth : source.maxWidth,
+    minHeight: source.minHeight === undefined ? DEFAULT_CONSTRAINTS.minHeight : source.minHeight,
+    maxHeight: source.maxHeight === undefined ? DEFAULT_CONSTRAINTS.maxHeight : source.maxHeight,
   };
 }

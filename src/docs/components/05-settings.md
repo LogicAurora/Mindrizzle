@@ -37,13 +37,13 @@
 设置面板与内容在**同一个组件实例**里，所以直接共用 `ref`，不需要通过 `config` 来回搬：
 
 ```ts
-const draft = ref(""); // 设置面板里编辑
+const draft = ref(''); // 设置面板里编辑
 const addItem = () => {
   // 内容区/设置面板都能调
   ctx.setConfig({
     items: [...ctx.config.items, { text: draft.value, done: false }],
   });
-  draft.value = "";
+  draft.value = '';
 };
 ```
 
@@ -79,11 +79,7 @@ const addItem = () => {
       />
     </v-list-item>
     <v-list-item class="d-flex justify-end ga-2">
-      <v-btn
-        size="small"
-        variant="tonal"
-        :disabled="ctx.readOnly"
-        @click="pickFile"
+      <v-btn size="small" variant="tonal" :disabled="ctx.readOnly" @click="pickFile"
         >选择文件</v-btn
       >
     </v-list-item>

@@ -3,8 +3,8 @@
 //! 归档是整包读写，所以写入/删除都要先解包再重新打包；读/list 直接从归档流里找条目。
 
 use anyhow::{Context, Result};
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use flate2::read::GzDecoder;
 use log::info;
 use serde::Deserialize;
@@ -348,7 +348,7 @@ fn prune_empty_dirs(mut dir: PathBuf, stop: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_component_path, validate_component_uuid, ComponentScopeRequest};
+    use super::{ComponentScopeRequest, normalize_component_path, validate_component_uuid};
 
     #[test]
     fn scope_request_does_not_require_path() {

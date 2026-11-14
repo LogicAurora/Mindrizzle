@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { Z_LAYER } from "./zIndex.ts";
+import { Z_LAYER } from './zIndex.ts';
 
 defineProps<{ visible: boolean }>();
 </script>

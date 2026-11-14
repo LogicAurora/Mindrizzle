@@ -15,20 +15,11 @@
       :class="['image-preview', `fit-${fit}`]"
     />
     <div v-else class="image-empty">
-      <v-progress-circular
-        v-if="isLoading"
-        indeterminate
-        size="28"
-        color="primary"
-      />
+      <v-progress-circular v-if="isLoading" indeterminate size="28" color="primary" />
       <template v-else>
-        <v-icon
-          :icon="mdiImageOutline"
-          size="40"
-          class="text-medium-emphasis"
-        />
+        <v-icon :icon="mdiImageOutline" size="40" class="text-medium-emphasis" />
         <span class="text-caption text-medium-emphasis">{{
-          loadFailed ? "图片读取失败" : "还没有图片"
+          loadFailed ? '图片读取失败' : '还没有图片'
         }}</span>
         <v-btn
           v-if="!readOnly"
@@ -43,24 +34,18 @@
       </template>
     </div>
     <div v-if="errorText" class="image-error">{{ errorText }}</div>
-    <input
-      ref="fileInputRef"
-      type="file"
-      accept="image/*"
-      class="d-none"
-      @change="onFileChange"
-    />
+    <input ref="fileInputRef" type="file" accept="image/*" class="d-none" @change="onFileChange" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { mdiImageOutline, mdiImagePlus } from "@mdi/js";
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { mdiImageOutline, mdiImagePlus } from '@mdi/js';
 
-import type { BlockFiles } from "../../Sdk/block.types.ts";
-import type { ImageFit } from "../../Registry/canvasComponents.ts";
-import { getErrorMessage } from "../../../../utils/getErrorMessage.ts";
-import { MAX_IMAGE_BYTES } from "./imageConfig.ts";
+import type { BlockFiles } from '../../Sdk/block.types.ts';
+import type { ImageFit } from '../../Registry/canvasComponents.ts';
+import { getErrorMessage } from '../../../../utils/getErrorMessage.ts';
+import { MAX_IMAGE_BYTES } from './imageConfig.ts';
 
 const ERROR_VISIBLE_MS = 3200;
 
@@ -74,29 +59,29 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "select", file: File): void;
-  (e: "loaded"): void;
+  (e: 'select', file: File): void;
+  (e: 'loaded'): void;
 }>();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
-const imageUrl = ref("");
+const imageUrl = ref('');
 const isLoading = ref(false);
 const loadFailed = ref(false);
-const errorText = ref("");
+const errorText = ref('');
 let loadToken = 0;
 let errorTimer = 0;
 
 const revokeImageUrl = () => {
   if (!imageUrl.value) return;
   URL.revokeObjectURL(imageUrl.value);
-  imageUrl.value = "";
+  imageUrl.value = '';
 };
 
 const showError = (message: string) => {
   errorText.value = message;
   window.clearTimeout(errorTimer);
   errorTimer = window.setTimeout(() => {
-    errorText.value = "";
+    errorText.value = '';
   }, ERROR_VISIBLE_MS);
 };
 
@@ -117,10 +102,10 @@ const loadImage = async () => {
     revokeImageUrl();
     imageUrl.value = URL.createObjectURL(
       new Blob([bytes as BlobPart], {
-        type: props.mime || "application/octet-stream",
+        type: props.mime || 'application/octet-stream',
       }),
     );
-    emit("loaded");
+    emit('loaded');
   } catch (cause) {
     if (token !== loadToken) return;
     loadFailed.value = true;
@@ -152,17 +137,17 @@ const onFileChange = (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   // 清空 value 才能重复选择同一个文件
-  input.value = "";
+  input.value = '';
   if (!file) return;
-  if (!file.type.startsWith("image/")) {
-    showError("只能选择图片文件");
+  if (!file.type.startsWith('image/')) {
+    showError('只能选择图片文件');
     return;
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    showError("图片超过 64 MiB 上限");
+    showError('图片超过 64 MiB 上限');
     return;
   }
-  emit("select", file);
+  emit('select', file);
 };
 
 const naturalSize = () =>
@@ -173,8 +158,7 @@ const naturalSize = () =>
       return;
     }
     const probe = new Image();
-    probe.onload = () =>
-      resolve({ w: probe.naturalWidth, h: probe.naturalHeight });
+    probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight });
     probe.onerror = () => resolve(null);
     probe.src = url;
   });

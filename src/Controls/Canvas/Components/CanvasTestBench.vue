@@ -1,12 +1,7 @@
 <template>
   <BlockShell>
     <div class="test-bench">
-      <v-tabs
-        v-model="tab"
-        density="compact"
-        bg-color="transparent"
-        show-arrows
-      >
+      <v-tabs v-model="tab" density="compact" bg-color="transparent" show-arrows>
         <v-tab value="state">状态</v-tab>
         <v-tab value="config">配置</v-tab>
         <v-tab value="files">文件</v-tab>
@@ -30,7 +25,7 @@
 
             <div v-if="config.showViewport !== false" class="bench-metrics">
               <span><b>view</b> {{ viewLabel }}</span>
-              <span><b>origin</b> {{ viewLabel ? originLabel : "—" }}</span>
+              <span><b>origin</b> {{ viewLabel ? originLabel : '—' }}</span>
               <span><b>isPanning</b> {{ panningLabel }}</span>
             </div>
 
@@ -83,9 +78,7 @@
               >
                 重置视图
               </v-btn>
-              <v-btn size="x-small" variant="outlined" @click="refreshView"
-                >刷新视图</v-btn
-              >
+              <v-btn size="x-small" variant="outlined" @click="refreshView">刷新视图</v-btn>
             </div>
           </div>
         </v-window-item>
@@ -94,11 +87,7 @@
           <div class="bench-pane">
             <div class="bench-row">
               <span>config.counter = {{ config.counter }}</span>
-              <v-btn
-                size="x-small"
-                variant="tonal"
-                :disabled="ctx.readOnly"
-                @click="bumpCounter"
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="bumpCounter"
                 >+1</v-btn
               >
             </div>
@@ -111,9 +100,7 @@
               :readonly="ctx.readOnly"
               @update:model-value="onNoteInput"
             />
-            <div class="bench-hint">
-              note 变化会驱动 titleOf，拖拽栏标题应同步变化。
-            </div>
+            <div class="bench-hint">note 变化会驱动 titleOf，拖拽栏标题应同步变化。</div>
           </div>
         </v-window-item>
 
@@ -137,24 +124,12 @@
               :readonly="ctx.readOnly"
             />
             <div class="bench-actions">
-              <v-btn
-                size="x-small"
-                variant="tonal"
-                :disabled="ctx.readOnly"
-                @click="writeData"
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="writeData"
                 >写入</v-btn
               >
-              <v-btn size="x-small" variant="tonal" @click="readData"
-                >读取</v-btn
-              >
-              <v-btn size="x-small" variant="tonal" @click="listData"
-                >列出</v-btn
-              >
-              <v-btn
-                size="x-small"
-                variant="tonal"
-                :disabled="ctx.readOnly"
-                @click="deleteData"
+              <v-btn size="x-small" variant="tonal" @click="readData">读取</v-btn>
+              <v-btn size="x-small" variant="tonal" @click="listData">列出</v-btn>
+              <v-btn size="x-small" variant="tonal" :disabled="ctx.readOnly" @click="deleteData"
                 >删除</v-btn
               >
             </div>
@@ -162,16 +137,14 @@
               {{ dataStatus }}
             </div>
             <div v-if="dataFiles.length" class="bench-status">
-              {{ dataFiles.join(" : ") }}
+              {{ dataFiles.join(' : ') }}
             </div>
           </div>
         </v-window-item>
 
         <v-window-item value="scroll">
           <div class="bench-pane scroll-pane">
-            <div v-for="row in SCROLL_ROWS" :key="row">
-              滚动测试行 {{ row }}
-            </div>
+            <div v-for="row in SCROLL_ROWS" :key="row">滚动测试行 {{ row }}</div>
           </div>
         </v-window-item>
 
@@ -195,11 +168,7 @@
               rounded
             />
             <div class="bench-metrics">
-              <div
-                v-for="item in themeColors"
-                :key="item.key"
-                class="color-cell"
-              >
+              <div v-for="item in themeColors" :key="item.key" class="color-cell">
                 <span class="color-swatch" :style="{ background: item.css }" />
                 <code class="color-key">{{ item.key }}</code>
                 <span class="color-value">{{ item.value }}</span>
@@ -228,40 +197,33 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
-import { useTheme } from "vuetify";
+import { computed, nextTick, ref } from 'vue';
+import { useTheme } from 'vuetify';
 
-import { getErrorMessage } from "../../../utils/getErrorMessage.ts";
-import type { TestBenchConfig } from "../Registry/canvasComponents.ts";
-import BlockShell from "../Sdk/BlockShell.vue";
-import { useBlockContext } from "../Sdk/blockContext.ts";
+import { getErrorMessage } from '../../../utils/getErrorMessage.ts';
+import type { TestBenchConfig } from '../Registry/canvasComponents.ts';
+import BlockShell from '../Sdk/BlockShell.vue';
+import { useBlockContext } from '../Sdk/blockContext.ts';
 
 const MOVE_STEP = 40;
 const RESIZE_STEP = 40;
 const PAN_STEP = 60;
 const ZOOM_PRESETS = [0.5, 1, 2, 3];
-const DATA_TEST_PATH = "test/hello.txt";
-const DATA_TEST_CONTENT = "hello mdrfcd";
-const DATA_TEST_IDLE = "未测试";
+const DATA_TEST_PATH = 'test/hello.txt';
+const DATA_TEST_CONTENT = 'hello mdrfcd';
+const DATA_TEST_IDLE = '未测试';
 const SCROLL_ROWS = Array.from({ length: 60 }, (_, index) => index + 1);
-const PREVIEW_ROLES = [
-  "primary",
-  "secondary",
-  "success",
-  "warning",
-  "info",
-  "error",
-] as const;
+const PREVIEW_ROLES = ['primary', 'secondary', 'success', 'warning', 'info', 'error'] as const;
 const PREVIEW_PROGRESS = 60;
 
 const ctx = useBlockContext<TestBenchConfig>();
 const config = computed(() => ctx.config);
 const size = computed(() => ctx.getSize());
 
-const tab = ref("state");
-const viewLabel = ref("");
-const originLabel = ref("");
-const panningLabel = ref("");
+const tab = ref('state');
+const viewLabel = ref('');
+const originLabel = ref('');
+const panningLabel = ref('');
 
 const theme = useTheme();
 const themeColors = computed(() =>
@@ -269,7 +231,7 @@ const themeColors = computed(() =>
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => ({
       key,
-      value: typeof value === "string" ? value : JSON.stringify(value),
+      value: typeof value === 'string' ? value : JSON.stringify(value),
       css: `rgb(var(--v-theme-${key}))`,
     })),
 );
@@ -297,8 +259,7 @@ const panCanvas = () => ctx.panBy(PAN_STEP, 0);
 
 const cycleZoom = () => {
   const current = ctx.getView().zoom;
-  const next =
-    ZOOM_PRESETS.find((preset) => preset > current) ?? ZOOM_PRESETS[0];
+  const next = ZOOM_PRESETS.find((preset) => preset > current) ?? ZOOM_PRESETS[0];
   ctx.zoomTo(next);
 };
 
@@ -315,7 +276,7 @@ const bumpCounter = () => {
 };
 
 const onNoteInput = (value: unknown) => {
-  ctx.setConfig({ note: String(value ?? "") });
+  ctx.setConfig({ note: String(value ?? '') });
 };
 
 const onShowViewportToggle = (value: unknown) => {

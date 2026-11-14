@@ -11,12 +11,7 @@
       />
     </Teleport>
     <Teleport to="#title-left-actions" defer>
-      <v-btn
-        :icon="mdiExitToApp"
-        color="white"
-        variant="text"
-        @click="$router.push('/set')"
-      />
+      <v-btn :icon="mdiExitToApp" color="white" variant="text" @click="$router.push('/set')" />
     </Teleport>
 
     <MdrCanvas class="editor-wrapper" ref="MdrCRef" />
@@ -68,29 +63,15 @@
         <v-card-title>笔记尚未保存</v-card-title>
         <v-card-text>
           「{{ noteRef.fileName }}」有未保存的修改，要保存后离开吗？
-          <p v-if="saveError" class="text-error text-caption mt-2">
-            保存失败：{{ saveError }}
-          </p>
+          <p v-if="saveError" class="text-error text-caption mt-2">保存失败：{{ saveError }}</p>
         </v-card-text>
         <v-card-actions>
-          <v-btn :disabled="isSaving" @click="resolveNavigation(false)">
-            继续编辑
-          </v-btn>
+          <v-btn :disabled="isSaving" @click="resolveNavigation(false)"> 继续编辑 </v-btn>
           <v-spacer />
-          <v-btn
-            color="error"
-            :disabled="isSaving"
-            @click="resolveNavigation(true)"
-          >
+          <v-btn color="error" :disabled="isSaving" @click="resolveNavigation(true)">
             不保存
           </v-btn>
-          <v-btn
-            color="primary"
-            :loading="isSaving"
-            @click="saveAndLeave"
-          >
-            保存并离开
-          </v-btn>
+          <v-btn color="primary" :loading="isSaving" @click="saveAndLeave"> 保存并离开 </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -98,37 +79,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, inject } from "vue";
-import { mdiContentSave, mdiExitToApp, mdiCheck } from "@mdi/js";
-import { isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { error as logError } from "@tauri-apps/plugin-log";
-import {
-  onBeforeRouteLeave,
-  onBeforeRouteUpdate,
-  useRoute,
-} from "vue-router";
-import MdrCanvas from "../Controls/Canvas/Core/MdrCanvas.vue";
-import AddBlockPicker from "../Controls/Canvas/AddBlockPicker.vue";
-import CanvasSideToolbar from "../Controls/Canvas/CanvasToolbar.vue";
+import { ref, onMounted, onUnmounted, computed, watch, inject } from 'vue';
+import { mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js';
+import { isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { error as logError } from '@tauri-apps/plugin-log';
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router';
+import MdrCanvas from '../Controls/Canvas/Core/MdrCanvas.vue';
+import AddBlockPicker from '../Controls/Canvas/AddBlockPicker.vue';
+import CanvasSideToolbar from '../Controls/Canvas/CanvasToolbar.vue';
 import {
   clipboardEntries,
   loadClipboardEntries,
   pushClipboardEntry,
   type ClipboardEntry,
-} from "../utils/blockClipboard";
-import { CANVAS_COMPONENTS } from "../Controls/Canvas/Registry/canvasComponents.ts";
-import { isDeveloperMode } from "../utils/developerMode";
-import { screenToContent } from "../utils/canvasCoords";
-import { fileOperations } from "../fileOperations";
-import { getErrorMessage } from "../utils/getErrorMessage.ts";
-import { takePendingEditorBody } from "../utils/editorRoute";
-import { touchNoteSetUpdatedAt } from "../utils/noteSetStore";
-import { setCurrentNote } from "../utils/noteContext";
-import {
-  isDebugLoadingEnabled,
-  noteLoadControllerKey,
-} from "../utils/routeTransition";
+} from '../utils/blockClipboard';
+import { CANVAS_COMPONENTS } from '../Controls/Canvas/Registry/canvasComponents.ts';
+import { isDeveloperMode } from '../utils/developerMode';
+import { screenToContent } from '../utils/canvasCoords';
+import { fileOperations } from '../fileOperations';
+import { getErrorMessage } from '../utils/getErrorMessage.ts';
+import { takePendingEditorBody } from '../utils/editorRoute';
+import { touchNoteSetUpdatedAt } from '../utils/noteSetStore';
+import { setCurrentNote } from '../utils/noteContext';
+import { isDebugLoadingEnabled, noteLoadControllerKey } from '../utils/routeTransition';
 
 const noteLoadController = inject(noteLoadControllerKey);
 
@@ -136,12 +110,8 @@ const MdrCRef = ref<InstanceType<typeof MdrCanvas> | null>();
 
 const isEditMode = computed(() => MdrCRef.value?.isEditMode ?? false);
 const zoom = computed(() => MdrCRef.value?.zoom ?? 1);
-const hasSelection = computed(
-  () => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0,
-);
-const canOperateSelection = computed(
-  () => isEditMode.value && hasSelection.value,
-);
+const hasSelection = computed(() => (MdrCRef.value?.state.selectedIds.size ?? 0) > 0);
+const canOperateSelection = computed(() => isEditMode.value && hasSelection.value);
 
 const annotationMode = computed(() => MdrCRef.value?.isAnnotationMode ?? false);
 
@@ -151,15 +121,15 @@ const toggleAnnotationMode = () => {
 
 // 添加类型单源
 const addOptions = computed(() =>
-  CANVAS_COMPONENTS.filter(
-    ({ devOnly }) => !devOnly || isDeveloperMode.value,
-  ).map(({ key, title, description, icon, addId }) => ({
-    key,
-    label: title,
-    description,
-    icon,
-    addId,
-  })),
+  CANVAS_COMPONENTS.filter(({ devOnly }) => !devOnly || isDeveloperMode.value).map(
+    ({ key, title, description, icon, addId }) => ({
+      key,
+      label: title,
+      description,
+      icon,
+      addId,
+    }),
+  ),
 );
 // 添加类型单选索引
 const addIdx = ref(0);
@@ -180,19 +150,15 @@ watch(
     const ojc = MdrCRef.value;
     if (!ojc) return;
     ojc.setAddPreview(
-      hasSelection.value || !ojc.isEditMode
-        ? null
-        : (addOptions.value[addIdx.value]?.key ?? null),
+      hasSelection.value || !ojc.isEditMode ? null : (addOptions.value[addIdx.value]?.key ?? null),
     );
   },
   { immediate: true },
 );
 
 // 把视口鼠标坐标换算为画布 content 坐标
-const canvasPointFromMouse = (
-  e: MouseEvent,
-): { x: number; y: number } | null => {
-  const cont = document.querySelector<HTMLElement>(".canvas-container");
+const canvasPointFromMouse = (e: MouseEvent): { x: number; y: number } | null => {
+  const cont = document.querySelector<HTMLElement>('.canvas-container');
   const ojc = MdrCRef.value;
   if (!cont || !ojc) return null;
   return screenToContent(
@@ -218,7 +184,7 @@ const trackMouseDown = (e: MouseEvent) => {
   // 画布拖拽结束后 mouseup 可能落在文档节点上，所以先确认目标元素存在
   const target = e.target instanceof Element ? e.target : null;
   isBlockPress = !!target?.closest?.(
-    ".drag-wrapper, .floating-handle, .side-settings, .handle, .block-handle-popup",
+    '.drag-wrapper, .floating-handle, .side-settings, .handle, .block-handle-popup',
   );
 };
 
@@ -229,16 +195,11 @@ const onMouseUp = (e: MouseEvent) => {
   if (isDeselectClick || isBlockPress) return;
   if (!MdrCRef.value?.isEditMode || e.button !== 0) return;
   const target = e.target instanceof Element ? e.target : null;
-  if (!target?.closest(".canvas-container")) return;
+  if (!target?.closest('.canvas-container')) return;
   // 仅位移小于阈值的简单点击才添加
-  if (
-    Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) >
-    CLICK_DRAG_THRESHOLD
-  )
-    return;
+  if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > CLICK_DRAG_THRESHOLD) return;
   const key = addOptions.value[addIdx.value]?.key;
-  if (key)
-    MdrCRef.value?.addComponent(key, canvasPointFromMouse(e) ?? undefined);
+  if (key) MdrCRef.value?.addComponent(key, canvasPointFromMouse(e) ?? undefined);
 };
 
 const toggleEditMode = () => {
@@ -266,10 +227,9 @@ const route = useRoute();
 const fileName = Array.isArray(route.params.fileName)
   ? route.params.fileName[0]
   : route.params.fileName;
-const dir = typeof route.query.dir === "string" ? route.query.dir : undefined;
-const filePath =
-  typeof route.query.path === "string" ? route.query.path : undefined;
-const noteRef = { fileName: String(fileName ?? ""), dir, filePath };
+const dir = typeof route.query.dir === 'string' ? route.query.dir : undefined;
+const filePath = typeof route.query.path === 'string' ? route.query.path : undefined;
+const noteRef = { fileName: String(fileName ?? ''), dir, filePath };
 // 组件数据 store 拿不到路由参数，进编辑页先把笔记位置写进上下文
 setCurrentNote(noteRef);
 const pendingEditorBody = takePendingEditorBody(noteRef);
@@ -277,17 +237,17 @@ const pendingEditorBody = takePendingEditorBody(noteRef);
 const isSaving = ref(false);
 const saved = ref(false);
 const saveFailed = ref(false);
-const saveError = ref("");
+const saveError = ref('');
 const isLeaveDialogOpen = ref(false);
 let lastSavedContent: string | null = null;
 let resolveNavigationDecision: ((shouldLeave: boolean) => void) | null = null;
 
 const save = async () => {
   isSaving.value = true;
-  saveError.value = "";
+  saveError.value = '';
   saveFailed.value = false;
   try {
-    const content = MdrCRef.value?.save() ?? "";
+    const content = MdrCRef.value?.save() ?? '';
     await fileOperations.setNoteBody(noteRef, content);
     lastSavedContent = content;
     touchNoteSetUpdatedAt(noteRef.fileName, dir);
@@ -304,8 +264,7 @@ const save = async () => {
 };
 
 const hasUnsavedChanges = () =>
-  lastSavedContent !== null &&
-  (MdrCRef.value?.save() ?? "") !== lastSavedContent;
+  lastSavedContent !== null && (MdrCRef.value?.save() ?? '') !== lastSavedContent;
 
 const confirmNavigation = () => {
   if (!hasUnsavedChanges()) return true;
@@ -333,9 +292,9 @@ const load = async () => {
   const raw = pendingEditorBody
     ? await pendingEditorBody
     : await fileOperations.getNoteBody(noteRef, isDebugLoadingEnabled.value);
-  if ("error" in raw) throw raw.error;
-  await MdrCRef.value?.load(raw.content ?? "");
-  lastSavedContent = MdrCRef.value?.save() ?? "";
+  if ('error' in raw) throw raw.error;
+  await MdrCRef.value?.load(raw.content ?? '');
+  lastSavedContent = MdrCRef.value?.save() ?? '';
 };
 
 const deleteSelected = () => {
@@ -344,10 +303,10 @@ const deleteSelected = () => {
 
 const initializeEditor = async () => {
   let unlisten: (() => void) | undefined;
-  noteLoadController?.setName(String(fileName ?? ""));
+  noteLoadController?.setName(String(fileName ?? ''));
   try {
     if (isTauri() && !pendingEditorBody) {
-      unlisten = await listen<number>("file-load-progress", (event) => {
+      unlisten = await listen<number>('file-load-progress', (event) => {
         noteLoadController?.setProgress(event.payload);
       });
     }
@@ -366,14 +325,14 @@ onMounted(() => {
   loadClipboardEntries();
   void initializeEditor();
   // 选字可能跨出编辑器，所以挂 window 级 mouseup
-  window.addEventListener("mouseup", onMouseUp);
+  window.addEventListener('mouseup', onMouseUp);
   // 挂 window 级 mousedown 记录按下位置
-  window.addEventListener("mousedown", trackMouseDown);
+  window.addEventListener('mousedown', trackMouseDown);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("mouseup", onMouseUp);
-  window.removeEventListener("mousedown", trackMouseDown);
+  window.removeEventListener('mouseup', onMouseUp);
+  window.removeEventListener('mousedown', trackMouseDown);
 });
 </script>
 

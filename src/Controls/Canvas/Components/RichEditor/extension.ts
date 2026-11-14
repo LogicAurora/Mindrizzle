@@ -5,18 +5,15 @@ import {
   defineBaseKeymap,
   defineCommands,
   defineHistory,
-} from "@prosekit/core";
-import { defineDoc } from "@prosekit/extensions/doc";
-import { defineList } from "prosekit/extensions/list";
-import { defineParagraph } from "@prosekit/extensions/paragraph";
-import { defineText } from "@prosekit/extensions/text";
-import { defineMath } from "prosekit/extensions/math";
-import { defineHeading } from "prosekit/extensions/heading";
-import {
-  renderKaTeXMathBlock,
-  renderKaTeXMathInline,
-} from "./extensions/kateX.ts";
-import { definePlaceholder } from "@prosekit/extensions/placeholder";
+} from '@prosekit/core';
+import { defineDoc } from '@prosekit/extensions/doc';
+import { defineList } from 'prosekit/extensions/list';
+import { defineParagraph } from '@prosekit/extensions/paragraph';
+import { defineText } from '@prosekit/extensions/text';
+import { defineMath } from 'prosekit/extensions/math';
+import { defineHeading } from 'prosekit/extensions/heading';
+import { renderKaTeXMathBlock, renderKaTeXMathInline } from './extensions/kateX.ts';
+import { definePlaceholder } from '@prosekit/extensions/placeholder';
 import {
   bold,
   italic,
@@ -31,24 +28,24 @@ import {
   underlineKeymap,
   strikethroughKeymap,
   highlightKeymap,
-} from "./extensions/formatting.ts";
+} from './extensions/formatting.ts';
 import {
   EMBED_DEFAULT_HEIGHT,
   EMBED_DEFAULT_WIDTH,
   vueComponentNode,
   vueComponentNodeView,
-} from "./extensions/vue-component.ts";
-import { atomBlockKeyboard } from "./extensions/atom-block-keyboard.ts";
-import { generateBlockUuid } from "../../../../utils/blockUuid.ts";
-import { defineBlockquote } from "prosekit/extensions/blockquote";
-import { defineSubscript } from "prosekit/extensions/subscript";
-import { defineSuperscript } from "prosekit/extensions/superscript";
-import { defineGapCursor } from "prosekit/extensions/gap-cursor";
-import { Fragment, Slice } from "prosekit/pm/model";
-import type { Node as ProseMirrorNode, Schema } from "prosekit/pm/model";
-import { TextSelection } from "prosekit/pm/state";
-import type { Transaction } from "prosekit/pm/state";
-import { dropPoint } from "prosekit/pm/transform";
+} from './extensions/vue-component.ts';
+import { atomBlockKeyboard } from './extensions/atom-block-keyboard.ts';
+import { generateBlockUuid } from '../../../../utils/blockUuid.ts';
+import { defineBlockquote } from 'prosekit/extensions/blockquote';
+import { defineSubscript } from 'prosekit/extensions/subscript';
+import { defineSuperscript } from 'prosekit/extensions/superscript';
+import { defineGapCursor } from 'prosekit/extensions/gap-cursor';
+import { Fragment, Slice } from 'prosekit/pm/model';
+import type { Node as ProseMirrorNode, Schema } from 'prosekit/pm/model';
+import { TextSelection } from 'prosekit/pm/state';
+import type { Transaction } from 'prosekit/pm/state';
+import { dropPoint } from 'prosekit/pm/transform';
 
 interface EmbedInsertion {
   schema: Schema;
@@ -65,10 +62,7 @@ const createEmbedNode = (options: EmbedInsertion): ProseMirrorNode | null => {
     schema.nodes.vueComponent?.create({
       componentName,
       props,
-      width: Math.min(
-        EMBED_DEFAULT_WIDTH,
-        containerWidth || EMBED_DEFAULT_WIDTH,
-      ),
+      width: Math.min(EMBED_DEFAULT_WIDTH, containerWidth || EMBED_DEFAULT_WIDTH),
       height: EMBED_DEFAULT_HEIGHT,
       uuid: uuid ?? generateBlockUuid(),
     }) ?? null
@@ -76,26 +70,17 @@ const createEmbedNode = (options: EmbedInsertion): ProseMirrorNode | null => {
 };
 
 // 组件是原子块，光标停在它身上时下一次输入会把它整体替换掉，所以统一把落笔点放进节点后的文本块
-const placeCaretAfterEmbed = (
-  tr: Transaction,
-  pos: number,
-  nodeSize: number,
-): void => {
+const placeCaretAfterEmbed = (tr: Transaction, pos: number, nodeSize: number): void => {
   const after = pos + nodeSize;
   const $after = tr.doc.resolve(after);
-  if (!$after.nodeAfter?.isTextblock)
-    tr.insert(after, tr.doc.type.schema.nodes.paragraph.create());
+  if (!$after.nodeAfter?.isTextblock) tr.insert(after, tr.doc.type.schema.nodes.paragraph.create());
   tr.setSelection(TextSelection.near(tr.doc.resolve(after), 1));
 };
 
 // 父组件统一经 editor.commands 调用，所以在此注册自定义命令；
 // 标题切换复用 defineHeading() 内置的 toggleHeading，避免同名命令被合并成交叉类型
 const customCommands = defineCommands({
-  insertVueComponent(
-    componentName: string,
-    props: Record<string, any> = {},
-    uuid?: string,
-  ) {
+  insertVueComponent(componentName: string, props: Record<string, any> = {}, uuid?: string) {
     return (state, dispatch, view) => {
       if (!view) return false;
       const node = createEmbedNode({
@@ -148,10 +133,7 @@ const customCommands = defineCommands({
   },
   insertMathInline(latex: string) {
     return (state, dispatch) => {
-      const node = state.schema.nodes.mathInline?.create(
-        {},
-        state.schema.text(latex),
-      );
+      const node = state.schema.nodes.mathInline?.create({}, state.schema.text(latex));
       if (!node) return false;
       const tr = state.tr.replaceSelectionWith(node);
       if (dispatch) dispatch(tr);
@@ -160,10 +142,7 @@ const customCommands = defineCommands({
   },
   insertMathBlock(latex: string) {
     return (state, dispatch) => {
-      const node = state.schema.nodes.mathBlock?.create(
-        {},
-        state.schema.text(latex),
-      );
+      const node = state.schema.nodes.mathBlock?.create({}, state.schema.text(latex));
       if (!node) return false;
       const tr = state.tr.replaceSelectionWith(node);
       if (dispatch) dispatch(tr);
@@ -181,7 +160,7 @@ export function defineExtension() {
     defineBaseKeymap(),
     defineHistory(),
     defineHeading(),
-    definePlaceholder({ placeholder: "写点什么吧" }),
+    definePlaceholder({ placeholder: '写点什么吧' }),
     defineList(),
     defineBlockquote(),
     defineSubscript(),
@@ -213,6 +192,4 @@ export function defineExtension() {
 export type EditorExtension = ReturnType<typeof defineExtension>;
 // 父组件统一经 editor.commands 命令链调用（含自定义与各扩展命令）且要 IDE 补全，
 // 直接以 createEditor 实例的 commands 推导精确命令类型，而非手写宽泛索引签名
-export type EditorCommands = ReturnType<
-  typeof createEditor<EditorExtension>
->["commands"];
+export type EditorCommands = ReturnType<typeof createEditor<EditorExtension>>['commands'];

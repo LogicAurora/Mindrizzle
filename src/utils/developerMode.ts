@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
-import { ref } from "vue";
+import { ref } from 'vue';
 
-import { getSetting, setSetting } from "./settingsStore";
+import { getSetting, setSetting } from './settingsStore';
 
-export const DEVELOPER_MODE_SETTING_KEY = "developer-mode";
+export const DEVELOPER_MODE_SETTING_KEY = 'developer-mode';
 
 // 开发者入口只在用户显式开启后出现，构建环境不参与判断
 export const isDeveloperMode = ref(false);
 
 export function isDeveloperModeValue(value: unknown): value is boolean {
-  return typeof value === "boolean";
+  return typeof value === 'boolean';
 }
 
 export async function loadDeveloperMode(): Promise<void> {

@@ -11,7 +11,7 @@
 //! # Ok::<(), io::Error>(())
 //! ```
 
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::fs::{self, File};
 use std::io::{self, Read, Result, Seek, SeekFrom, Write};
 use std::path::{Component, Path};
@@ -167,7 +167,7 @@ pub fn is_mdrf_compressed(path: &Path) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_meta, extract_to_cache, extract_to_cache_with_progress, PROGRESS_COMPLETE,
+        PROGRESS_COMPLETE, extract_meta, extract_to_cache, extract_to_cache_with_progress,
     };
     use std::fs;
     use std::io::Cursor;

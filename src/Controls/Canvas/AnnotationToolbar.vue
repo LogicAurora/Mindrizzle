@@ -40,10 +40,10 @@ import {
   mdiFountainPen,
   mdiVectorCurve,
   mdiVectorLine,
-} from "@mdi/js";
+} from '@mdi/js';
 
-import SideToolbar from "./Core/SideToolbar.vue";
-import type { AnnotationTool } from "./Core/annotationModel.ts";
+import SideToolbar from './Core/SideToolbar.vue';
+import type { AnnotationTool } from './Core/annotationModel.ts';
 
 defineProps<{
   visible: boolean;
@@ -52,7 +52,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  "set-tool": [tool: AnnotationTool];
+  'set-tool': [tool: AnnotationTool];
   clear: [];
   exit: [];
 }>();
@@ -62,10 +62,10 @@ const ANNOTATION_TOOLS: {
   title: string;
   icon: string;
 }[] = [
-  { value: "pen", title: "自由绘制", icon: mdiFountainPen },
-  { value: "line", title: "直线连接块", icon: mdiVectorLine },
-  { value: "arrow", title: "箭头连接块", icon: mdiArrowTopRight },
-  { value: "curve", title: "曲线连接块", icon: mdiVectorCurve },
-  { value: "eraser", title: "擦除批注", icon: mdiEraser },
+  { value: 'pen', title: '自由绘制', icon: mdiFountainPen },
+  { value: 'line', title: '直线连接块', icon: mdiVectorLine },
+  { value: 'arrow', title: '箭头连接块', icon: mdiArrowTopRight },
+  { value: 'curve', title: '曲线连接块', icon: mdiVectorCurve },
+  { value: 'eraser', title: '擦除批注', icon: mdiEraser },
 ];
 </script>

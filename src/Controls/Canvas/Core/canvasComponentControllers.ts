@@ -1,5 +1,5 @@
-import type { InjectionKey } from "vue";
-import type { Rect, WidgetConfig } from "../Registry/canvasComponents.ts";
+import type { InjectionKey } from 'vue';
+import type { Rect, WidgetConfig } from '../Registry/canvasComponents.ts';
 
 export interface BlockSize {
   width: number;
@@ -51,7 +51,8 @@ export interface BlockInteractionHandlers {
   updateConfig: (patch: Partial<WidgetConfig>) => void;
 }
 
-export const COMPONENT_CONTROLLER_KEY: InjectionKey<BlockComponentController> =
-  Symbol("mdr:component-controller");
+export const COMPONENT_CONTROLLER_KEY: InjectionKey<BlockComponentController> = Symbol(
+  'mdr:component-controller',
+);
 export const CANVAS_CONTROLLER_KEY: InjectionKey<BlockCanvasController> =
-  Symbol("mdr:canvas-controller");
+  Symbol('mdr:canvas-controller');

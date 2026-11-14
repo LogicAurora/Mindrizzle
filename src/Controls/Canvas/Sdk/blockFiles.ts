@@ -1,6 +1,6 @@
-import { ComponentDataStore } from "../../../utils/componentDataStore.ts";
+import { ComponentDataStore } from '../../../utils/componentDataStore.ts';
 
-import type { BlockFiles } from "./block.types.ts";
+import type { BlockFiles } from './block.types.ts';
 
 export const createBlockFiles = (uuid: string): BlockFiles => {
   // 构造时捕获当前笔记，块被虚拟化重建后也不会读到别的笔记

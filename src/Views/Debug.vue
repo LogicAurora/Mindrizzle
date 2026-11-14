@@ -1,33 +1,29 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-import { isTauri } from "@tauri-apps/api/core";
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { isTauri } from '@tauri-apps/api/core';
 
-import {
-  clearLocalNotes,
-  clearTestNotes,
-  createTestNotes,
-} from "../fileOperations";
-import { getErrorMessage } from "../utils/getErrorMessage";
+import { clearLocalNotes, clearTestNotes, createTestNotes } from '../fileOperations';
+import { getErrorMessage } from '../utils/getErrorMessage';
 import {
   invalidateNoteSetEntries,
   lastNoteSetLoad,
   loadNoteSetEntries,
-} from "../utils/noteSetStore";
-import { isDebugLoadingEnabled } from "../utils/routeTransition";
+} from '../utils/noteSetStore';
+import { isDebugLoadingEnabled } from '../utils/routeTransition';
 
 const MAX_TEST_NOTE_COUNT = 500;
 const DEFAULT_TEST_NOTE_COUNT = 200;
 
 const router = useRouter();
-const path = ref("");
+const path = ref('');
 const isCleared = ref(false);
 
 const isWebEnv = !isTauri();
 const testNoteCount = ref(DEFAULT_TEST_NOTE_COUNT);
 const isPerfBusy = ref(false);
-const noteHint = ref("");
-const perfHint = ref("");
+const noteHint = ref('');
+const perfHint = ref('');
 
 const clearWebStorage = async () => {
   await clearLocalNotes();
@@ -37,10 +33,7 @@ const clearWebStorage = async () => {
 
 // 批量造样本只为压列表渲染与逐条取元信息的开销，只允许在浏览器端跑
 async function generateTestNotes() {
-  const count = Math.min(
-    Math.max(Math.floor(testNoteCount.value) || 1, 1),
-    MAX_TEST_NOTE_COUNT,
-  );
+  const count = Math.min(Math.max(Math.floor(testNoteCount.value) || 1, 1), MAX_TEST_NOTE_COUNT);
   await createTestNotes(count);
   invalidateNoteSetEntries();
   noteHint.value = `已生成 ${count} 个测试便签`;
@@ -56,7 +49,7 @@ async function measureNoteSetLoad(force: boolean) {
   isPerfBusy.value = true;
   try {
     await loadNoteSetEntries(undefined, force);
-    perfHint.value = "";
+    perfHint.value = '';
   } catch (error) {
     perfHint.value = `测量失败：${getErrorMessage(error)}`;
   } finally {
@@ -102,14 +95,10 @@ async function measureNoteSetLoad(force: boolean) {
               />
             </v-col>
             <v-col cols="auto">
-              <v-btn :disabled="!isWebEnv" @click="generateTestNotes"
-                >生成测试便签</v-btn
-              >
+              <v-btn :disabled="!isWebEnv" @click="generateTestNotes">生成测试便签</v-btn>
             </v-col>
             <v-col cols="auto">
-              <v-btn :disabled="!isWebEnv" @click="removeTestNotes"
-                >清除测试便签</v-btn
-              >
+              <v-btn :disabled="!isWebEnv" @click="removeTestNotes">清除测试便签</v-btn>
             </v-col>
             <v-col v-if="!isWebEnv" cols="auto" class="text-caption"
               >桌面端禁用以免污染真实笔记目录</v-col
@@ -121,9 +110,7 @@ async function measureNoteSetLoad(force: boolean) {
         </v-expansion-panel-text>
       </v-expansion-panel>
       <v-expansion-panel>
-        <v-expansion-panel-title
-          >便签集列表拉取性能测试</v-expansion-panel-title
-        >
+        <v-expansion-panel-title>便签集列表拉取性能测试</v-expansion-panel-title>
         <v-expansion-panel-text>
           <v-row>
             <v-col cols="auto">
@@ -139,11 +126,8 @@ async function measureNoteSetLoad(force: boolean) {
           </v-row>
           <v-row v-if="lastNoteSetLoad">
             <v-col class="text-body-2">
-              最近一次：{{
-                lastNoteSetLoad.fromCache ? "缓存命中" : "重新拉取"
-              }}， {{ lastNoteSetLoad.entryCount }} 条，{{
-                lastNoteSetLoad.durationMs.toFixed(1)
-              }}
+              最近一次：{{ lastNoteSetLoad.fromCache ? '缓存命中' : '重新拉取' }}，
+              {{ lastNoteSetLoad.entryCount }} 条，{{ lastNoteSetLoad.durationMs.toFixed(1) }}
               ms
             </v-col>
           </v-row>
@@ -157,18 +141,12 @@ async function measureNoteSetLoad(force: boolean) {
         <v-expansion-panel-text>
           <v-row>
             <v-col>
-              <v-switch
-                v-model="isDebugLoadingEnabled"
-                label="模拟后端慢速加载进度"
-                hide-details
-              />
+              <v-switch v-model="isDebugLoadingEnabled" label="模拟后端慢速加载进度" hide-details />
             </v-col>
           </v-row>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
-    <v-snackbar v-model="isCleared" timeout="1500"
-      >已清除网页端笔记存档</v-snackbar
-    >
+    <v-snackbar v-model="isCleared" timeout="1500">已清除网页端笔记存档</v-snackbar>
   </v-container>
 </template>

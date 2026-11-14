@@ -43,14 +43,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { isTauri } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { mdiLinkVariant } from "@mdi/js";
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { mdiLinkVariant } from '@mdi/js';
 
-import { getErrorMessage } from "../../../../utils/getErrorMessage.ts";
-import { useAutoHideNotice } from "../../../../utils/useAutoHideNotice.ts";
-import { fetchLinkMeta, parseHttpUrl, resolveUrl } from "./linkMeta.ts";
+import { getErrorMessage } from '../../../../utils/getErrorMessage.ts';
+import { useAutoHideNotice } from '../../../../utils/useAutoHideNotice.ts';
+import { fetchLinkMeta, parseHttpUrl, resolveUrl } from './linkMeta.ts';
 
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -64,20 +64,18 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update", patch: Record<string, unknown>): void;
+  (e: 'update', patch: Record<string, unknown>): void;
 }>();
 
-const draftUrl = ref("");
+const draftUrl = ref('');
 const { notice, showNotice, clearNotice } = useAutoHideNotice();
 const isFetching = ref(false);
 const coverFailed = ref(false);
 let abortController: AbortController | null = null;
 
-const hasUrl = computed(() => props.url !== "");
+const hasUrl = computed(() => props.url !== '');
 const parsedUrl = computed(() => parseHttpUrl(props.url));
-const coverUrl = computed(() =>
-  resolveUrl(props.imageUrl, parsedUrl.value?.href ?? ""),
-);
+const coverUrl = computed(() => resolveUrl(props.imageUrl, parsedUrl.value?.href ?? ''));
 const hostLabel = computed(() => parsedUrl.value?.hostname ?? props.url);
 const displayTitle = computed(() => props.title || hostLabel.value);
 
@@ -100,14 +98,13 @@ const fetchPreview = async (target?: string) => {
   const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const meta = await fetchLinkMeta(url, controller.signal);
-    emit("update", {
+    emit('update', {
       title: meta.title || props.title,
       description: meta.description || props.description,
       siteName: meta.siteName || props.siteName,
       imageUrl: meta.imageUrl || props.imageUrl,
     });
-    if (!meta.title && !meta.description)
-      showNotice("没有读到标题或描述，可以手动填写");
+    if (!meta.title && !meta.description) showNotice('没有读到标题或描述，可以手动填写');
   } catch (cause) {
     showNotice(`读取失败，请手动填写标题（${getErrorMessage(cause)}）`);
   } finally {
@@ -120,11 +117,11 @@ const fetchPreview = async (target?: string) => {
 const applyDraft = async () => {
   const url = parseHttpUrl(draftUrl.value);
   if (!url) {
-    showNotice("网址无效，需要 http 或 https 开头");
+    showNotice('网址无效，需要 http 或 https 开头');
     return;
   }
-  emit("update", { url: url.href });
-  draftUrl.value = "";
+  emit('update', { url: url.href });
+  draftUrl.value = '';
   clearNotice();
   await fetchPreview(url.href);
 };
@@ -138,7 +135,7 @@ const openLink = () => {
     void openUrl(url);
     return;
   }
-  window.open(url, "_blank", "noopener,noreferrer");
+  window.open(url, '_blank', 'noopener,noreferrer');
 };
 </script>
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount, ref } from 'vue';
 
 export const SECRET_KNOCK_TARGET = 7;
 // 停手过久说明不是有意的连点，静默清零重新计数
@@ -8,22 +8,22 @@ const KNOCK_RESET_DELAY = 2_500;
 const EFFECT_DURATION = 5_000;
 
 const KONAMI_SEQUENCE = [
-  "arrowup",
-  "arrowup",
-  "arrowdown",
-  "arrowdown",
-  "arrowleft",
-  "arrowright",
-  "arrowleft",
-  "arrowright",
-  "b",
-  "a",
+  'arrowup',
+  'arrowup',
+  'arrowdown',
+  'arrowdown',
+  'arrowleft',
+  'arrowright',
+  'arrowleft',
+  'arrowright',
+  'b',
+  'a',
 ];
 
-const DRIZZLE_WORD = "drizzle";
+const DRIZZLE_WORD = 'drizzle';
 const KEY_BUFFER_LIMIT = Math.max(KONAMI_SEQUENCE.length, DRIZZLE_WORD.length);
 
-export type EasterEggEffect = "rain" | "rainbow";
+export type EasterEggEffect = 'rain' | 'rainbow';
 
 type SecretHandlers = {
   onKonami: () => void;
@@ -91,11 +91,11 @@ export function attachSecretKeyboard(handlers: SecretHandlers): () => void {
       handlers.onKonami();
       return;
     }
-    if (!typedKeys.join("").endsWith(DRIZZLE_WORD)) return;
+    if (!typedKeys.join('').endsWith(DRIZZLE_WORD)) return;
     typedKeys.length = 0;
     handlers.onDrizzle();
   };
 
-  window.addEventListener("keydown", onKeyDown, true);
-  return () => window.removeEventListener("keydown", onKeyDown, true);
+  window.addEventListener('keydown', onKeyDown, true);
+  return () => window.removeEventListener('keydown', onKeyDown, true);
 }

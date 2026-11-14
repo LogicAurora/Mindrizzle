@@ -1,9 +1,9 @@
-import { createVuetify } from "vuetify";
-import { aliases, mdi } from "vuetify/iconsets/mdi-svg";
-import "vuetify/styles";
-import { md3 } from "vuetify/blueprints";
-import { VLoadingIndicator } from 'vuetify/labs/VLoadingIndicator'
-import { VCommandPalette } from "vuetify/labs/VCommandPalette";
+import { createVuetify } from 'vuetify';
+import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
+import 'vuetify/styles';
+import { md3 } from 'vuetify/blueprints';
+import { VLoadingIndicator } from 'vuetify/labs/VLoadingIndicator';
+import { VCommandPalette } from 'vuetify/labs/VCommandPalette';
 
 const vuetify = createVuetify({
   components: {
@@ -11,10 +11,10 @@ const vuetify = createVuetify({
     VCommandPalette,
   },
   theme: {
-    defaultTheme: "light",
+    defaultTheme: 'light',
   },
   icons: {
-    defaultSet: "mdi",
+    defaultSet: 'mdi',
     aliases,
     sets: {
       mdi,
@@ -23,7 +23,7 @@ const vuetify = createVuetify({
   blueprint: md3,
   defaults: {
     global: {
-      density: "comfortable",
+      density: 'comfortable',
     },
   },
 });

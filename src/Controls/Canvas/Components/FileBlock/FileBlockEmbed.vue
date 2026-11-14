@@ -25,23 +25,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, inject, ref } from 'vue';
 
 // 根是「内容 + Teleport」的 fragment，透传 attrs 无处可落
 
 defineOptions({ inheritAttrs: false });
-import { isTauri } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { isTauri } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
 
-import { createBlockFiles } from "../../Sdk/blockFiles.ts";
-import { EMBED_SETTINGS_HOST_KEY } from "../../Sdk/embedSettingsHost.ts";
-import { getErrorMessage } from "../../../../utils/getErrorMessage.ts";
-import FileCardView from "./FileCardView.vue";
-import FileSettings from "./FileSettings.vue";
+import { createBlockFiles } from '../../Sdk/blockFiles.ts';
+import { EMBED_SETTINGS_HOST_KEY } from '../../Sdk/embedSettingsHost.ts';
+import { getErrorMessage } from '../../../../utils/getErrorMessage.ts';
+import FileCardView from './FileCardView.vue';
+import FileSettings from './FileSettings.vue';
 
-const FILE_DATA_PATH = "file.bin";
+const FILE_DATA_PATH = 'file.bin';
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
-const FALLBACK_FILE_NAME = "attachment";
+const FALLBACK_FILE_NAME = 'attachment';
 
 const props = defineProps<{
   path?: string;
@@ -53,35 +53,30 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update-props", patch: Record<string, unknown>): void;
+  (e: 'update-props', patch: Record<string, unknown>): void;
 }>();
 
 const cardRef = ref<{ showError: (message: string) => void } | null>(null);
 const settingsHost = inject(EMBED_SETTINGS_HOST_KEY, ref(null));
 // 旧节点可能没有 uuid，此时没有可用目录，只做展示
-const files = computed(() =>
-  props.blockUuid ? createBlockFiles(props.blockUuid) : null,
-);
-const path = computed(() => String(props.path ?? ""));
-const name = computed(() => String(props.name ?? ""));
-const mime = computed(() => String(props.mime ?? ""));
+const files = computed(() => (props.blockUuid ? createBlockFiles(props.blockUuid) : null));
+const path = computed(() => String(props.path ?? ''));
+const name = computed(() => String(props.name ?? ''));
+const mime = computed(() => String(props.mime ?? ''));
 const size = computed(() => Number(props.size ?? 0));
 
 const uploadFile = async (file: File) => {
   if (!files.value) {
-    cardRef.value?.showError("这个附件没有存储目录，请拖出到画布后再更换");
+    cardRef.value?.showError('这个附件没有存储目录，请拖出到画布后再更换');
     return;
   }
   if (file.size > MAX_FILE_BYTES) {
-    cardRef.value?.showError("附件超过 64 MiB 上限");
+    cardRef.value?.showError('附件超过 64 MiB 上限');
     return;
   }
   try {
-    await files.value.write(
-      FILE_DATA_PATH,
-      new Uint8Array(await file.arrayBuffer()),
-    );
-    emit("update-props", {
+    await files.value.write(FILE_DATA_PATH, new Uint8Array(await file.arrayBuffer()));
+    emit('update-props', {
       path: FILE_DATA_PATH,
       name: file.name,
       mime: file.type,
@@ -101,10 +96,10 @@ const exportFile = async () => {
       const bytes = await files.value.readBinary(source);
       const url = URL.createObjectURL(
         new Blob([bytes as BlobPart], {
-          type: mime.value || "application/octet-stream",
+          type: mime.value || 'application/octet-stream',
         }),
       );
-      const anchor = document.createElement("a");
+      const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = name.value || FALLBACK_FILE_NAME;
       anchor.click();
@@ -124,7 +119,7 @@ const exportFile = async () => {
 const removeFile = async () => {
   const source = path.value;
   if (!source) return;
-  emit("update-props", { path: "", name: "", mime: "", size: 0 });
+  emit('update-props', { path: '', name: '', mime: '', size: 0 });
   if (!files.value) return;
   try {
     await files.value.remove(source);

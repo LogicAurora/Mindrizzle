@@ -1,11 +1,6 @@
-import {
-  NodeSelection,
-  Plugin,
-  PluginKey,
-  TextSelection,
-} from "prosekit/pm/state";
-import type { EditorView } from "prosekit/pm/view";
-import type { Slice } from "prosekit/pm/model";
+import { NodeSelection, Plugin, PluginKey, TextSelection } from 'prosekit/pm/state';
+import type { EditorView } from 'prosekit/pm/view';
+import type { Slice } from 'prosekit/pm/model';
 
 export interface RowDropShow {
   view: EditorView;
@@ -33,7 +28,7 @@ export function createRowDropIndicatorPlugin(options: {
     const before = $pos.before($pos.depth);
     const after = $pos.after($pos.depth);
     const dom = view.nodeDOM(before) as HTMLElement | null;
-    if (dom && typeof dom.getBoundingClientRect === "function") {
+    if (dom && typeof dom.getBoundingClientRect === 'function') {
       const r = dom.getBoundingClientRect();
       const insertPos = y < r.top + r.height / 2 ? before : after;
       const indY = insertPos === before ? r.top : r.bottom;
@@ -44,7 +39,7 @@ export function createRowDropIndicatorPlugin(options: {
   }
 
   return new Plugin({
-    key: new PluginKey("row-drop-indicator"),
+    key: new PluginKey('row-drop-indicator'),
     view(view: EditorView) {
       const dom = view.dom;
       let hideId: ReturnType<typeof setTimeout> | undefined;
@@ -76,27 +71,22 @@ export function createRowDropIndicatorPlugin(options: {
         });
       };
 
-      dom.addEventListener("dragover", handleDragOver);
-      dom.addEventListener("dragleave", hide);
-      dom.addEventListener("drop", hide);
-      dom.addEventListener("dragend", hide);
+      dom.addEventListener('dragover', handleDragOver);
+      dom.addEventListener('dragleave', hide);
+      dom.addEventListener('drop', hide);
+      dom.addEventListener('dragend', hide);
 
       return {
         destroy() {
-          dom.removeEventListener("dragover", handleDragOver);
-          dom.removeEventListener("dragleave", hide);
-          dom.removeEventListener("drop", hide);
-          dom.removeEventListener("dragend", hide);
+          dom.removeEventListener('dragover', handleDragOver);
+          dom.removeEventListener('dragleave', hide);
+          dom.removeEventListener('drop', hide);
+          dom.removeEventListener('dragend', hide);
         },
       };
     },
     props: {
-      handleDrop(
-        view: EditorView,
-        event: DragEvent,
-        slice: Slice,
-        move: boolean,
-      ) {
+      handleDrop(view: EditorView, event: DragEvent, slice: Slice, move: boolean) {
         const target = getDropTarget(view, event.clientX, event.clientY);
         if (!target) return false;
         event.preventDefault();
@@ -109,9 +99,7 @@ export function createRowDropIndicatorPlugin(options: {
         }
         const pos = tr.mapping.map(insertPos0);
         const isNode =
-          slice.openStart === 0 &&
-          slice.openEnd === 0 &&
-          slice.content.childCount === 1;
+          slice.openStart === 0 && slice.openEnd === 0 && slice.content.childCount === 1;
         if (isNode) tr.replaceRangeWith(pos, pos, slice.content.firstChild!);
         else tr.replaceRange(pos, pos, slice);
         const $pos = tr.doc.resolve(pos);
@@ -125,7 +113,7 @@ export function createRowDropIndicatorPlugin(options: {
         } else {
           tr.setSelection(TextSelection.near(tr.doc.resolve(pos)));
         }
-        view.dispatch(tr.setMeta("uiEvent", "drop"));
+        view.dispatch(tr.setMeta('uiEvent', 'drop'));
         view.focus();
         return true;
       },

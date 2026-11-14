@@ -10,8 +10,8 @@ use std::time::{Duration, UNIX_EPOCH};
 use tauri::{Emitter, Window};
 
 use crate::mdr_file_cache::{
-    invalidate_named, named_cache_dir, read_signature, signature_path, write_signature,
-    MindrizzleFileCache,
+    MindrizzleFileCache, invalidate_named, named_cache_dir, read_signature, signature_path,
+    write_signature,
 };
 use crate::mdr_file_struct::{MindrizzleFileBody, MindrizzleFileMeta, MindrizzleFileMetaView};
 use crate::mdr_file_tar::{

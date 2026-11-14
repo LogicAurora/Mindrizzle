@@ -1,16 +1,8 @@
 <template>
   <span class="option-glyph">
-    <span
-      v-if="color && !custom"
-      class="option-glyph-solid"
-      :style="{ background: color }"
-    />
+    <span v-if="color && !custom" class="option-glyph-solid" :style="{ background: color }" />
     <v-icon v-else-if="icon" :icon="icon" size="20" />
-    <span
-      v-if="custom"
-      class="option-glyph-dot"
-      :style="{ background: color }"
-    />
+    <span v-if="custom" class="option-glyph-dot" :style="{ background: color }" />
   </span>
 </template>
 

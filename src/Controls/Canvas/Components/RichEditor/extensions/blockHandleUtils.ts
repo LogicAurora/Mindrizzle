@@ -1,6 +1,6 @@
 // 编辑器未挂载时访问 view 会抛错，所以统一 try/catch 返回 null
 
-import type { Editor } from "@prosekit/core";
+import type { Editor } from '@prosekit/core';
 
 export function getView(editor?: Editor | null): any {
   try {
@@ -37,12 +37,9 @@ export function getBlockRect(view: any, pos: number): DOMRect | null {
 }
 
 export function getCanvasViewportRect(view: any): DOMRect {
-  const container = view?.dom?.closest(
-    ".canvas-container",
-  ) as HTMLElement | null;
+  const container = view?.dom?.closest('.canvas-container') as HTMLElement | null;
   return (
-    container?.getBoundingClientRect() ??
-    new DOMRect(0, 0, window.innerWidth, window.innerHeight)
+    container?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight)
   );
 }
 
@@ -52,28 +49,11 @@ export function getClipRect(view: any): DOMRect {
   if (!scroll) return containerRect;
   // 滚动容器在 .canvas 的 zoom 空间内（BCR 是布局坐标）、容器在 zoom 外（视觉坐标），所以先把滚动矩形折到视觉空间再求交
   const scrollRect = scroll.getBoundingClientRect();
-  const left = Math.max(
-    containerRect.left,
-    layoutToViewportX(scroll, scrollRect.left),
-  );
-  const top = Math.max(
-    containerRect.top,
-    layoutToViewportY(scroll, scrollRect.top),
-  );
-  const right = Math.min(
-    containerRect.right,
-    layoutToViewportX(scroll, scrollRect.right),
-  );
-  const bottom = Math.min(
-    containerRect.bottom,
-    layoutToViewportY(scroll, scrollRect.bottom),
-  );
-  return new DOMRect(
-    left,
-    top,
-    Math.max(right - left, 0),
-    Math.max(bottom - top, 0),
-  );
+  const left = Math.max(containerRect.left, layoutToViewportX(scroll, scrollRect.left));
+  const top = Math.max(containerRect.top, layoutToViewportY(scroll, scrollRect.top));
+  const right = Math.min(containerRect.right, layoutToViewportX(scroll, scrollRect.right));
+  const bottom = Math.min(containerRect.bottom, layoutToViewportY(scroll, scrollRect.bottom));
+  return new DOMRect(left, top, Math.max(right - left, 0), Math.max(bottom - top, 0));
 }
 
 export function getClipTop(view: any): number {
@@ -84,10 +64,7 @@ export function getClipBottom(view: any): number {
   return getClipRect(view).bottom;
 }
 
-export function getVisibleBlockRectInViewport(
-  view: any,
-  el: HTMLElement | null,
-): DOMRect | null {
+export function getVisibleBlockRectInViewport(view: any, el: HTMLElement | null): DOMRect | null {
   const rect = getVisibleBlockRect(el);
   if (!rect) return null;
   const clip = getClipRect(view);
@@ -105,7 +82,7 @@ export function dispatchBlockHover(view: any, pos: number): void {
   const rect = getVisibleBlockRect(dom);
   if (!dom || !rect) return;
   dom.dispatchEvent(
-    new PointerEvent("pointermove", {
+    new PointerEvent('pointermove', {
       bubbles: true,
       clientX: rect.x + 2,
       clientY: rect.y + rect.height / 2,
@@ -123,7 +100,7 @@ export function getRealPointer(): { x: number; y: number } {
     pointerTracked = true;
     // hover 自解析会 stopPropagation，所以用捕获阶段
     window.addEventListener(
-      "pointermove",
+      'pointermove',
       (event) => {
         if (!event.isTrusted) return;
         realPointer.x = event.clientX;
@@ -142,13 +119,13 @@ export function isPointerInsideRect(rect: DOMRect | null): boolean {
 }
 
 export function getScrollEl(view: any): HTMLElement | null {
-  return view?.dom?.closest(".editor-scroll") ?? null;
+  return view?.dom?.closest('.editor-scroll') ?? null;
 }
 
 // 判据：块完全显示在视口内时贴边拖拽只滚块内内容（画布平移会与内容滚动互相拉扯）；两坐标空间需先换算
 export function isFullyVisibleInCanvas(el: HTMLElement | null): boolean {
-  const container = el?.closest(".canvas-container") as HTMLElement | null;
-  const wrapper = el?.closest(".drag-wrapper") as HTMLElement | null;
+  const container = el?.closest('.canvas-container') as HTMLElement | null;
+  const wrapper = el?.closest('.drag-wrapper') as HTMLElement | null;
   if (!container || !wrapper) return false;
   const cr = container.getBoundingClientRect();
   const wr = wrapper.getBoundingClientRect();
@@ -186,8 +163,8 @@ export function invalidateCanvasScaleCache(): void {
 
 function getCanvasMetrics(view: any): CanvasMetrics {
   const dom = (view?.dom ?? view) as HTMLElement | null;
-  const canvasEl = dom?.closest?.(".canvas") as HTMLElement | null;
-  const container = dom?.closest?.(".canvas-container") as HTMLElement | null;
+  const canvasEl = dom?.closest?.('.canvas') as HTMLElement | null;
+  const container = dom?.closest?.('.canvas-container') as HTMLElement | null;
   if (!canvasEl || !container) return NO_CANVAS_METRICS;
   const cached = canvasMetricsCache.get(canvasEl);
   if (cached && cached.epoch === canvasScaleEpoch) return cached;
@@ -236,9 +213,7 @@ export function layoutToCanvasCss(view: any, layoutValue: number): number {
 
 function popupElOf(view: any): HTMLElement | null {
   return (
-    (findPositionerEl(view)?.querySelector(
-      ".block-handle-popup",
-    ) as HTMLElement | null) ?? null
+    (findPositionerEl(view)?.querySelector('.block-handle-popup') as HTMLElement | null) ?? null
   );
 }
 
@@ -248,9 +223,9 @@ export function getPopupHeight(view: any): number {
   if (!popup) return 35;
   const prevDisplay = popup.style.display;
   const prevVisibility = popup.style.visibility;
-  if (prevDisplay !== "inline-flex") {
-    popup.style.display = "inline-flex";
-    popup.style.visibility = "hidden";
+  if (prevDisplay !== 'inline-flex') {
+    popup.style.display = 'inline-flex';
+    popup.style.visibility = 'hidden';
   }
   const h = popup.getBoundingClientRect().height;
   popup.style.display = prevDisplay;
@@ -264,9 +239,9 @@ export function getPopupWidth(view: any): number {
   if (!popup) return 64;
   const prevDisplay = popup.style.display;
   const prevVisibility = popup.style.visibility;
-  if (prevDisplay !== "inline-flex") {
-    popup.style.display = "inline-flex";
-    popup.style.visibility = "hidden";
+  if (prevDisplay !== 'inline-flex') {
+    popup.style.display = 'inline-flex';
+    popup.style.visibility = 'hidden';
   }
   const w = popup.getBoundingClientRect().width;
   popup.style.display = prevDisplay;
@@ -276,17 +251,12 @@ export function getPopupWidth(view: any): number {
 
 // positioner 被 Teleport 到 .canvas（不在 .editor-wrapper 内），所以按 data-owner 在 .canvas 里找回对应实例
 export function findPositionerEl(view: any): HTMLElement | null {
-  const wrapper = view?.dom?.closest?.(".editor-wrapper") as HTMLElement | null;
-  const inWrapper = wrapper?.querySelector(
-    ".block-handle-positioner",
-  ) as HTMLElement | null;
+  const wrapper = view?.dom?.closest?.('.editor-wrapper') as HTMLElement | null;
+  const inWrapper = wrapper?.querySelector('.block-handle-positioner') as HTMLElement | null;
   if (inWrapper) return inWrapper;
-  const id = (view?.dom?.closest?.(".drag-wrapper") as HTMLElement | null)
-    ?.dataset.uuid;
+  const id = (view?.dom?.closest?.('.drag-wrapper') as HTMLElement | null)?.dataset.uuid;
   if (!id) return null;
-  return document.querySelector<HTMLElement>(
-    `.block-handle-positioner[data-owner="${id}"]`,
-  );
+  return document.querySelector<HTMLElement>(`.block-handle-positioner[data-owner="${id}"]`);
 }
 
 // ProseKit 未公开 BlockHandleStore API，所以经 aria-ui context 冒泡事件取 provider 回调；每实例缓存
@@ -295,7 +265,7 @@ function createContextResolver(key: string) {
   return (el?: Element | null): any => {
     if (cached) return cached;
     if (!el) return null;
-    const ev: any = new Event("aria-ui:context-request", {
+    const ev: any = new Event('aria-ui:context-request', {
       bubbles: true,
       composed: true,
     });
@@ -309,20 +279,15 @@ function createContextResolver(key: string) {
 }
 
 export function createStoreResolver() {
-  return createContextResolver("aria-ui:context:prosekit-block-handle-store");
+  return createContextResolver('aria-ui:context:prosekit-block-handle-store');
 }
 
 // overlay store 持有 anchorElement，换成指向当前行的动态参考后由 autoUpdate 自行重算位置
 export function createOverlayStoreResolver() {
-  return createContextResolver(
-    "aria-ui:context:prosekit-block-handle-overlay-store",
-  );
+  return createContextResolver('aria-ui:context:prosekit-block-handle-overlay-store');
 }
 
 // 跳过 ProseKit 节流与失效缓冲立即关闭 popup
-export function clearStoreHover(
-  view: any,
-  getStore: (el?: Element | null) => any,
-): void {
+export function clearStoreHover(view: any, getStore: (el?: Element | null) => any): void {
   getStore(findPositionerEl(view))?.hoverState?.set(undefined);
 }

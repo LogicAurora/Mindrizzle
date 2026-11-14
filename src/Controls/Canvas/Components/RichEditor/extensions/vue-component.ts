@@ -1,5 +1,5 @@
-import { defineNodeSpec } from "@prosekit/core";
-import { defineVueNodeView } from "@prosekit/vue";
+import { defineNodeSpec } from '@prosekit/core';
+import { defineVueNodeView } from '@prosekit/vue';
 import {
   h,
   defineComponent,
@@ -14,25 +14,25 @@ import {
   provide,
   Teleport,
   nextTick,
-} from "vue";
-import { mdiArrowBottomRight, mdiCogOutline, mdiExportVariant } from "@mdi/js";
-import { NodeSelection } from "prosekit/pm/state";
-import { Z_LAYER } from "../../../Core/zIndex.ts";
+} from 'vue';
+import { mdiArrowBottomRight, mdiCogOutline, mdiExportVariant } from '@mdi/js';
+import { NodeSelection } from 'prosekit/pm/state';
+import { Z_LAYER } from '../../../Core/zIndex.ts';
 import {
   DEFAULT_CONSTRAINTS,
   normalizeConstraints,
   type ResizeConstraints,
-} from "../../../Registry/resizeConstraints.ts";
-import { embeddedBlockOf } from "../../../Sdk/blockRegistry.ts";
-import { EMBED_SETTINGS_HOST_KEY } from "../../../Sdk/embedSettingsHost.ts";
-import { isValidComponentUuid } from "../../../../../utils/componentDataStore.ts";
+} from '../../../Registry/resizeConstraints.ts';
+import { embeddedBlockOf } from '../../../Sdk/blockRegistry.ts';
+import { EMBED_SETTINGS_HOST_KEY } from '../../../Sdk/embedSettingsHost.ts';
+import { isValidComponentUuid } from '../../../../../utils/componentDataStore.ts';
 import {
   createStoreResolver,
   findPositionerEl,
   layoutToViewportX,
   layoutToViewportY,
   viewportToLayout,
-} from "./blockHandleUtils.ts";
+} from './blockHandleUtils.ts';
 
 const resolveBlockHandleStore = createStoreResolver();
 
@@ -69,63 +69,57 @@ const parsePropsAttr = (raw: string | null): Record<string, unknown> => {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 };
 
 const parseSizeAttr = (raw: string | null, fallback: number): number => {
-  const value = Number.parseFloat(raw ?? "");
+  const value = Number.parseFloat(raw ?? '');
   return Number.isFinite(value) && value > 0 ? value : fallback;
 };
 
 export const vueComponentNode = defineNodeSpec({
-  name: "vueComponent",
-  group: "block",
+  name: 'vueComponent',
+  group: 'block',
   atom: true,
   isolating: true,
   attrs: {
-    componentName: { default: "MyCard" },
+    componentName: { default: 'MyCard' },
     props: { default: {} },
     width: { default: EMBED_DEFAULT_WIDTH },
     height: { default: EMBED_DEFAULT_HEIGHT },
     // 嵌入态也需要组件数据目录，拖出成块时按它迁移文件
-    uuid: { default: "" },
+    uuid: { default: '' },
   },
   parseDOM: [
     {
-      tag: "div[data-vue-component]",
+      tag: 'div[data-vue-component]',
       getAttrs(dom) {
         const el = dom as HTMLElement;
-        const uuid = el.getAttribute("data-uuid") || "";
+        const uuid = el.getAttribute('data-uuid') || '';
         return {
-          componentName: el.getAttribute("data-component-name") || "MyCard",
-          props: parsePropsAttr(el.getAttribute("data-props")),
-          width: parseSizeAttr(
-            el.getAttribute("data-width"),
-            EMBED_DEFAULT_WIDTH,
-          ),
-          height: parseSizeAttr(
-            el.getAttribute("data-height"),
-            EMBED_DEFAULT_HEIGHT,
-          ),
+          componentName: el.getAttribute('data-component-name') || 'MyCard',
+          props: parsePropsAttr(el.getAttribute('data-props')),
+          width: parseSizeAttr(el.getAttribute('data-width'), EMBED_DEFAULT_WIDTH),
+          height: parseSizeAttr(el.getAttribute('data-height'), EMBED_DEFAULT_HEIGHT),
           // uuid 会直接拼进组件数据目录，外部粘贴来的非法值一律丢弃
-          uuid: isValidComponentUuid(uuid) ? uuid : "",
+          uuid: isValidComponentUuid(uuid) ? uuid : '',
         };
       },
     },
   ],
   toDOM(node) {
     return [
-      "div",
+      'div',
       {
-        "data-vue-component": "",
-        "data-component-name": node.attrs.componentName,
-        "data-props": JSON.stringify(node.attrs.props),
-        "data-width": String(node.attrs.width),
-        "data-height": String(node.attrs.height),
-        "data-uuid": node.attrs.uuid || "",
+        'data-vue-component': '',
+        'data-component-name': node.attrs.componentName,
+        'data-props': JSON.stringify(node.attrs.props),
+        'data-width': String(node.attrs.width),
+        'data-height': String(node.attrs.height),
+        'data-uuid': node.attrs.uuid || '',
       },
     ];
   },
@@ -142,7 +136,7 @@ interface ToolButtonOptions {
 
 // 左下"拖出成块"与右下缩放共用角标视觉，避免渲染函数重复整段样式
 // 描边与工具条共用同一个色相，随主题明暗自动切换
-const toolTone = "var(--v-theme-on-surface, #000000)";
+const toolTone = 'var(--v-theme-on-surface, #000000)';
 const TOOLBAR_HEIGHT = 22;
 const TOOL_BUTTON_SIZE = 20;
 const SETTINGS_POP_WIDTH = 240;
@@ -150,23 +144,23 @@ const SETTINGS_POP_GAP = 6;
 const SETTINGS_POP_MARGIN = 8;
 
 const toolButtonStyle = (active: boolean, cursor: string) => ({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   width: `${TOOL_BUTTON_SIZE}px`,
   height: `${TOOL_BUTTON_SIZE}px`,
-  borderRadius: "3px",
-  background: active ? `rgba(${toolTone}, 0.16)` : "transparent",
+  borderRadius: '3px',
+  background: active ? `rgba(${toolTone}, 0.16)` : 'transparent',
   color: active ? `rgba(${toolTone}, 0.95)` : `rgba(${toolTone}, 0.6)`,
   cursor,
-  userSelect: "none" as const,
-  transition: "background 0.15s, color 0.15s",
+  userSelect: 'none' as const,
+  transition: 'background 0.15s, color 0.15s',
 });
 
 function renderToolButton(options: ToolButtonOptions) {
   const { icon, active, cursor, title, onMousedown, onHover } = options;
   return h(
-    "div",
+    'div',
     {
       title,
       style: toolButtonStyle(active, cursor),
@@ -175,8 +169,8 @@ function renderToolButton(options: ToolButtonOptions) {
       onMousedown,
     },
     [
-      h("svg", { viewBox: "0 0 24 24", width: 14, height: 14 }, [
-        h("path", { d: icon, fill: "currentColor" }),
+      h('svg', { viewBox: '0 0 24 24', width: 14, height: 14 }, [
+        h('path', { d: icon, fill: 'currentColor' }),
       ]),
     ],
   );
@@ -184,18 +178,18 @@ function renderToolButton(options: ToolButtonOptions) {
 
 // 拖出成块时跟随鼠标的徽标，不可命中
 function createExtractGhost(): HTMLDivElement {
-  const ghost = document.createElement("div");
+  const ghost = document.createElement('div');
   ghost.style.cssText =
-    "position:fixed;pointer-events:none;z-index:9999;width:26px;height:26px;border-radius:4px;" +
-    "display:flex;align-items:center;justify-content:center;" +
-    "background:rgba(var(--v-theme-surface),0.92);" +
-    "border:1px solid rgba(var(--v-theme-on-surface),0.3);color:rgba(var(--v-theme-on-surface),0.6);";
+    'position:fixed;pointer-events:none;z-index:9999;width:26px;height:26px;border-radius:4px;' +
+    'display:flex;align-items:center;justify-content:center;' +
+    'background:rgba(var(--v-theme-surface),0.92);' +
+    'border:1px solid rgba(var(--v-theme-on-surface),0.3);color:rgba(var(--v-theme-on-surface),0.6);';
   ghost.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16"><path d="${mdiExportVariant}" fill="currentColor"/></svg>`;
   return ghost;
 }
 
 const ResizableContainer = defineComponent({
-  name: "ResizableContainer",
+  name: 'ResizableContainer',
   props: {
     width: { type: Number, required: true },
     height: { type: Number, required: true },
@@ -205,14 +199,14 @@ const ResizableContainer = defineComponent({
     minHeight: { type: Number as PropType<number | null>, default: null },
     maxHeight: { type: Number as PropType<number | null>, default: null },
     readOnly: { type: Boolean, default: false },
-    icon: { type: String, default: "" },
-    title: { type: String, default: "" },
+    icon: { type: String, default: '' },
+    title: { type: String, default: '' },
     // 工具条不是内容区，点它选中整块，用户才能复制/剪切这个原子节点
     selectBlock: { type: Function as PropType<() => void>, required: true },
     // NodeView 渲染上下文外调用 slot 会触发 Vue 警告，所以内容经 prop 传入
     content: { type: Object as PropType<any>, required: true },
   },
-  emits: ["resize", "extract"],
+  emits: ['resize', 'extract'],
   setup(props, { emit }) {
     const containerRef = ref<HTMLElement | null>(null);
     const isResizing = ref(false);
@@ -241,7 +235,7 @@ const ResizableContainer = defineComponent({
     const isInsideSettingsUi = (target: Node): boolean =>
       settingsPopRef.value?.contains(target) === true ||
       settingsAnchorRef.value?.contains(target) === true ||
-      (target instanceof Element && !!target.closest(".v-overlay-container"));
+      (target instanceof Element && !!target.closest('.v-overlay-container'));
 
     // 面板常驻 DOM（只是不可见），所以随时能量高；下方放不下就翻到按钮上方
     const placeSettings = (anchor: HTMLElement) => {
@@ -252,8 +246,7 @@ const ResizableContainer = defineComponent({
         window.innerHeight - height - SETTINGS_POP_MARGIN,
       );
       const below = layoutToViewportY(anchor, rect.bottom) + SETTINGS_POP_GAP;
-      const above =
-        layoutToViewportY(anchor, rect.top) - height - SETTINGS_POP_GAP;
+      const above = layoutToViewportY(anchor, rect.top) - height - SETTINGS_POP_GAP;
       settingsPos.value = {
         left: Math.max(
           SETTINGS_POP_MARGIN,
@@ -262,10 +255,7 @@ const ResizableContainer = defineComponent({
             window.innerWidth - SETTINGS_POP_WIDTH - SETTINGS_POP_MARGIN,
           ),
         ),
-        top:
-          below <= maxTop
-            ? below
-            : Math.max(SETTINGS_POP_MARGIN, Math.min(above, maxTop)),
+        top: below <= maxTop ? below : Math.max(SETTINGS_POP_MARGIN, Math.min(above, maxTop)),
       };
     };
 
@@ -315,10 +305,8 @@ const ResizableContainer = defineComponent({
 
       const onMouseMove = (ev: MouseEvent) => {
         ev.preventDefault();
-        let newWidth =
-          startWidth + viewportToLayout(scaleEl, ev.clientX - startX);
-        let newHeight =
-          startHeight + viewportToLayout(scaleEl, ev.clientY - startY);
+        let newWidth = startWidth + viewportToLayout(scaleEl, ev.clientX - startX);
+        let newHeight = startHeight + viewportToLayout(scaleEl, ev.clientY - startY);
 
         newWidth = Math.max(minW, Math.min(maxW, newWidth));
         newHeight = Math.max(minH, Math.min(maxH, newHeight));
@@ -333,18 +321,18 @@ const ResizableContainer = defineComponent({
 
         currentWidth.value = newWidth;
         currentHeight.value = newHeight;
-        emit("resize", newWidth, newHeight);
+        emit('resize', newWidth, newHeight);
       };
 
       const onMouseUp = () => {
         isResizing.value = false;
-        document.removeEventListener("mousemove", onMouseMove, true);
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener('mousemove', onMouseMove, true);
+        document.removeEventListener('mouseup', onMouseUp);
       };
 
       // hover 自解析会 stopPropagation，所以用捕获阶段
-      document.addEventListener("mousemove", onMouseMove, true);
-      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener('mousemove', onMouseMove, true);
+      document.addEventListener('mouseup', onMouseUp);
     };
 
     // 左下按钮把插入组件拖出成画布块，是否落位由画布判定
@@ -361,26 +349,24 @@ const ResizableContainer = defineComponent({
       };
       const onMouseMove = (ev: MouseEvent) => placeGhost(ev);
       const onMouseUp = (ev: MouseEvent) => {
-        document.removeEventListener("mousemove", onMouseMove, true);
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener('mousemove', onMouseMove, true);
+        document.removeEventListener('mouseup', onMouseUp);
         ghost.remove();
         isExtracting.value = false;
-        emit("extract", { clientX: ev.clientX, clientY: ev.clientY });
+        emit('extract', { clientX: ev.clientX, clientY: ev.clientY });
       };
       placeGhost(event);
       // hover 自解析会 stopPropagation，所以用捕获阶段
-      document.addEventListener("mousemove", onMouseMove, true);
-      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener('mousemove', onMouseMove, true);
+      document.addEventListener('mouseup', onMouseUp);
     };
 
-    onMounted(() =>
-      document.addEventListener("mousedown", closeSettingsOnOutside, true),
-    );
+    onMounted(() => document.addEventListener('mousedown', closeSettingsOnOutside, true));
 
     onUnmounted(() => {
       stopWatchWidth();
       stopWatchHeight();
-      document.removeEventListener("mousedown", closeSettingsOnOutside, true);
+      document.removeEventListener('mousedown', closeSettingsOnOutside, true);
     });
 
     return () => {
@@ -388,23 +374,23 @@ const ResizableContainer = defineComponent({
       const isResizeActive = isResizing.value || isResizeHovered.value;
       const isExtractActive = isExtracting.value || isExtractHovered.value;
 
-      const maxWidth = props.maxWidth !== null ? props.maxWidth + "px" : "100%";
+      const maxWidth = props.maxWidth !== null ? props.maxWidth + 'px' : '100%';
       const toolbar = props.readOnly
         ? null
         : h(
-            "div",
+            'div',
             {
               style: {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 // 宽度交给父级 stretch，写 100% 会在自动宽容器里按可用宽撑开，块缩窄时条不跟
-                alignSelf: "stretch",
+                alignSelf: 'stretch',
                 height: `${TOOLBAR_HEIGHT}px`,
-                marginTop: "2px",
-                padding: "0 3px",
-                boxSizing: "border-box",
-                borderRadius: "4px",
+                marginTop: '2px',
+                padding: '0 3px',
+                boxSizing: 'border-box',
+                borderRadius: '4px',
                 background: `rgba(${toolTone}, 0.06)`,
                 border: `1px solid rgba(${toolTone}, 0.08)`,
               },
@@ -417,41 +403,41 @@ const ResizableContainer = defineComponent({
             },
             [
               h(
-                "div",
+                'div',
                 {
                   style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    flex: "1",
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    flex: '1',
                     minWidth: 0,
                   },
                 },
                 [
                   props.icon
                     ? h(
-                        "svg",
+                        'svg',
                         {
-                          viewBox: "0 0 24 24",
+                          viewBox: '0 0 24 24',
                           width: 12,
                           height: 12,
                           style: {
-                            flex: "0 0 auto",
+                            flex: '0 0 auto',
                             color: `rgba(${toolTone}, 0.45)`,
                           },
                         },
-                        [h("path", { d: props.icon, fill: "currentColor" })],
+                        [h('path', { d: props.icon, fill: 'currentColor' })],
                       )
                     : null,
                   h(
-                    "span",
+                    'span',
                     {
                       style: {
-                        fontSize: "11px",
+                        fontSize: '11px',
                         color: `rgba(${toolTone}, 0.6)`,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       },
                     },
                     props.title,
@@ -459,21 +445,21 @@ const ResizableContainer = defineComponent({
                 ],
               ),
               h(
-                "div",
+                'div',
                 {
                   style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "2px",
-                    flex: "0 0 auto",
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    flex: '0 0 auto',
                   },
                 },
                 [
                   renderToolButton({
                     icon: mdiExportVariant,
                     active: isExtractActive,
-                    cursor: "grab",
-                    title: "拖出成画布块",
+                    cursor: 'grab',
+                    title: '拖出成画布块',
                     onMousedown: startExtract,
                     onHover: (hovering) => {
                       isExtractHovered.value = hovering;
@@ -482,16 +468,16 @@ const ResizableContainer = defineComponent({
                   renderToolButton({
                     icon: mdiCogOutline,
                     active: settingsOpen.value,
-                    cursor: "pointer",
-                    title: "块设置",
+                    cursor: 'pointer',
+                    title: '块设置',
                     onMousedown: toggleSettings,
                     onHover: () => {},
                   }),
                   renderToolButton({
                     icon: mdiArrowBottomRight,
                     active: isResizeActive,
-                    cursor: "nwse-resize",
-                    title: "拖动改变大小",
+                    cursor: 'nwse-resize',
+                    title: '拖动改变大小',
                     onMousedown: startResize,
                     onHover: (hovering) => {
                       isResizeHovered.value = hovering;
@@ -503,31 +489,30 @@ const ResizableContainer = defineComponent({
           );
 
       return h(
-        "div",
+        'div',
         {
           style: {
-            display: "inline-flex",
-            flexDirection: "column",
-            width: currentWidth.value + "px",
+            display: 'inline-flex',
+            flexDirection: 'column',
+            width: currentWidth.value + 'px',
             maxWidth,
-            verticalAlign: "top",
+            verticalAlign: 'top',
           },
         },
         [
           h(
-            "div",
+            'div',
             {
               ref: containerRef,
               style: {
-                width: "100%",
-                height: currentHeight.value + "px",
+                width: '100%',
+                height: currentHeight.value + 'px',
                 maxWidth,
-                maxHeight:
-                  props.maxHeight !== null ? props.maxHeight + "px" : "100%",
-                position: "relative",
-                boxSizing: "border-box",
-                overflow: "hidden",
-                borderRadius: "4px",
+                maxHeight: props.maxHeight !== null ? props.maxHeight + 'px' : '100%',
+                position: 'relative',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                borderRadius: '4px',
                 // 描边会挤压内容，所以用 inset 阴影画
                 boxShadow: `inset 0 0 0 1px rgba(${toolTone}, 0.22)`,
               },
@@ -536,32 +521,32 @@ const ResizableContainer = defineComponent({
           ),
           toolbar,
           // 设置面板挂在 body：放在 .editor-scroll 里会被 overflow 裁掉
-          h(Teleport, { to: "body" }, [
+          h(Teleport, { to: 'body' }, [
             h(
-              "div",
+              'div',
               {
                 ref: settingsPopRef,
                 style: {
-                  position: "fixed",
+                  position: 'fixed',
                   left: `${settingsPos.value.left}px`,
                   top: `${settingsPos.value.top}px`,
                   width: `${SETTINGS_POP_WIDTH}px`,
                   // 常驻布局才能量高度算展开方向，关闭时用可见性而不是 display 隐藏
-                  display: "block",
-                  visibility: settingsOpen.value ? "visible" : "hidden",
-                  pointerEvents: settingsOpen.value ? "auto" : "none",
+                  display: 'block',
+                  visibility: settingsOpen.value ? 'visible' : 'hidden',
+                  pointerEvents: settingsOpen.value ? 'auto' : 'none',
                   zIndex: Z_LAYER.settingsMenu,
-                  background: "rgb(var(--v-theme-surface))",
+                  background: 'rgb(var(--v-theme-surface))',
                   border: `1px solid rgba(${toolTone}, 0.12)`,
-                  borderRadius: "6px",
-                  boxShadow: "0 12px 32px -12px rgba(0, 0, 0, 0.45)",
-                  padding: "4px",
-                  maxHeight: "60vh",
-                  overflow: "auto",
+                  borderRadius: '6px',
+                  boxShadow: '0 12px 32px -12px rgba(0, 0, 0, 0.45)',
+                  padding: '4px',
+                  maxHeight: '60vh',
+                  overflow: 'auto',
                 },
                 onMousedown: (event: MouseEvent) => event.stopPropagation(),
               },
-              [h("div", { ref: settingsHostRef })],
+              [h('div', { ref: settingsHostRef })],
             ),
           ]),
         ],
@@ -571,9 +556,9 @@ const ResizableContainer = defineComponent({
 });
 
 export const vueComponentNodeView = defineVueNodeView({
-  name: "vueComponent",
+  name: 'vueComponent',
   component: defineComponent({
-    props: ["node", "view", "getPos"],
+    props: ['node', 'view', 'getPos'],
     setup(props) {
       const node = props.node;
       const view = props.view;
@@ -582,7 +567,7 @@ export const vueComponentNodeView = defineVueNodeView({
 
       const setBlockHover = () => {
         const pos = getPos();
-        if (typeof pos !== "number") return;
+        if (typeof pos !== 'number') return;
         const store = resolveBlockHandleStore(findPositionerEl(view));
         store?.hoverState?.set({ node: node.value, pos });
       };
@@ -602,34 +587,22 @@ export const vueComponentNodeView = defineVueNodeView({
       // 组件内容要留给业务输入，只有工具条能当选择把手；选中后 Ctrl+C/Delete 才作用在这个原子节点上
       const selectBlock = () => {
         const pos = getPos();
-        if (typeof pos !== "number") return;
-        view.dispatch(
-          view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)),
-        );
+        if (typeof pos !== 'number') return;
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
         view.focus();
       };
 
       // 工具条标题/图标与画布块一致：按当前 config 反推，改 props 立即更新
-      const definition = computed(() =>
-        embeddedBlockOf(node.value.attrs.componentName as string),
-      );
+      const definition = computed(() => embeddedBlockOf(node.value.attrs.componentName as string));
       const embedConfig = computed<Record<string, unknown>>(() => {
         const embed = definition.value?.embed;
-        return embed
-          ? embed.fromProps(node.value.attrs.props as Record<string, unknown>)
-          : {};
+        return embed ? embed.fromProps(node.value.attrs.props as Record<string, unknown>) : {};
       });
       const blockIcon = computed(
-        () =>
-          definition.value?.iconOf?.(embedConfig.value) ??
-          definition.value?.icon ??
-          "",
+        () => definition.value?.iconOf?.(embedConfig.value) ?? definition.value?.icon ?? '',
       );
       const blockTitle = computed(
-        () =>
-          definition.value?.titleOf?.(embedConfig.value) ??
-          definition.value?.title ??
-          "",
+        () => definition.value?.titleOf?.(embedConfig.value) ?? definition.value?.title ?? '',
       );
 
       const state = reactive<{
@@ -648,15 +621,14 @@ export const vueComponentNodeView = defineVueNodeView({
       const load = async () => {
         const name = node.value.attrs.componentName as string;
         try {
-          const { component, constraints, aspectRatio } =
-            await loadComponent(name);
+          const { component, constraints, aspectRatio } = await loadComponent(name);
           state.component = markRaw(component);
           state.constraints = constraints;
           state.aspectRatio = aspectRatio;
           state.loaded = true;
           state.error = undefined;
         } catch (err: any) {
-          state.error = err.message || "加载失败";
+          state.error = err.message || '加载失败';
           state.loaded = true;
         }
       };
@@ -713,7 +685,7 @@ export const vueComponentNodeView = defineVueNodeView({
       const handleResize = (newWidth: number, newHeight: number) => {
         if (readOnly.value) return;
         const pos = getPos();
-        if (typeof pos !== "number") return;
+        if (typeof pos !== 'number') return;
         const tr = view.state.tr;
         tr.setNodeMarkup(pos, undefined, {
           ...node.value.attrs,
@@ -726,7 +698,7 @@ export const vueComponentNodeView = defineVueNodeView({
       const updateComponentProps = (props: Record<string, any>) => {
         if (readOnly.value) return;
         const pos = getPos();
-        if (typeof pos !== "number") return;
+        if (typeof pos !== 'number') return;
         const tr = view.state.tr;
         tr.setNodeMarkup(pos, undefined, {
           ...node.value.attrs,
@@ -739,7 +711,7 @@ export const vueComponentNodeView = defineVueNodeView({
       const handleExtract = (point: { clientX: number; clientY: number }) => {
         if (readOnly.value) return;
         const pos = getPos();
-        if (typeof pos !== "number") return;
+        if (typeof pos !== 'number') return;
         // doc 需 block+，仅剩该节点时抽出会留下非法空文档，所以不响应
         if (view.state.doc.childCount <= 1) return;
         const payload = {
@@ -750,9 +722,7 @@ export const vueComponentNodeView = defineVueNodeView({
           clientY: point.clientY,
           accepted: false,
         };
-        window.dispatchEvent(
-          new CustomEvent("Mindrizzle:extract-component", { detail: payload }),
-        );
+        window.dispatchEvent(new CustomEvent('Mindrizzle:extract-component', { detail: payload }));
         if (!payload.accepted) return;
         view.dispatch(view.state.tr.delete(pos, pos + node.value.nodeSize));
       };
@@ -770,22 +740,14 @@ export const vueComponentNodeView = defineVueNodeView({
       );
 
       onMounted(() => {
-        editorWrapper = view.dom.closest(
-          ".editor-wrapper",
-        ) as HTMLElement | null;
+        editorWrapper = view.dom.closest('.editor-wrapper') as HTMLElement | null;
         if (!editorWrapper) return;
-        readOnly.value = editorWrapper.dataset.readOnly === "true";
-        editorWrapper.addEventListener(
-          "Mindrizzle:rich-text-read-only",
-          onReadOnlyChange,
-        );
+        readOnly.value = editorWrapper.dataset.readOnly === 'true';
+        editorWrapper.addEventListener('Mindrizzle:rich-text-read-only', onReadOnlyChange);
       });
 
       onUnmounted(() =>
-        editorWrapper?.removeEventListener(
-          "Mindrizzle:rich-text-read-only",
-          onReadOnlyChange,
-        ),
+        editorWrapper?.removeEventListener('Mindrizzle:rich-text-read-only', onReadOnlyChange),
       );
 
       return () => {
@@ -794,26 +756,26 @@ export const vueComponentNodeView = defineVueNodeView({
 
         if (!state.loaded) {
           return h(
-            "div",
+            'div',
             {
               style: {
-                padding: "16px",
-                color: "rgba(var(--v-theme-on-surface), 0.6)",
+                padding: '16px',
+                color: 'rgba(var(--v-theme-on-surface), 0.6)',
               },
             },
-            "加载中...",
+            '加载中...',
           );
         }
         if (state.error || !state.component) {
           return h(
-            "div",
+            'div',
             {
               style: {
-                color: "var(--v-theme-error, #b71c1c)",
-                padding: "8px",
+                color: 'var(--v-theme-error, #b71c1c)',
+                padding: '8px',
               },
             },
-            `错误：${state.error || "组件未找到"}`,
+            `错误：${state.error || '组件未找到'}`,
           );
         }
 
@@ -821,13 +783,13 @@ export const vueComponentNodeView = defineVueNodeView({
         const aspectRatio = state.aspectRatio;
 
         const innerContent = h(
-          "div",
+          'div',
           {
             style: {
-              width: "100%",
-              height: "100%",
-              overflow: "hidden",
-              boxSizing: "border-box",
+              width: '100%',
+              height: '100%',
+              overflow: 'hidden',
+              boxSizing: 'border-box',
             },
             onMousedown: (e: Event) => e.stopPropagation(),
             onKeydown: (e: Event) => e.stopPropagation(),
@@ -841,16 +803,13 @@ export const vueComponentNodeView = defineVueNodeView({
             readOnly: readOnly.value,
             blockUuid: currentNode.attrs.uuid as string,
             // 结构化块（表格/任务）一次要改多个字段，所以除两个历史通道外再给一个通用 patch 通道
-            onUpdateProps: (patch: Record<string, any>) =>
-              updateComponentProps(patch),
-            "onUpdate:modelValue": (value: string) =>
-              updateComponentProps({ modelValue: value }),
-            "onUpdate:language": (value: string) =>
-              updateComponentProps({ language: value }),
+            onUpdateProps: (patch: Record<string, any>) => updateComponentProps(patch),
+            'onUpdate:modelValue': (value: string) => updateComponentProps({ modelValue: value }),
+            'onUpdate:language': (value: string) => updateComponentProps({ language: value }),
             style: {
               ...(componentProps.style || {}),
-              width: "100%",
-              height: "100%",
+              width: '100%',
+              height: '100%',
             },
           }),
         );

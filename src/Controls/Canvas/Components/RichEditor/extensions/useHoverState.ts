@@ -1,5 +1,5 @@
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import type { Editor } from "@prosekit/core";
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import type { Editor } from '@prosekit/core';
 import {
   getBlockEl,
   getBlockRect,
@@ -16,7 +16,7 @@ import {
   layoutToViewportY,
   getRealPointer,
   viewportToLayout,
-} from "./blockHandleUtils";
+} from './blockHandleUtils';
 
 export interface HoveredBlock {
   node: unknown;
@@ -25,7 +25,7 @@ export interface HoveredBlock {
 
 export function useHoverState(
   editor: Editor | null,
-  dir: "ltr" | "rtl",
+  dir: 'ltr' | 'rtl',
   getStore: (el?: Element | null) => any,
   getOverlayStore?: (el?: Element | null) => any,
 ) {
@@ -45,19 +45,15 @@ export function useHoverState(
   function zoomFromStyle(): number {
     const dom = getView(editor)?.dom as HTMLElement | undefined;
     const parsed = Number.parseFloat(
-      dom ? getComputedStyle(dom).getPropertyValue("--canvas-zoom") : "",
+      dom ? getComputedStyle(dom).getPropertyValue('--canvas-zoom') : '',
     );
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
   }
 
   // 逐帧读 computed style 会带来 N 次强制样式重算，所以优先取事件 detail 的 zoom，值未变则早返回
   const readCanvasZoom = (event?: Event) => {
-    const detailZoom = (event as CustomEvent<{ zoom?: number }> | undefined)
-      ?.detail?.zoom;
-    const next =
-      typeof detailZoom === "number" && detailZoom > 0
-        ? detailZoom
-        : zoomFromStyle();
+    const detailZoom = (event as CustomEvent<{ zoom?: number }> | undefined)?.detail?.zoom;
+    const next = typeof detailZoom === 'number' && detailZoom > 0 ? detailZoom : zoomFromStyle();
     if (next === canvasZoom.value) return;
     canvasZoom.value = next;
     if (next === 1) stopKeepAlive();
@@ -76,20 +72,18 @@ export function useHoverState(
       clientX: viewportToLayout(view, clientX) + jitter,
       clientY: viewportToLayout(view, clientY) + jitter,
       pointerId: 1,
-      pointerType: "mouse",
+      pointerType: 'mouse',
       isPrimary: true,
     };
-    dom.dispatchEvent(new PointerEvent("pointermove", init));
+    dom.dispatchEvent(new PointerEvent('pointermove', init));
     const enterInit: PointerEventInit = { ...init, bubbles: false };
-    dom.dispatchEvent(new PointerEvent("pointerenter", enterInit));
-    document.dispatchEvent(new PointerEvent("pointerenter", enterInit));
+    dom.dispatchEvent(new PointerEvent('pointerenter', enterInit));
+    document.dispatchEvent(new PointerEvent('pointerenter', enterInit));
   }
 
   // stateChange 在缩放环境偶发滞后，所以用事件目标 + posAtDOM 自解析；
   // 调 elementFromPoint 会变成每块×每事件的强制布局，所以复用事件目标做 O(1) 判定
-  function rowAtElement(
-    hit: HTMLElement,
-  ): { row: HoveredBlock; el: HTMLElement } | null {
+  function rowAtElement(hit: HTMLElement): { row: HoveredBlock; el: HTMLElement } | null {
     const view = getView(editor);
     const dom = view?.dom as HTMLElement | null;
     if (!view || !dom) return null;
@@ -104,7 +98,7 @@ export function useHoverState(
   }
 
   const HOVER_UI_SELECTOR =
-    ".block-handle-popup, .block-handle-positioner, .floating-handle, .side-settings, .handle";
+    '.block-handle-popup, .block-handle-positioner, .floating-handle, .side-settings, .handle';
 
   const storeOf = () => getStore(findPositionerEl(getView(editor)));
   const overlayOf = () => getOverlayStore?.(findPositionerEl(getView(editor)));
@@ -195,23 +189,23 @@ export function useHoverState(
   onMounted(() => {
     readCanvasZoom();
     placementScrollEl = getScrollEl(getView(editor));
-    placementScrollEl?.addEventListener("scroll", refreshPlacement, {
+    placementScrollEl?.addEventListener('scroll', refreshPlacement, {
       passive: true,
     });
-    window.addEventListener("resize", refreshPlacement);
-    window.addEventListener("Mindrizzle:canvas-transform", refreshPlacement);
-    window.addEventListener("pointermove", onZoomPointerMove, true);
-    window.addEventListener("pointermove", onPointerResolve, true);
-    window.addEventListener("Mindrizzle:canvas-transform", readCanvasZoom);
+    window.addEventListener('resize', refreshPlacement);
+    window.addEventListener('Mindrizzle:canvas-transform', refreshPlacement);
+    window.addEventListener('pointermove', onZoomPointerMove, true);
+    window.addEventListener('pointermove', onPointerResolve, true);
+    window.addEventListener('Mindrizzle:canvas-transform', readCanvasZoom);
   });
 
   onUnmounted(() => {
-    placementScrollEl?.removeEventListener("scroll", refreshPlacement);
-    window.removeEventListener("resize", refreshPlacement);
-    window.removeEventListener("Mindrizzle:canvas-transform", refreshPlacement);
-    window.removeEventListener("pointermove", onZoomPointerMove, true);
-    window.removeEventListener("pointermove", onPointerResolve, true);
-    window.removeEventListener("Mindrizzle:canvas-transform", readCanvasZoom);
+    placementScrollEl?.removeEventListener('scroll', refreshPlacement);
+    window.removeEventListener('resize', refreshPlacement);
+    window.removeEventListener('Mindrizzle:canvas-transform', refreshPlacement);
+    window.removeEventListener('pointermove', onZoomPointerMove, true);
+    window.removeEventListener('pointermove', onPointerResolve, true);
+    window.removeEventListener('Mindrizzle:canvas-transform', readCanvasZoom);
     cancelHoverClear();
     stopKeepAlive();
   });
@@ -219,7 +213,7 @@ export function useHoverState(
   function onBlockStateChange(event: Event) {
     const detail = (event as CustomEvent).detail as HoveredBlock | null;
     // 拖拽需跨编辑器全局抑制 popup/高亮
-    if (document.body.classList.contains("block-handle-dragging")) {
+    if (document.body.classList.contains('block-handle-dragging')) {
       activeHover.value = null;
       stopKeepAlive();
       return;
@@ -237,35 +231,25 @@ export function useHoverState(
   // 留出 4px 余量，避免空间判断被边界像素误差影响
   const POPUP_GAP = 4;
 
-  type PopupPlacement = "left" | "right" | "top" | "bottom";
+  type PopupPlacement = 'left' | 'right' | 'top' | 'bottom';
   type PlacementSpaces = Record<PopupPlacement, number>;
 
-  const horizontalPlacementOf = (
-    view: any,
-    fallback: "left" | "right",
-  ): "left" | "right" => {
+  const horizontalPlacementOf = (view: any, fallback: 'left' | 'right'): 'left' | 'right' => {
     const editorDom = view?.dom as HTMLElement | null;
-    const widget = editorDom?.closest(".drag-wrapper") as HTMLElement | null;
-    const container = editorDom?.closest(
-      ".canvas-container",
-    ) as HTMLElement | null;
+    const widget = editorDom?.closest('.drag-wrapper') as HTMLElement | null;
+    const container = editorDom?.closest('.canvas-container') as HTMLElement | null;
     if (!widget || !container) return fallback;
     const widgetRect = widget.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     const left = layoutToViewportX(view, widgetRect.left);
     const right = layoutToViewportX(view, widgetRect.right);
-    return (left + right) / 2 < (containerRect.left + containerRect.right) / 2
-      ? "right"
-      : "left";
+    return (left + right) / 2 < (containerRect.left + containerRect.right) / 2 ? 'right' : 'left';
   };
 
-  const placementOrderOf = (
-    view: any,
-    fallback: "left" | "right",
-  ): PopupPlacement[] => {
+  const placementOrderOf = (view: any, fallback: 'left' | 'right'): PopupPlacement[] => {
     const preferred = horizontalPlacementOf(view, fallback);
-    const opposite = preferred === "left" ? "right" : "left";
-    return [preferred, opposite, "top", "bottom"];
+    const opposite = preferred === 'left' ? 'right' : 'left';
+    return [preferred, opposite, 'top', 'bottom'];
   };
 
   const prioritizeVisibleEdges = (
@@ -275,10 +259,10 @@ export function useHoverState(
   ): PopupPlacement[] => {
     if (!full) return order;
     const clipped: PopupPlacement[] = [];
-    if (full.top < clip.top) clipped.push("bottom");
-    if (full.bottom > clip.bottom) clipped.push("top");
-    if (full.left < clip.left) clipped.push("right");
-    if (full.right > clip.right) clipped.push("left");
+    if (full.top < clip.top) clipped.push('bottom');
+    if (full.bottom > clip.bottom) clipped.push('top');
+    if (full.left < clip.left) clipped.push('right');
+    if (full.right > clip.right) clipped.push('left');
     return [...new Set([...clipped, ...order])];
   };
 
@@ -287,14 +271,10 @@ export function useHoverState(
     needs: PlacementSpaces,
     order: PopupPlacement[],
   ): PopupPlacement => {
-    const fitting = order.find(
-      (placement) => spaces[placement] >= needs[placement],
-    );
+    const fitting = order.find((placement) => spaces[placement] >= needs[placement]);
     if (fitting) return fitting;
     return order.reduce((best, placement) =>
-      spaces[placement] / needs[placement] > spaces[best] / needs[best]
-        ? placement
-        : best,
+      spaces[placement] / needs[placement] > spaces[best] / needs[best] ? placement : best,
     );
   };
 
@@ -311,9 +291,9 @@ export function useHoverState(
     );
   };
 
-  const handlePlacement = computed<"left" | "right" | "top" | "bottom">(() => {
+  const handlePlacement = computed<'left' | 'right' | 'top' | 'bottom'>(() => {
     void placementVersion.value;
-    const fallback: "left" | "right" = dir === "rtl" ? "right" : "left";
+    const fallback: 'left' | 'right' = dir === 'rtl' ? 'right' : 'left';
     if (!hoveredBlock.value) return fallback;
 
     const view = getView(editor);
@@ -322,10 +302,8 @@ export function useHoverState(
     if (!view || !row) return fallback;
     const clip = getClipRect(view);
     const popupBounds = getCanvasViewportRect(view);
-    const needX =
-      layoutToViewportSize(view, getPopupWidth(view)) + POPUP_GAP;
-    const needY =
-      layoutToViewportSize(view, getPopupHeight(view)) + POPUP_GAP;
+    const needX = layoutToViewportSize(view, getPopupWidth(view)) + POPUP_GAP;
+    const needY = layoutToViewportSize(view, getPopupHeight(view)) + POPUP_GAP;
     const spaces: PlacementSpaces = {
       left: row.left - popupBounds.left,
       right: popupBounds.right - row.right,

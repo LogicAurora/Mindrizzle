@@ -1,25 +1,25 @@
-import { mdiImageOutline } from "@mdi/js";
+import { mdiImageOutline } from '@mdi/js';
 
-import { defineBlock } from "../Sdk/defineBlock.ts";
-import type { ImageBlockConfig } from "../Registry/canvasComponents.ts";
-import { IMAGE_BLOCK_CONSTRAINTS } from "../Registry/componentConstraints.ts";
-import ImageBlockEmbed from "./ImageBlock/ImageBlockEmbed.vue";
-import ImageSettings from "./ImageBlock/ImageSettings.vue";
-import { toImageFit } from "./ImageBlock/imageConfig.ts";
+import { defineBlock } from '../Sdk/defineBlock.ts';
+import type { ImageBlockConfig } from '../Registry/canvasComponents.ts';
+import { IMAGE_BLOCK_CONSTRAINTS } from '../Registry/componentConstraints.ts';
+import ImageBlockEmbed from './ImageBlock/ImageBlockEmbed.vue';
+import ImageSettings from './ImageBlock/ImageSettings.vue';
+import { toImageFit } from './ImageBlock/imageConfig.ts';
 
 export default defineBlock<ImageBlockConfig>({
-  key: "ImageBlock",
-  title: "图片",
-  description: "放置本地图片，可调整填充方式",
+  key: 'ImageBlock',
+  title: '图片',
+  description: '放置本地图片，可调整填充方式',
   icon: mdiImageOutline,
-  addId: "add-image",
+  addId: 'add-image',
   order: 30,
   constraints: IMAGE_BLOCK_CONSTRAINTS,
   defaultConfig: () => ({
-    path: "",
-    mime: "",
-    alt: "",
-    fit: "contain",
+    path: '',
+    mime: '',
+    alt: '',
+    fit: 'contain',
     autoSize: false,
   }),
   defaultSize: { w: 360, h: 240 },
@@ -27,7 +27,7 @@ export default defineBlock<ImageBlockConfig>({
   heightChangableOf: (config) => config.autoSize !== true,
   settings: ImageSettings,
   embed: {
-    nodeName: "ImageBlock",
+    nodeName: 'ImageBlock',
     component: ImageBlockEmbed,
     toProps: (config) => ({
       path: config.path,
@@ -37,9 +37,9 @@ export default defineBlock<ImageBlockConfig>({
       autoSize: config.autoSize,
     }),
     fromProps: (props) => ({
-      path: String(props.path ?? ""),
-      mime: String(props.mime ?? ""),
-      alt: String(props.alt ?? ""),
+      path: String(props.path ?? ''),
+      mime: String(props.mime ?? ''),
+      alt: String(props.alt ?? ''),
       fit: toImageFit(props.fit),
       autoSize: props.autoSize === true,
     }),

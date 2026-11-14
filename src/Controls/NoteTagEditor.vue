@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { mdiPlus } from "@mdi/js";
+import { computed, ref } from 'vue';
+import { mdiPlus } from '@mdi/js';
 
-import {
-  resolveTagColor,
-  TAG_NAME_MAX_LEN,
-  tagLibrary,
-} from "../utils/tagStore";
+import { resolveTagColor, TAG_NAME_MAX_LEN, tagLibrary } from '../utils/tagStore';
 
 // 中文输入法里逗号常打成全角，两种都当分隔符
 const TAG_DELIMITERS = /[,，]/;
@@ -17,10 +13,10 @@ const MAX_VISIBLE_OPTIONS = 60;
 const props = defineProps<{ modelValue: string[] }>();
 
 const emit = defineEmits<{
-  "update:modelValue": [value: string[]];
+  'update:modelValue': [value: string[]];
 }>();
 
-const keyword = ref("");
+const keyword = ref('');
 const fieldRef = ref<{ focus: () => void } | null>(null);
 
 const availableTags = computed(() =>
@@ -31,33 +27,21 @@ const availableTags = computed(() =>
 const matchedTags = computed(() => {
   const search = keyword.value.trim().toLowerCase();
   if (!search) return availableTags.value;
-  return availableTags.value.filter((entry) =>
-    entry.name.toLowerCase().includes(search),
-  );
+  return availableTags.value.filter((entry) => entry.name.toLowerCase().includes(search));
 });
 
-const createName = computed(() =>
-  keyword.value.trim().slice(0, TAG_NAME_MAX_LEN),
-);
+const createName = computed(() => keyword.value.trim().slice(0, TAG_NAME_MAX_LEN));
 
 const isCreateHintVisible = computed(
   () =>
-    !!createName.value &&
-    !props.modelValue.includes(createName.value) &&
-    !matchedTags.value.length,
+    !!createName.value && !props.modelValue.includes(createName.value) && !matchedTags.value.length,
 );
 
-const isOptionsVisible = computed(
-  () => !!matchedTags.value.length || isCreateHintVisible.value,
-);
+const isOptionsVisible = computed(() => !!matchedTags.value.length || isCreateHintVisible.value);
 
-const visibleTags = computed(() =>
-  matchedTags.value.slice(0, MAX_VISIBLE_OPTIONS),
-);
+const visibleTags = computed(() => matchedTags.value.slice(0, MAX_VISIBLE_OPTIONS));
 
-const hiddenCount = computed(
-  () => matchedTags.value.length - visibleTags.value.length,
-);
+const hiddenCount = computed(() => matchedTags.value.length - visibleTags.value.length);
 
 function focusInput() {
   fieldRef.value?.focus();
@@ -71,14 +55,14 @@ function handleBackspace() {
 }
 
 function addTag(name: string) {
-  keyword.value = "";
+  keyword.value = '';
   if (props.modelValue.includes(name)) return;
-  emit("update:modelValue", [...props.modelValue, name]);
+  emit('update:modelValue', [...props.modelValue, name]);
 }
 
 function removeTag(name: string) {
   emit(
-    "update:modelValue",
+    'update:modelValue',
     props.modelValue.filter((item) => item !== name),
   );
 }
@@ -88,12 +72,10 @@ function commitKeyword() {
   const names = keyword.value
     .split(TAG_DELIMITERS)
     .map((item) => item.trim().slice(0, TAG_NAME_MAX_LEN));
-  const additions = names.filter(
-    (name) => name && !props.modelValue.includes(name),
-  );
-  keyword.value = "";
+  const additions = names.filter((name) => name && !props.modelValue.includes(name));
+  keyword.value = '';
   if (!additions.length) return;
-  emit("update:modelValue", [...props.modelValue, ...additions]);
+  emit('update:modelValue', [...props.modelValue, ...additions]);
 }
 </script>
 

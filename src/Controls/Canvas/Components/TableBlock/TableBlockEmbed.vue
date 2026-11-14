@@ -24,24 +24,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, inject, ref, watch } from "vue";
+import { computed, defineAsyncComponent, inject, ref, watch } from 'vue';
 
 // 根是「内容 + Teleport」的 fragment，透传 attrs 无处可落
 
 defineOptions({ inheritAttrs: false });
 
-import { EMBED_SETTINGS_HOST_KEY } from "../../Sdk/embedSettingsHost.ts";
-import TableSettings from "./TableSettings.vue";
+import { EMBED_SETTINGS_HOST_KEY } from '../../Sdk/embedSettingsHost.ts';
+import TableSettings from './TableSettings.vue';
 import {
   bodyRowCountOf,
   columnCountOf,
   normalizeTableMerges,
   normalizeTableRows,
   type TableSelection,
-} from "./tableRows.ts";
+} from './tableRows.ts';
 
 // 块定义是同步注册的，vxe-table 体积不能跟着进首屏包
-const TableGrid = defineAsyncComponent(() => import("./TableGrid.vue"));
+const TableGrid = defineAsyncComponent(() => import('./TableGrid.vue'));
 
 const props = defineProps<{
   rows?: unknown;
@@ -53,7 +53,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update-props", patch: Record<string, unknown>): void;
+  (e: 'update-props', patch: Record<string, unknown>): void;
 }>();
 
 const settingsHost = inject(EMBED_SETTINGS_HOST_KEY, ref(null));
@@ -80,11 +80,11 @@ watch(
 
 const onRowsUpdate = (next: string[][]) => {
   rows.value = next;
-  emit("update-props", { rows: next });
+  emit('update-props', { rows: next });
 };
 
 const onSettingsUpdate = (patch: Record<string, unknown>) => {
   if (Array.isArray(patch.rows)) rows.value = patch.rows as string[][];
-  emit("update-props", patch);
+  emit('update-props', patch);
 };
 </script>

@@ -1,43 +1,40 @@
-import { createApp } from "vue";
-import { createMemoryHistory, createRouter } from "vue-router";
-import App from "./App.vue";
-import vuetify from "./Vuetify.ts";
-import NoteSet from "./Views/NoteSets.vue";
-import Home from "./Views/Home.vue";
-import { routeTransition } from "./utils/routeTransition.ts";
-import { loadEditorComponent } from "./utils/editorRoute";
-import { getSetting } from "./utils/settingsStore";
-import { isDeveloperMode, loadDeveloperMode } from "./utils/developerMode";
-import {
-  APPEARANCE_SETTING_KEY,
-  isAppearancePreference,
-} from "./utils/appearancePreference";
-import { defaultThemes } from "./Vuetify.ts";
-import 'unfonts.css'
+import { createApp } from 'vue';
+import { createMemoryHistory, createRouter } from 'vue-router';
+import App from './App.vue';
+import vuetify from './Vuetify.ts';
+import NoteSet from './Views/NoteSets.vue';
+import Home from './Views/Home.vue';
+import { routeTransition } from './utils/routeTransition.ts';
+import { loadEditorComponent } from './utils/editorRoute';
+import { getSetting } from './utils/settingsStore';
+import { isDeveloperMode, loadDeveloperMode } from './utils/developerMode';
+import { APPEARANCE_SETTING_KEY, isAppearancePreference } from './utils/appearancePreference';
+import { defaultThemes } from './Vuetify.ts';
+import 'unfonts.css';
 
 const routes = [
-  { path: "/", component: Home, meta: { level: 1, title: "首页" } },
-  { path: "/set", component: NoteSet, meta: { level: 1, title: "便签集" } },
+  { path: '/', component: Home, meta: { level: 1, title: '首页' } },
+  { path: '/set', component: NoteSet, meta: { level: 1, title: '便签集' } },
   {
-    path: "/board",
-    component: () => import("./Views/NoteBoard.vue"),
-    meta: { level: 2, title: "记事板" },
+    path: '/board',
+    component: () => import('./Views/NoteBoard.vue'),
+    meta: { level: 2, title: '记事板' },
   },
   {
-    path: "/editor/:fileName",
-    name: "editor",
+    path: '/editor/:fileName',
+    name: 'editor',
     component: loadEditorComponent,
-    meta: { level: 100, title: "编辑" },
+    meta: { level: 100, title: '编辑' },
   },
   {
-    path: "/settings/:tab",
-    component: () => import("./Views/Settings.vue"),
-    meta: { level: 3, title: "设置", toolbarTabs: true },
+    path: '/settings/:tab',
+    component: () => import('./Views/Settings.vue'),
+    meta: { level: 3, title: '设置', toolbarTabs: true },
   },
   {
-    path: "/debug",
-    component: () => import("./Views/Debug.vue"),
-    meta: { level: 4, title: "调试" },
+    path: '/debug',
+    component: () => import('./Views/Debug.vue'),
+    meta: { level: 4, title: '调试' },
   },
 ];
 
@@ -48,30 +45,30 @@ const router = createRouter({
 
 router.beforeEach((to, from) => {
   // 调试页属于隐藏入口，直接改 URL 也要拦住
-  if (to.path === "/debug" && !isDeveloperMode.value) return "/set";
+  if (to.path === '/debug' && !isDeveloperMode.value) return '/set';
 
   const toLevel = (to.meta.level as number) ?? 0;
   const fromLevel = (from.meta.level as number) ?? 0;
 
   if (toLevel > fromLevel) {
-    routeTransition.value = "VSlideXReverseTransition";
+    routeTransition.value = 'VSlideXReverseTransition';
   } else if (toLevel < fromLevel) {
-    routeTransition.value = "VSlideXTransition";
+    routeTransition.value = 'VSlideXTransition';
   } else {
-    routeTransition.value = "VFadeTransition";
+    routeTransition.value = 'VFadeTransition';
   }
 });
 
 // 匹配懒加载 chunk 取不到的错误文案
 const CHUNK_LOAD_ERROR =
   /Failed to fetch dynamically imported module|Importing a module script failed/;
-const CHUNK_RELOAD_KEY = "mindrizzle:chunk-reload";
+const CHUNK_RELOAD_KEY = 'mindrizzle:chunk-reload';
 
 // 因构建产物更新后旧 chunk 必然 404、只能重载入口恢复，故生产环境限次重载，避免停在空白页
 router.onError((error) => {
   if (!import.meta.env.PROD || !CHUNK_LOAD_ERROR.test(String(error))) return;
   if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return;
-  sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
   window.location.reload();
 });
 
@@ -81,7 +78,7 @@ async function mountApplication() {
   try {
     await loadDeveloperMode();
   } catch (error) {
-    console.error("读取开发者模式设置失败：", error);
+    console.error('读取开发者模式设置失败：', error);
   }
 
   try {
@@ -100,10 +97,10 @@ async function mountApplication() {
       await vuetify.theme.change(preference.theme, true);
     }
   } catch (error) {
-    console.error("恢复外观设置失败：", error);
+    console.error('恢复外观设置失败：', error);
   }
 
-  createApp(App).use(vuetify).use(router).mount("#app");
+  createApp(App).use(vuetify).use(router).mount('#app');
 }
 
 function applySavedColors(

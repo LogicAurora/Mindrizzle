@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-import { ref } from "vue";
+import { ref } from 'vue';
 
-import { getCurrentNote } from "./noteContext";
+import { getCurrentNote } from './noteContext';
 
 export interface ClipboardRect {
   x: number;
@@ -36,7 +36,7 @@ export interface ClipboardEntry extends ClipboardSnapshot {
   source: ClipboardSource;
 }
 
-const STORAGE_KEY = "mindrizzle:canvas-clipboard";
+const STORAGE_KEY = 'mindrizzle:canvas-clipboard';
 const MAX_ENTRIES = 20;
 // 大图的 config 可能不小，localStorage 总配额有限，超出就丢最旧的记录
 const MAX_STORAGE_CHARS = 512 * 1024;
@@ -46,18 +46,18 @@ export const clipboardEntries = ref<ClipboardEntry[]>([]);
 let isLoaded = false;
 
 function isClipboardBlock(value: unknown): value is ClipboardBlock {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const block = value as Partial<ClipboardBlock>;
   const rect = block.layout;
   return (
-    typeof block.uuid === "string" &&
-    typeof block.component === "string" &&
-    typeof block.arranged === "boolean" &&
+    typeof block.uuid === 'string' &&
+    typeof block.component === 'string' &&
+    typeof block.arranged === 'boolean' &&
     !!rect &&
-    typeof rect.x === "number" &&
-    typeof rect.y === "number" &&
-    typeof rect.w === "number" &&
-    typeof rect.h === "number"
+    typeof rect.x === 'number' &&
+    typeof rect.y === 'number' &&
+    typeof rect.w === 'number' &&
+    typeof rect.h === 'number'
   );
 }
 
@@ -70,14 +70,10 @@ function normalizeEntry(raw: unknown): ClipboardEntry | null {
     !entry.blocks.every(isClipboardBlock)
   )
     return null;
-  if (!entry.source || typeof entry.source.fileName !== "string") return null;
+  if (!entry.source || typeof entry.source.fileName !== 'string') return null;
   return {
-    id:
-      typeof entry.id === "string"
-        ? entry.id
-        : String(entry.createdAt ?? Date.now()),
-    createdAt:
-      typeof entry.createdAt === "number" ? entry.createdAt : Date.now(),
+    id: typeof entry.id === 'string' ? entry.id : String(entry.createdAt ?? Date.now()),
+    createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : Date.now(),
     source: {
       fileName: entry.source.fileName,
       dir: entry.source.dir,
@@ -85,7 +81,7 @@ function normalizeEntry(raw: unknown): ClipboardEntry | null {
     },
     blocks: entry.blocks,
     links: Array.isArray(entry.links)
-      ? entry.links.filter((key): key is string => typeof key === "string")
+      ? entry.links.filter((key): key is string => typeof key === 'string')
       : [],
   };
 }
@@ -94,13 +90,9 @@ export function loadClipboardEntries(): void {
   if (isLoaded) return;
   isLoaded = true;
   try {
-    const parsed: unknown = JSON.parse(
-      localStorage.getItem(STORAGE_KEY) ?? "[]",
-    );
+    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
     const entries = Array.isArray(parsed)
-      ? parsed
-          .map(normalizeEntry)
-          .filter((entry): entry is ClipboardEntry => entry !== null)
+      ? parsed.map(normalizeEntry).filter((entry): entry is ClipboardEntry => entry !== null)
       : [];
     clipboardEntries.value = entries;
     if (Array.isArray(parsed) && entries.length !== parsed.length) persist();
@@ -118,17 +110,12 @@ function persist(): void {
   }
 }
 
-const sameSnapshot = (
-  entry: ClipboardSnapshot,
-  snapshot: ClipboardSnapshot,
-): boolean =>
+const sameSnapshot = (entry: ClipboardSnapshot, snapshot: ClipboardSnapshot): boolean =>
   JSON.stringify({ blocks: entry.blocks, links: entry.links }) ===
   JSON.stringify({ blocks: snapshot.blocks, links: snapshot.links });
 
 // 重复复制同一组块时只刷新时间并提到最前，避免历史被同一条内容刷屏
-export function pushClipboardEntry(
-  snapshot: ClipboardSnapshot,
-): ClipboardEntry {
+export function pushClipboardEntry(snapshot: ClipboardSnapshot): ClipboardEntry {
   const entry: ClipboardEntry = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: Date.now(),
@@ -136,15 +123,9 @@ export function pushClipboardEntry(
     blocks: snapshot.blocks,
     links: snapshot.links,
   };
-  const remaining = clipboardEntries.value.filter(
-    (item) => !sameSnapshot(item, snapshot),
-  );
+  const remaining = clipboardEntries.value.filter((item) => !sameSnapshot(item, snapshot));
   const next = [entry, ...remaining];
-  while (
-    next.length > MAX_ENTRIES ||
-    JSON.stringify(next).length > MAX_STORAGE_CHARS
-  )
-    next.pop();
+  while (next.length > MAX_ENTRIES || JSON.stringify(next).length > MAX_STORAGE_CHARS) next.pop();
   clipboardEntries.value = next;
   persist();
   return entry;

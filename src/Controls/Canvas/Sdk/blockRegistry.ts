@@ -1,4 +1,4 @@
-import type { AnyBlockDefinition } from "./block.types.ts";
+import type { AnyBlockDefinition } from './block.types.ts';
 
 const registry = new Map<string, AnyBlockDefinition>();
 
@@ -11,16 +11,9 @@ export const registerBlocks = (definitions: AnyBlockDefinition[]): void => {
   definitions.forEach(registerBlock);
 };
 
-export const blockDefinitionOf = (
-  key: string,
-): AnyBlockDefinition | undefined => registry.get(key);
+export const blockDefinitionOf = (key: string): AnyBlockDefinition | undefined => registry.get(key);
 
-export const blockDefinitions = (): AnyBlockDefinition[] =>
-  Array.from(registry.values());
+export const blockDefinitions = (): AnyBlockDefinition[] => Array.from(registry.values());
 
-export const embeddedBlockOf = (
-  nodeName: string,
-): AnyBlockDefinition | undefined =>
-  blockDefinitions().find(
-    (definition) => definition.embed?.nodeName === nodeName,
-  );
+export const embeddedBlockOf = (nodeName: string): AnyBlockDefinition | undefined =>
+  blockDefinitions().find((definition) => definition.embed?.nodeName === nodeName);

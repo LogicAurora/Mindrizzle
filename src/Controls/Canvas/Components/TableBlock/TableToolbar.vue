@@ -1,88 +1,88 @@
 <template>
   <SideToolbar :visible="visible">
-      <v-btn
-        v-tooltip:left="'加行'"
-        :disabled="!canAddRow"
-        :icon="mdiTableRowPlusAfter"
-        variant="text"
-        size="small"
-        @click="emit('add-row')"
-      />
-      <v-btn
-        v-tooltip:left="'加列'"
-        :disabled="!canAddColumn"
-        :icon="mdiTableColumnPlusAfter"
-        variant="text"
-        size="small"
-        @click="emit('add-column')"
-      />
-      <v-btn
-        v-tooltip:left="'删行'"
-        :disabled="!canRemoveRow"
-        :icon="mdiTableRowRemove"
-        variant="text"
-        size="small"
-        @click="emit('remove-row')"
-      />
-      <v-btn
-        v-tooltip:left="'删列'"
-        :disabled="!canRemoveColumn"
-        :icon="mdiTableColumnRemove"
-        variant="text"
-        size="small"
-        @click="emit('remove-column')"
-      />
-      <v-divider class="my-1" />
-      <v-btn
-        v-tooltip:left="'首行作为表头'"
-        :icon="mdiTableHeadersEye"
-        :color="header ? 'primary' : undefined"
-        variant="text"
-        size="small"
-        @click="emit('toggle-header')"
-      />
-      <v-btn
-        v-tooltip:left="'显示行号'"
-        :icon="mdiCounter"
-        :color="showIndex ? 'primary' : undefined"
-        variant="text"
-        size="small"
-        @click="emit('toggle-index')"
-      />
-      <v-btn
-        v-tooltip:left="'斑马纹'"
-        :icon="mdiViewSequentialOutline"
-        :color="stripe ? 'primary' : undefined"
-        variant="text"
-        size="small"
-        @click="emit('toggle-stripe')"
-      />
-      <v-divider class="my-1" />
-      <v-btn
-        v-tooltip:left="'合并选中单元格'"
-        :disabled="!canMerge"
-        :icon="mdiTableMergeCells"
-        variant="text"
-        size="small"
-        @click="emit('merge')"
-      />
-      <v-btn
-        v-tooltip:left="'取消合并'"
-        :disabled="!canUnmerge"
-        :icon="mdiTableSplitCell"
-        variant="text"
-        size="small"
-        @click="emit('unmerge')"
-      />
-      <v-divider class="my-1" />
-      <v-btn
-        v-tooltip:left="'清空内容'"
-        :icon="mdiTableRemove"
-        color="error"
-        variant="text"
-        size="small"
-        @click="emit('clear')"
-      />
+    <v-btn
+      v-tooltip:left="'加行'"
+      :disabled="!canAddRow"
+      :icon="mdiTableRowPlusAfter"
+      variant="text"
+      size="small"
+      @click="emit('add-row')"
+    />
+    <v-btn
+      v-tooltip:left="'加列'"
+      :disabled="!canAddColumn"
+      :icon="mdiTableColumnPlusAfter"
+      variant="text"
+      size="small"
+      @click="emit('add-column')"
+    />
+    <v-btn
+      v-tooltip:left="'删行'"
+      :disabled="!canRemoveRow"
+      :icon="mdiTableRowRemove"
+      variant="text"
+      size="small"
+      @click="emit('remove-row')"
+    />
+    <v-btn
+      v-tooltip:left="'删列'"
+      :disabled="!canRemoveColumn"
+      :icon="mdiTableColumnRemove"
+      variant="text"
+      size="small"
+      @click="emit('remove-column')"
+    />
+    <v-divider class="my-1" />
+    <v-btn
+      v-tooltip:left="'首行作为表头'"
+      :icon="mdiTableHeadersEye"
+      :color="header ? 'primary' : undefined"
+      variant="text"
+      size="small"
+      @click="emit('toggle-header')"
+    />
+    <v-btn
+      v-tooltip:left="'显示行号'"
+      :icon="mdiCounter"
+      :color="showIndex ? 'primary' : undefined"
+      variant="text"
+      size="small"
+      @click="emit('toggle-index')"
+    />
+    <v-btn
+      v-tooltip:left="'斑马纹'"
+      :icon="mdiViewSequentialOutline"
+      :color="stripe ? 'primary' : undefined"
+      variant="text"
+      size="small"
+      @click="emit('toggle-stripe')"
+    />
+    <v-divider class="my-1" />
+    <v-btn
+      v-tooltip:left="'合并选中单元格'"
+      :disabled="!canMerge"
+      :icon="mdiTableMergeCells"
+      variant="text"
+      size="small"
+      @click="emit('merge')"
+    />
+    <v-btn
+      v-tooltip:left="'取消合并'"
+      :disabled="!canUnmerge"
+      :icon="mdiTableSplitCell"
+      variant="text"
+      size="small"
+      @click="emit('unmerge')"
+    />
+    <v-divider class="my-1" />
+    <v-btn
+      v-tooltip:left="'清空内容'"
+      :icon="mdiTableRemove"
+      color="error"
+      variant="text"
+      size="small"
+      @click="emit('clear')"
+    />
   </SideToolbar>
 </template>
 
@@ -98,9 +98,9 @@ import {
   mdiTableRowRemove,
   mdiTableSplitCell,
   mdiViewSequentialOutline,
-} from "@mdi/js";
+} from '@mdi/js';
 
-import SideToolbar from "../../Core/SideToolbar.vue";
+import SideToolbar from '../../Core/SideToolbar.vue';
 
 defineProps<{
   visible: boolean;
@@ -116,15 +116,15 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "add-row"): void;
-  (e: "add-column"): void;
-  (e: "remove-row"): void;
-  (e: "remove-column"): void;
-  (e: "toggle-header"): void;
-  (e: "toggle-index"): void;
-  (e: "toggle-stripe"): void;
-  (e: "merge"): void;
-  (e: "unmerge"): void;
-  (e: "clear"): void;
+  (e: 'add-row'): void;
+  (e: 'add-column'): void;
+  (e: 'remove-row'): void;
+  (e: 'remove-column'): void;
+  (e: 'toggle-header'): void;
+  (e: 'toggle-index'): void;
+  (e: 'toggle-stripe'): void;
+  (e: 'merge'): void;
+  (e: 'unmerge'): void;
+  (e: 'clear'): void;
 }>();
 </script>

@@ -1,4 +1,4 @@
-export const loadEditorComponent = () => import("../Views/Editor.vue");
+export const loadEditorComponent = () => import('../Views/Editor.vue');
 
 export type EditorBodyResult = { content: string } | { error: unknown };
 
@@ -9,7 +9,7 @@ export interface EditorNoteRef {
 }
 
 const noteKeyOf = (note: EditorNoteRef): string =>
-  `${note.filePath ?? ""}\u0000${note.dir ?? ""}\u0000${note.fileName}`;
+  `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
 
 let pendingEditorBody: {
   key: string;
@@ -24,8 +24,7 @@ export function storePendingEditorBody(
 }
 
 export function takePendingEditorBody(note: EditorNoteRef) {
-  if (!pendingEditorBody || pendingEditorBody.key !== noteKeyOf(note))
-    return null;
+  if (!pendingEditorBody || pendingEditorBody.key !== noteKeyOf(note)) return null;
   const bodyPromise = pendingEditorBody.bodyPromise;
   pendingEditorBody = null;
   return bodyPromise;

@@ -9,9 +9,7 @@
         persistent-hint
         hide-details
         :disabled="readOnly"
-        @update:model-value="
-          (value) => emit('update', { fitHeight: value === true })
-        "
+        @update:model-value="(value) => emit('update', { fitHeight: value === true })"
       />
     </v-list-item>
   </v-list>
@@ -24,6 +22,6 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update", patch: Record<string, unknown>): void;
+  (e: 'update', patch: Record<string, unknown>): void;
 }>();
 </script>

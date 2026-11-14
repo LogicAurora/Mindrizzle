@@ -11,13 +11,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed } from 'vue';
 
-import type { CodeBlockConfig } from "../Registry/canvasComponents.ts";
-import BlockShell from "../Sdk/BlockShell.vue";
-import { useBlockContext } from "../Sdk/blockContext.ts";
+import type { CodeBlockConfig } from '../Registry/canvasComponents.ts';
+import BlockShell from '../Sdk/BlockShell.vue';
+import { useBlockContext } from '../Sdk/blockContext.ts';
 
-import CodeBlockEditor from "./CodeBlock/CodeBlockEditor.vue";
+import CodeBlockEditor from './CodeBlock/CodeBlockEditor.vue';
 
 const ctx = useBlockContext<CodeBlockConfig>();
 const config = computed(() => ctx.config);

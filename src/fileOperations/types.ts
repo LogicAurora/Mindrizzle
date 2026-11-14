@@ -66,10 +66,7 @@ export interface FileOperations {
   fetchFileNames(dir?: string): Promise<string[]>;
   isFileNameAvailable(fileName: string, dir?: string): Promise<boolean>;
   getNoteMeta(location: NoteFileLocation): Promise<NoteMetaView>;
-  getNoteBody(
-    location: NoteFileLocation,
-    debugProgress?: boolean,
-  ): Promise<NoteBody>;
+  getNoteBody(location: NoteFileLocation, debugProgress?: boolean): Promise<NoteBody>;
   setNoteBody(location: NoteFileLocation, content: string): Promise<void>;
   setNoteMeta(location: NoteFileLocation, meta: NoteMeta): Promise<void>;
   createNote(request: CreateNoteRequest): Promise<string>;

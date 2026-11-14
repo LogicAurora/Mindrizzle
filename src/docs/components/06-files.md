@@ -6,10 +6,10 @@
 
 ```ts
 const files = ctx.files;
-await files.write("assets/rows.json", JSON.stringify({ rows }));
-const rows = JSON.parse(await files.readText("assets/rows.json"));
+await files.write('assets/rows.json', JSON.stringify({ rows }));
+const rows = JSON.parse(await files.readText('assets/rows.json'));
 const list = await files.list();
-const imageUrl = files.url("assets/cover.png"); // 直接给 <img :src>
+const imageUrl = files.url('assets/cover.png'); // 直接给 <img :src>
 ```
 
 | 方法                                | 说明                                             |
@@ -29,10 +29,10 @@ const imageUrl = files.url("assets/cover.png"); // 直接给 <img :src>
 用户选的路径可能含中文与空格，直接丢给 `exportTo` 即可，Rust 侧只校验非空与绝对路径。
 
 ```ts
-const bytes = await ctx.files.readBinary("file.bin");
+const bytes = await ctx.files.readBinary('file.bin');
 if (isTauri()) {
   const target = await save({ defaultPath: name });
-  if (target) await ctx.files.exportTo("file.bin", target);
+  if (target) await ctx.files.exportTo('file.bin', target);
 } else {
   downloadBlob(bytes, name);
 }

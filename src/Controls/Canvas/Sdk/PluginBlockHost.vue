@@ -3,21 +3,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide, shallowRef, watch } from "vue";
+import { computed, provide, shallowRef, watch } from 'vue';
 
-import type { MdrCanvasComponentShellProps } from "../Core/MdrCanvasComponentBase.types.ts";
+import type { MdrCanvasComponentShellProps } from '../Core/MdrCanvasComponentBase.types.ts';
 
-import { createBlockFiles } from "./blockFiles.ts";
-import {
-  BLOCK_CONTEXT_KEY,
-  BLOCK_SHELL_KEY,
-  type BlockShellProvide,
-} from "./blockContext.ts";
-import type {
-  BlockContext,
-  BlockDefinition,
-  BlockDropHandlers,
-} from "./block.types.ts";
+import { createBlockFiles } from './blockFiles.ts';
+import { BLOCK_CONTEXT_KEY, BLOCK_SHELL_KEY, type BlockShellProvide } from './blockContext.ts';
+import type { BlockContext, BlockDefinition, BlockDropHandlers } from './block.types.ts';
 
 const props = defineProps<{
   definition: BlockDefinition;
@@ -44,21 +36,13 @@ const changeableEnv = () => ({
 });
 
 const widthChangable = computed(
-  () =>
-    props.definition.widthChangableOf?.(configRef.value, changeableEnv()) ??
-    true,
+  () => props.definition.widthChangableOf?.(configRef.value, changeableEnv()) ?? true,
 );
 const heightChangable = computed(
-  () =>
-    props.definition.heightChangableOf?.(configRef.value, changeableEnv()) ??
-    true,
+  () => props.definition.heightChangableOf?.(configRef.value, changeableEnv()) ?? true,
 );
-const icon = computed(
-  () => props.definition.iconOf?.(configRef.value) ?? props.definition.icon,
-);
-const title = computed(
-  () => props.definition.titleOf?.(configRef.value) ?? props.definition.title,
-);
+const icon = computed(() => props.definition.iconOf?.(configRef.value) ?? props.definition.icon);
+const title = computed(() => props.definition.titleOf?.(configRef.value) ?? props.definition.title);
 
 const setConfig = (patch: Record<string, unknown>) => {
   configRef.value = { ...configRef.value, ...patch };
@@ -80,8 +64,7 @@ const ctx: BlockContext = {
   setConfig,
   getSize: () => ({ w: props.base.width, h: props.base.height }),
   moveBy: (dx, dy) => props.base.handlers.moveBy(dx, dy),
-  resizeTo: (size) =>
-    props.base.handlers.resizeTo({ width: size.w, height: size.h }),
+  resizeTo: (size) => props.base.handlers.resizeTo({ width: size.w, height: size.h }),
   getView: () => props.base.handlers.getCanvasView(),
   panBy: (dx, dy) => props.base.handlers.panCanvas(dx, dy),
   zoomTo: (zoom) => props.base.handlers.zoomCanvas(zoom),
@@ -114,7 +97,7 @@ const shell: BlockShellProvide = {
     return props.virtualized === true;
   },
   get snapshot() {
-    return props.snapshot ?? "";
+    return props.snapshot ?? '';
   },
   get settingsWidth() {
     return props.definition.settingsWidth;
@@ -126,17 +109,15 @@ provide(BLOCK_SHELL_KEY, shell);
 
 const contentRootOf = (): HTMLElement | null => {
   const uuid = CSS.escape(props.base.uuid);
-  return document.querySelector<HTMLElement>(
-    `.drag-wrapper[data-uuid="${uuid}"] .inner-component`,
-  );
+  return document.querySelector<HTMLElement>(`.drag-wrapper[data-uuid="${uuid}"] .inner-component`);
 };
 
 const snapshotHtml = (): string => {
-  const mode = props.definition.snapshot ?? "html";
-  if (mode === "none") return '<div class="virtual-snapshot-empty"></div>';
-  if (typeof mode === "function") return mode(configRef.value, contentRootOf());
+  const mode = props.definition.snapshot ?? 'html';
+  if (mode === 'none') return '<div class="virtual-snapshot-empty"></div>';
+  if (typeof mode === 'function') return mode(configRef.value, contentRootOf());
   // 'html' 不下发，画布直接克隆块内 DOM
-  return "";
+  return '';
 };
 
 defineExpose({
@@ -150,8 +131,7 @@ defineExpose({
   },
   resolveDropAtElement: (el: HTMLElement | null, preferBefore: boolean) =>
     dropHandlers.value?.resolveDropAtElement(el, preferBefore) ?? null,
-  scrollContent: (deltaY: number) =>
-    dropHandlers.value?.scrollContent?.(deltaY),
+  scrollContent: (deltaY: number) => dropHandlers.value?.scrollContent?.(deltaY),
 });
 </script>
 

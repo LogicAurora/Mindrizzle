@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import { mdiSwapVertical } from "@mdi/js";
-import { onMounted, ref } from "vue";
+import { mdiSwapVertical } from '@mdi/js';
+import { onMounted, ref } from 'vue';
 
-import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
+import MdrSettingsPageBase from './MdrSettingsPageBase.vue';
 import {
   commandPaletteShortcut,
   commandPaletteShortcutFromEvent,
   DEFAULT_COMMAND_PALETTE_SHORTCUT,
   loadCommandPaletteShortcut,
   saveCommandPaletteShortcut,
-} from "../../utils/commandPaletteShortcut";
+} from '../../utils/commandPaletteShortcut';
 import {
   isTitleRollDirection,
   loadTitleRollDirection,
   saveTitleRollDirection,
   titleRollDirection,
-} from "../../utils/uiPreference";
+} from '../../utils/uiPreference';
 
-const settingsError = ref("");
+const settingsError = ref('');
 const isCapturingShortcut = ref(false);
 
 function reportSettingsError(error: unknown) {
@@ -26,11 +26,7 @@ function reportSettingsError(error: unknown) {
 
 function selectTitleRollDirection(direction: unknown) {
   // 按钮组挂载时会带着当前值回调一次，相同值直接忽略，避免覆盖尚未读回的偏好
-  if (
-    !isTitleRollDirection(direction) ||
-    direction === titleRollDirection.value
-  )
-    return;
+  if (!isTitleRollDirection(direction) || direction === titleRollDirection.value) return;
   void saveTitleRollDirection(direction).catch(reportSettingsError);
 }
 
@@ -38,43 +34,36 @@ function captureCommandPaletteShortcut(event: KeyboardEvent) {
   if (!isCapturingShortcut.value) return;
   event.preventDefault();
   event.stopPropagation();
-  if (event.key === "Escape") {
+  if (event.key === 'Escape') {
     isCapturingShortcut.value = false;
     return;
   }
   const shortcut = commandPaletteShortcutFromEvent(event);
   if (!shortcut) {
-    settingsError.value = "请同时按下 Ctrl、Alt 或 Meta 与其他按键。";
+    settingsError.value = '请同时按下 Ctrl、Alt 或 Meta 与其他按键。';
     return;
   }
   void saveCommandPaletteShortcut(shortcut)
     .then(() => {
       isCapturingShortcut.value = false;
-      settingsError.value = "";
+      settingsError.value = '';
     })
     .catch(reportSettingsError);
 }
 
 onMounted(() => {
-  void Promise.all([
-    loadTitleRollDirection(),
-    loadCommandPaletteShortcut(),
-  ]).catch(reportSettingsError);
+  void Promise.all([loadTitleRollDirection(), loadCommandPaletteShortcut()]).catch(
+    reportSettingsError,
+  );
 });
 </script>
 <template>
-  <MdrSettingsPageBase
-    title="界面"
-    subtitle="调整应用界面的交互细节。"
-    :icon="mdiSwapVertical"
-  >
+  <MdrSettingsPageBase title="界面" subtitle="调整应用界面的交互细节。" :icon="mdiSwapVertical">
     <section class="settings-section">
       <div class="settings-section-head">
         <div>
           <div class="settings-section-title">工具栏标题滚动方向</div>
-          <div class="settings-section-caption">
-            切换页面时标题的滚动动画方向，默认从上往下。
-          </div>
+          <div class="settings-section-caption">切换页面时标题的滚动动画方向，默认从上往下。</div>
         </div>
       </div>
       <v-btn-toggle
@@ -103,19 +92,13 @@ onMounted(() => {
           @click="isCapturingShortcut = true"
           @keydown="captureCommandPaletteShortcut"
         >
-          {{
-            isCapturingShortcut
-              ? "请按下快捷键…"
-              : commandPaletteShortcut
-          }}
+          {{ isCapturingShortcut ? '请按下快捷键…' : commandPaletteShortcut }}
         </v-btn>
         <v-btn
           v-if="commandPaletteShortcut !== DEFAULT_COMMAND_PALETTE_SHORTCUT"
           variant="text"
           @click="
-            saveCommandPaletteShortcut(DEFAULT_COMMAND_PALETTE_SHORTCUT).catch(
-              reportSettingsError,
-            )
+            saveCommandPaletteShortcut(DEFAULT_COMMAND_PALETTE_SHORTCUT).catch(reportSettingsError)
           "
         >
           恢复默认

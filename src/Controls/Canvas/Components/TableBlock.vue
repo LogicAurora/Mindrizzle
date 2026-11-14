@@ -45,14 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from 'vue';
 
-import type { TableBlockConfig } from "../Registry/canvasComponents.ts";
-import BlockShell from "../Sdk/BlockShell.vue";
-import { useBlockContext } from "../Sdk/blockContext.ts";
-import TableGrid from "./TableBlock/TableGrid.vue";
-import TableHeightSettings from "./TableBlock/TableHeightSettings.vue";
-import TableToolbar from "./TableBlock/TableToolbar.vue";
+import type { TableBlockConfig } from '../Registry/canvasComponents.ts';
+import BlockShell from '../Sdk/BlockShell.vue';
+import { useBlockContext } from '../Sdk/blockContext.ts';
+import TableGrid from './TableBlock/TableGrid.vue';
+import TableHeightSettings from './TableBlock/TableHeightSettings.vue';
+import TableToolbar from './TableBlock/TableToolbar.vue';
 import {
   bodyRowCountOf,
   columnCountOf,
@@ -66,7 +66,7 @@ import {
   normalizeTableRows,
   removeMergesInSelection,
   type TableSelection,
-} from "./TableBlock/tableRows.ts";
+} from './TableBlock/tableRows.ts';
 
 // 实测：vxe 行高 30px 加单元格边框后 34px，表格框内再加 .table-grid 的 8px 内边距
 const AUTO_ROW_HEIGHT = 34;
@@ -113,17 +113,13 @@ const canMerge = computed(
 const canUnmerge = computed(
   () =>
     !!selection.value &&
-    merges.value.some((merge) =>
-      mergeIntersectsSelection(merge, selection.value!, header.value),
-    ),
+    merges.value.some((merge) => mergeIntersectsSelection(merge, selection.value!, header.value)),
 );
 
 const syncAutoHeight = () => {
   if (!fitHeight.value) return;
-  const lineCount =
-    bodyRowCountOf(rows.value, header.value) + (header.value ? 1 : 0);
-  const gridHeight =
-    contentHeight.value || AUTO_FRAME_HEIGHT + lineCount * AUTO_ROW_HEIGHT;
+  const lineCount = bodyRowCountOf(rows.value, header.value) + (header.value ? 1 : 0);
+  const gridHeight = contentHeight.value || AUTO_FRAME_HEIGHT + lineCount * AUTO_ROW_HEIGHT;
   ctx.resizeTo({ h: gridHeight + BLOCK_CHROME_HEIGHT });
 };
 
@@ -149,16 +145,11 @@ const onSettingsUpdate = (patch: Record<string, unknown>) => {
 };
 
 const addRow = () =>
-  onRowsUpdate([
-    ...rows.value,
-    Array.from({ length: columnCount.value }, () => ""),
-  ]);
-const addColumn = () => onRowsUpdate(rows.value.map((row) => [...row, ""]));
+  onRowsUpdate([...rows.value, Array.from({ length: columnCount.value }, () => '')]);
+const addColumn = () => onRowsUpdate(rows.value.map((row) => [...row, '']));
 const removeRow = () => onRowsUpdate(rows.value.slice(0, -1));
-const removeColumn = () =>
-  onRowsUpdate(rows.value.map((row) => row.slice(0, -1)));
-const clearRows = () =>
-  onRowsUpdate(rows.value.map((row) => row.map(() => "")));
+const removeColumn = () => onRowsUpdate(rows.value.map((row) => row.slice(0, -1)));
+const clearRows = () => onRowsUpdate(rows.value.map((row) => row.map(() => '')));
 
 const toggleHeader = () => {
   const nextHeader = !header.value;
@@ -178,28 +169,18 @@ const toggleStripe = () => ctx.setConfig({ stripe: !stripe.value });
 const mergeSelection = () => {
   const range = selection.value;
   const bodyRowCount = bodyRowCountOf(rows.value, header.value);
-  const merge =
-    range &&
-    mergeOfSelection(range, bodyRowCount, columnCount.value, header.value);
+  const merge = range && mergeOfSelection(range, bodyRowCount, columnCount.value, header.value);
   if (!range || !merge) return;
   const rest = removeMergesInSelection(merges.value, range, header.value);
   ctx.setConfig({
-    merges: normalizeTableMerges(
-      [...rest, merge],
-      bodyRowCount,
-      columnCount.value,
-    ),
+    merges: normalizeTableMerges([...rest, merge], bodyRowCount, columnCount.value),
   });
 };
 
 const unmergeSelection = () => {
   if (!selection.value) return;
   ctx.setConfig({
-    merges: removeMergesInSelection(
-      merges.value,
-      selection.value,
-      header.value,
-    ),
+    merges: removeMergesInSelection(merges.value, selection.value, header.value),
   });
 };
 </script>

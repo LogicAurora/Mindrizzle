@@ -1,7 +1,7 @@
-import type { Component } from "vue";
+import type { Component } from 'vue';
 
-import type { CanvasViewData } from "../Core/canvasComponentControllers.ts";
-import type { ResizeConstraints } from "../Registry/resizeConstraints.ts";
+import type { CanvasViewData } from '../Core/canvasComponentControllers.ts';
+import type { ResizeConstraints } from '../Registry/resizeConstraints.ts';
 
 export interface BlockSize {
   w: number;
@@ -25,9 +25,7 @@ export interface BlockFiles {
   exportTo: (path: string, targetPath: string) => Promise<void>;
 }
 
-export interface BlockContext<
-  TConfig extends Record<string, unknown> = Record<string, unknown>,
-> {
+export interface BlockContext<TConfig extends Record<string, unknown> = Record<string, unknown>> {
   readonly uuid: string;
   readonly config: TConfig;
   readonly readOnly: boolean;
@@ -49,14 +47,11 @@ export interface BlockContext<
 
 /** html = 克隆块内 DOM；none = 只留占位；函数 = 自绘静态 HTML（canvas/WebGL 类必须用这个，root 为当前块内 DOM） */
 export type BlockSnapshot<TConfig> =
-  "html" | "none" | ((config: TConfig, root: HTMLElement | null) => string);
+  'html' | 'none' | ((config: TConfig, root: HTMLElement | null) => string);
 
 export interface BlockDropHandlers {
   /** 画布拖组件入块时解析插入位置，返回 null 表示不接收 */
-  resolveDropAtElement: (
-    el: HTMLElement | null,
-    preferBefore: boolean,
-  ) => number | null;
+  resolveDropAtElement: (el: HTMLElement | null, preferBefore: boolean) => number | null;
   /** 拖拽贴边时让块内内容自行滚动 */
   scrollContent?: (deltaY: number) => void;
 }
@@ -103,7 +98,7 @@ export interface BlockDefinition<
   /** 可接收画布块拖拽落点（富文本为 true） */
   acceptsDrop?: boolean;
   /** raw 表示组件自带壳层，宿主只按原样挂载 */
-  kind?: "block" | "raw";
+  kind?: 'block' | 'raw';
   rawComponent?: Component;
 }
 

@@ -24,22 +24,12 @@
     }"
     :data-uuid="uuid"
     @resizestart="(handle: string) => emit('resizestart', handle)"
-    @resizing="
-      (rx: number, ry: number, rw: number, rh: number) =>
-        emit('resizing', rx, ry, rw, rh)
-    "
+    @resizing="(rx: number, ry: number, rw: number, rh: number) => emit('resizing', rx, ry, rw, rh)"
     @resizestop="
-      (rx: number, ry: number, rw: number, rh: number) =>
-        emit('resizestop', rx, ry, rw, rh)
+      (rx: number, ry: number, rw: number, rh: number) => emit('resizestop', rx, ry, rw, rh)
     "
   >
-    <v-sheet
-      class="block-container"
-      color="surface"
-      elevation="0"
-      rounded
-      :style="cornerStyle"
-    >
+    <v-sheet class="block-container" color="surface" elevation="0" rounded :style="cornerStyle">
       <!-- 只盖接触段、露出段保留边框，所以按段渲染同色遮罩 -->
       <div
         v-for="mask in masks"
@@ -50,11 +40,7 @@
       <div class="content-area">
         <!-- 未传 virtualized 是 raw 旧写法，快照由块自己渲染 -->
         <slot v-if="virtualized === undefined" />
-        <div
-          v-else-if="virtualized"
-          class="virtual-snapshot inner-component"
-          v-html="snapshot"
-        />
+        <div v-else-if="virtualized" class="virtual-snapshot inner-component" v-html="snapshot" />
         <div v-else ref="contentEl" class="inner-component"><slot /></div>
       </div>
     </v-sheet>
@@ -70,15 +56,8 @@
           :style="handleStyle"
           @mousedown="onHandleDown"
         >
-          <v-icon
-            size="16"
-            color="on-surface-variant"
-            :icon="icon"
-            class="mr-1"
-          />
-          <span class="text-caption text-medium-emphasis user-select-none">{{
-            title
-          }}</span>
+          <v-icon size="16" color="on-surface-variant" :icon="icon" class="mr-1" />
+          <span class="text-caption text-medium-emphasis user-select-none">{{ title }}</span>
         </div>
       </Transition>
 
@@ -136,27 +115,23 @@ import {
   useSlots,
   watch,
   type CSSProperties,
-} from "vue";
-import { mdiCogOutline } from "@mdi/js";
-import ResizeBox from "./ResizeBox.vue";
-import {
-  handleBarStyleOf,
-  maskStyleOf,
-  sideSettingsStyleOf,
-} from "./blockFloatGeometry.ts";
+} from 'vue';
+import { mdiCogOutline } from '@mdi/js';
+import ResizeBox from './ResizeBox.vue';
+import { handleBarStyleOf, maskStyleOf, sideSettingsStyleOf } from './blockFloatGeometry.ts';
 import {
   layoutToViewportX,
   layoutToViewportY,
-} from "../Components/RichEditor/extensions/blockHandleUtils.ts";
-import { Z_LAYER } from "./zIndex.ts";
-import type { MdrCanvasComponentBaseProps } from "./MdrCanvasComponentBase.types.ts";
+} from '../Components/RichEditor/extensions/blockHandleUtils.ts';
+import { Z_LAYER } from './zIndex.ts';
+import type { MdrCanvasComponentBaseProps } from './MdrCanvasComponentBase.types.ts';
 import {
   CANVAS_CONTROLLER_KEY,
   COMPONENT_CONTROLLER_KEY,
   type BlockCanvasController,
   type BlockComponentController,
   type SizeChangeable,
-} from "./canvasComponentControllers.ts";
+} from './canvasComponentControllers.ts';
 
 const SETTINGS_MENU_WIDTH = 240;
 const SETTINGS_MENU_GAP = 6;
@@ -177,31 +152,30 @@ const props = withDefaults(defineProps<MdrCanvasComponentBaseProps>(), {
   showSettings: false,
   settingsAvailable: true,
   settingsWidth: SETTINGS_MENU_WIDTH,
-  handles: () => ["tl", "tm", "tr", "ml", "mr", "bl", "bm", "br"],
+  handles: () => ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'],
   zIndex: 0,
   zoom: 1,
-  placement: "top",
+  placement: 'top',
   popupOpen: false,
   cornerStyle: () => ({}),
   masks: () => [],
 });
 
 const emit = defineEmits<{
-  (e: "resizestart", handle: string): void;
-  (e: "resizing", x: number, y: number, w: number, h: number): void;
-  (e: "resizestop", x: number, y: number, w: number, h: number): void;
-  (e: "dragstart", event: MouseEvent): void;
+  (e: 'resizestart', handle: string): void;
+  (e: 'resizing', x: number, y: number, w: number, h: number): void;
+  (e: 'resizestop', x: number, y: number, w: number, h: number): void;
+  (e: 'dragstart', event: MouseEvent): void;
 }>();
 
 const resizeBoxRef = ref<{ rootEl: HTMLElement | null } | null>(null);
 const canvasEl = ref<HTMLElement | null>(null);
 const contentEl = ref<HTMLElement | null>(null);
 onMounted(() => {
-  canvasEl.value = resizeBoxRef.value?.rootEl?.closest(".canvas") ?? null;
+  canvasEl.value = resizeBoxRef.value?.rootEl?.closest('.canvas') ?? null;
 });
 
-const roundToPx = (value: number) =>
-  Math.round(value * props.zoom) / props.zoom;
+const roundToPx = (value: number) => Math.round(value * props.zoom) / props.zoom;
 const geometry = computed(() => ({
   layout: { x: props.x, y: props.y, w: props.width, h: props.height },
   placement: props.placement,
@@ -214,9 +188,9 @@ const settingsStyle = computed(() => sideSettingsStyleOf(geometry.value));
 const effectiveHandles = computed<string[]>(() => {
   if (!props.heightChangable && !props.widthChangable) return [];
   if (!props.heightChangable)
-    return props.handles.filter((handle) => handle === "ml" || handle === "mr");
+    return props.handles.filter((handle) => handle === 'ml' || handle === 'mr');
   if (!props.widthChangable)
-    return props.handles.filter((handle) => handle === "tm" || handle === "bm");
+    return props.handles.filter((handle) => handle === 'tm' || handle === 'bm');
   return props.handles;
 });
 
@@ -244,10 +218,7 @@ const settingsMenuStyle = ref<CSSProperties>({});
 
 const settingsMenuPosition = (anchor: HTMLElement): CSSProperties => {
   const rect = anchor.getBoundingClientRect();
-  const width = Math.min(
-    props.settingsWidth,
-    window.innerWidth - SETTINGS_MENU_MARGIN * 2,
-  );
+  const width = Math.min(props.settingsWidth, window.innerWidth - SETTINGS_MENU_MARGIN * 2);
   const left = layoutToViewportX(anchor, rect.left);
   const right = layoutToViewportX(anchor, rect.right);
   const bottom = layoutToViewportY(anchor, rect.bottom);
@@ -260,7 +231,7 @@ const settingsMenuPosition = (anchor: HTMLElement): CSSProperties => {
         ? left
         : right - width;
   return {
-    position: "fixed",
+    position: 'fixed',
     left: `${Math.max(SETTINGS_MENU_MARGIN, Math.min(fitted, window.innerWidth - width - SETTINGS_MENU_MARGIN))}px`,
     top: `${bottom + SETTINGS_MENU_GAP}px`,
     width: `${width}px`,
@@ -275,14 +246,8 @@ const fitSettingsMenuVertically = () => {
   if (!menu || !anchor) return;
   const menuRect = menu.getBoundingClientRect();
   if (menuRect.bottom <= window.innerHeight - SETTINGS_MENU_MARGIN) return;
-  const anchorTop = layoutToViewportY(
-    anchor,
-    anchor.getBoundingClientRect().top,
-  );
-  const top = Math.max(
-    SETTINGS_MENU_MARGIN,
-    anchorTop - menuRect.height - SETTINGS_MENU_GAP,
-  );
+  const anchorTop = layoutToViewportY(anchor, anchor.getBoundingClientRect().top);
+  const top = Math.max(SETTINGS_MENU_MARGIN, anchorTop - menuRect.height - SETTINGS_MENU_GAP);
   settingsMenuStyle.value = { ...settingsMenuStyle.value, top: `${top}px` };
 };
 
@@ -306,7 +271,7 @@ const isInsideSettingsUi = (target: EventTarget | null): boolean => {
   return (
     !!settingsMenuEl.value?.contains(element) ||
     !!settingsAnchorEl.value?.contains(element) ||
-    !!element?.closest(".v-overlay-container")
+    !!element?.closest('.v-overlay-container')
   );
 };
 
@@ -326,23 +291,23 @@ const onDocumentScroll = (event: Event) => {
 };
 
 const onDocumentKeydown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") closeSettings();
+  if (event.key === 'Escape') closeSettings();
 };
 
 const bindSettingsDismiss = (open: boolean) => {
   if (open) {
-    window.addEventListener("mousedown", onDocumentPointerDown, true);
-    window.addEventListener("keydown", onDocumentKeydown, true);
-    window.addEventListener("scroll", onDocumentScroll, true);
-    window.addEventListener("resize", closeSettings);
-    window.addEventListener("Mindrizzle:canvas-transform", closeSettings);
+    window.addEventListener('mousedown', onDocumentPointerDown, true);
+    window.addEventListener('keydown', onDocumentKeydown, true);
+    window.addEventListener('scroll', onDocumentScroll, true);
+    window.addEventListener('resize', closeSettings);
+    window.addEventListener('Mindrizzle:canvas-transform', closeSettings);
     return;
   }
-  window.removeEventListener("mousedown", onDocumentPointerDown, true);
-  window.removeEventListener("keydown", onDocumentKeydown, true);
-  window.removeEventListener("scroll", onDocumentScroll, true);
-  window.removeEventListener("resize", closeSettings);
-  window.removeEventListener("Mindrizzle:canvas-transform", closeSettings);
+  window.removeEventListener('mousedown', onDocumentPointerDown, true);
+  window.removeEventListener('keydown', onDocumentKeydown, true);
+  window.removeEventListener('scroll', onDocumentScroll, true);
+  window.removeEventListener('resize', closeSettings);
+  window.removeEventListener('Mindrizzle:canvas-transform', closeSettings);
 };
 
 watch(settingsOpen, bindSettingsDismiss);
@@ -381,7 +346,7 @@ defineExpose({
 
 const onHandleDown = (event: MouseEvent) => {
   if (event.button !== 0) return;
-  emit("dragstart", event);
+  emit('dragstart', event);
   event.preventDefault();
 };
 </script>

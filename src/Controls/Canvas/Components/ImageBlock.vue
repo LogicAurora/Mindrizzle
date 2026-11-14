@@ -29,21 +29,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { isTauri } from "@tauri-apps/api/core";
-import { error as logError } from "@tauri-apps/plugin-log";
+import { computed, ref } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
+import { error as logError } from '@tauri-apps/plugin-log';
 
-import type { ImageBlockConfig } from "../Registry/canvasComponents.ts";
-import BlockShell from "../Sdk/BlockShell.vue";
-import { useBlockContext } from "../Sdk/blockContext.ts";
-import ImageCardView from "./ImageBlock/ImageCardView.vue";
-import ImageSettings from "./ImageBlock/ImageSettings.vue";
-import {
-  baseNameOf,
-  imageExtensionOf,
-  toImageFit,
-} from "./ImageBlock/imageConfig.ts";
-import { getErrorMessage } from "../../../utils/getErrorMessage.ts";
+import type { ImageBlockConfig } from '../Registry/canvasComponents.ts';
+import BlockShell from '../Sdk/BlockShell.vue';
+import { useBlockContext } from '../Sdk/blockContext.ts';
+import ImageCardView from './ImageBlock/ImageCardView.vue';
+import ImageSettings from './ImageBlock/ImageSettings.vue';
+import { baseNameOf, imageExtensionOf, toImageFit } from './ImageBlock/imageConfig.ts';
+import { getErrorMessage } from '../../../utils/getErrorMessage.ts';
 
 interface ImageCardHandle {
   openPicker: () => void;
@@ -53,9 +49,9 @@ interface ImageCardHandle {
 
 const ctx = useBlockContext<ImageBlockConfig>();
 const cardRef = ref<ImageCardHandle | null>(null);
-const storedPath = computed(() => String(ctx.config.path ?? ""));
-const imageMime = computed(() => String(ctx.config.mime ?? ""));
-const imageAlt = computed(() => String(ctx.config.alt ?? ""));
+const storedPath = computed(() => String(ctx.config.path ?? ''));
+const imageMime = computed(() => String(ctx.config.mime ?? ''));
+const imageAlt = computed(() => String(ctx.config.alt ?? ''));
 const fit = computed(() => toImageFit(ctx.config.fit));
 const autoSize = computed(() => ctx.config.autoSize === true);
 
@@ -76,7 +72,7 @@ const deleteStaleFile = async (previousPath: string, nextPath: string) => {
     await ctx.files.remove(previousPath);
   } catch (cause) {
     // 旧文件残留不影响新图显示，只记日志
-    logFailure("清理旧图片失败", cause);
+    logFailure('清理旧图片失败', cause);
   }
 };
 
@@ -92,7 +88,7 @@ const uploadFile = async (file: File) => {
     });
   } catch (cause) {
     cardRef.value?.showError(`保存图片失败：${getErrorMessage(cause)}`);
-    logFailure("保存图片失败", cause);
+    logFailure('保存图片失败', cause);
   }
 };
 
@@ -104,11 +100,11 @@ const onSettingsUpdate = (patch: Record<string, unknown>) => {
 const removeImage = async () => {
   const path = storedPath.value;
   if (!path) return;
-  ctx.setConfig({ path: "", mime: "", alt: imageAlt.value });
+  ctx.setConfig({ path: '', mime: '', alt: imageAlt.value });
   try {
     await ctx.files.remove(path);
   } catch (cause) {
-    logFailure("删除图片失败", cause);
+    logFailure('删除图片失败', cause);
   }
 };
 </script>

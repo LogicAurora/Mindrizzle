@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { Z_LAYER } from "./zIndex";
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { Z_LAYER } from './zIndex';
 
-type Handle = "tl" | "tm" | "tr" | "ml" | "mr" | "bl" | "bm" | "br";
+type Handle = 'tl' | 'tm' | 'tr' | 'ml' | 'mr' | 'bl' | 'bm' | 'br';
 
 interface Rect {
   x: number;
@@ -47,15 +47,15 @@ const props = withDefaults(
     active: false,
     dragging: false,
     zIndex: 0,
-    handles: () => ["tl", "tm", "tr", "ml", "mr", "bl", "bm", "br"],
+    handles: () => ['tl', 'tm', 'tr', 'ml', 'mr', 'bl', 'bm', 'br'],
     zoom: 1,
   },
 );
 
 const emit = defineEmits<{
-  (e: "resizestart", handle: string): void;
-  (e: "resizing", x: number, y: number, w: number, h: number): void;
-  (e: "resizestop", x: number, y: number, w: number, h: number): void;
+  (e: 'resizestart', handle: string): void;
+  (e: 'resizing', x: number, y: number, w: number, h: number): void;
+  (e: 'resizestop', x: number, y: number, w: number, h: number): void;
 }>();
 
 let session: ResizeSession | null = null;
@@ -64,7 +64,7 @@ const rootEl = ref<HTMLElement | null>(null);
 // 手柄在块边缘会被紧贴邻块盖住而点不到，所以 Teleport 到 .canvas 顶层（Z_LAYER.resizeHandle）
 const canvasEl = ref<HTMLElement | null>(null);
 onMounted(() => {
-  canvasEl.value = rootEl.value?.closest(".canvas") ?? null;
+  canvasEl.value = rootEl.value?.closest('.canvas') ?? null;
 });
 
 // .canvas 用 CSS zoom，所以渲染层圆整到视觉像素，逻辑仍用 content 坐标
@@ -83,9 +83,7 @@ const boxStyle = computed(() => ({
   zIndex: props.zIndex,
 }));
 // 块拖拽期间坐标由画布命令式写入、本组件 prop 被冻结，手柄会冻在按下位置，所以拖拽期间不渲染
-const showHandles = computed(
-  () => props.active && !props.disabled && !props.dragging,
-);
+const showHandles = computed(() => props.active && !props.disabled && !props.dragging);
 
 // .canvas 已应用 pan+origin，所以手柄直接用 content 坐标 + 边缘偏移
 const HANDLE_POS: Record<Handle, (r: Rect) => { left: string; top: string }> = {
@@ -99,14 +97,14 @@ const HANDLE_POS: Record<Handle, (r: Rect) => { left: string; top: string }> = {
   br: (r) => ({ left: `${r.x + r.w - 5}px`, top: `${r.y + r.h - 5}px` }),
 };
 const CURSOR: Record<Handle, string> = {
-  tl: "nw-resize",
-  tm: "n-resize",
-  tr: "ne-resize",
-  ml: "w-resize",
-  mr: "e-resize",
-  bl: "sw-resize",
-  bm: "s-resize",
-  br: "se-resize",
+  tl: 'nw-resize',
+  tm: 'n-resize',
+  tr: 'ne-resize',
+  ml: 'w-resize',
+  mr: 'e-resize',
+  bl: 'sw-resize',
+  bm: 's-resize',
+  br: 'se-resize',
 };
 const handleStyle = (h: string) => {
   const pos = HANDLE_POS[h as Handle](renderRect.value);
@@ -121,10 +119,8 @@ const handleStyle = (h: string) => {
   };
 };
 
-const clampW = (w: number) =>
-  Math.min(Math.max(w, props.minWidth), props.maxWidth ?? Infinity);
-const clampH = (h: number) =>
-  Math.min(Math.max(h, props.minHeight), props.maxHeight ?? Infinity);
+const clampW = (w: number) => Math.min(Math.max(w, props.minWidth), props.maxWidth ?? Infinity);
+const clampH = (h: number) => Math.min(Math.max(h, props.minHeight), props.maxHeight ?? Infinity);
 
 // 锚定边保持 content 坐标，拖 l/t 时 x/y 随尺寸调整
 const computeRect = (s: ResizeSession, dx: number, dy: number): Rect => {
@@ -133,13 +129,13 @@ const computeRect = (s: ResizeSession, dx: number, dy: number): Rect => {
   let y = r.y;
   let w = r.w;
   let h = r.h;
-  if (s.handle.includes("r")) w = clampW(r.w + dx);
-  if (s.handle.includes("l")) {
+  if (s.handle.includes('r')) w = clampW(r.w + dx);
+  if (s.handle.includes('l')) {
     w = clampW(r.w - dx);
     x = r.x + (r.w - w);
   }
-  if (s.handle.includes("b")) h = clampH(r.h + dy);
-  if (s.handle.includes("t")) {
+  if (s.handle.includes('b')) h = clampH(r.h + dy);
+  if (s.handle.includes('t')) {
     h = clampH(r.h - dy);
     y = r.y + (r.h - h);
   }
@@ -155,14 +151,14 @@ const onMove = (e: MouseEvent) => {
     (e.clientY - session.startClientY) / props.zoom,
   );
   session.lastRect = rect;
-  emit("resizing", rect.x, rect.y, rect.w, rect.h);
+  emit('resizing', rect.x, rect.y, rect.w, rect.h);
 };
 
 const onUp = () => {
   if (!session) return;
   const rect = session.lastRect;
   cleanup();
-  emit("resizestop", rect.x, rect.y, rect.w, rect.h);
+  emit('resizestop', rect.x, rect.y, rect.w, rect.h);
   session = null;
 };
 
@@ -177,15 +173,15 @@ const onHandleDown = (handle: string, e: MouseEvent) => {
     lastRect: { x: props.x, y: props.y, w: props.w, h: props.h },
   };
   // hover 自解析会 stopPropagation，所以用捕获阶段
-  window.addEventListener("mousemove", onMove, true);
-  window.addEventListener("mouseup", onUp);
-  emit("resizestart", handle);
+  window.addEventListener('mousemove', onMove, true);
+  window.addEventListener('mouseup', onUp);
+  emit('resizestart', handle);
   e.preventDefault();
 };
 
 const cleanup = () => {
-  window.removeEventListener("mousemove", onMove, true);
-  window.removeEventListener("mouseup", onUp);
+  window.removeEventListener('mousemove', onMove, true);
+  window.removeEventListener('mouseup', onUp);
 };
 onUnmounted(cleanup);
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from 'vue';
 import {
   mdiArrowRight,
   mdiCalendarMonthOutline,
@@ -9,34 +9,27 @@ import {
   mdiHelpCircleOutline,
   mdiHistory,
   mdiMagnify,
-} from "@mdi/js";
-import appIconUrl from "../../app-icon.svg";
-import { useRouter } from "vue-router";
+} from '@mdi/js';
+import appIconUrl from '../../app-icon.svg';
+import { useRouter } from 'vue-router';
 
-import NewFileDialog from "../Controls/NewFileDialog.vue";
-import type { NoteSetEntry } from "../utils/noteSetStore";
-import {
-  fetchNoteSetEntry,
-  loadNoteSetEntries,
-} from "../utils/noteSetStore";
+import NewFileDialog from '../Controls/NewFileDialog.vue';
+import type { NoteSetEntry } from '../utils/noteSetStore';
+import { fetchNoteSetEntry, loadNoteSetEntries } from '../utils/noteSetStore';
 import {
   loadFileActivity,
   loadRecentNotes,
   type FileActivityEvent,
   type FileActivityKind,
   type RecentNote,
-} from "../utils/homeActivity";
-import { useOpenNote } from "../utils/useOpenNote";
+} from '../utils/homeActivity';
+import { useOpenNote } from '../utils/useOpenNote';
 import {
   commandPaletteShortcut,
   OPEN_COMMAND_PALETTE_EVENT,
-} from "../utils/commandPaletteShortcut";
-import {
-  externalNotes,
-  loadWorkspaceState,
-  workspaceDirectories,
-} from "../utils/workspaceStore";
-import { getErrorMessage } from "../utils/getErrorMessage";
+} from '../utils/commandPaletteShortcut';
+import { externalNotes, loadWorkspaceState, workspaceDirectories } from '../utils/workspaceStore';
+import { getErrorMessage } from '../utils/getErrorMessage';
 
 const RECENT_LIMIT = 5;
 const HEATMAP_DAYS = 90;
@@ -49,17 +42,15 @@ const recentRefs = ref<RecentNote[]>([]);
 const activity = ref<FileActivityEvent[]>([]);
 const isCreateDialogOpen = ref(false);
 const isErrorOpen = ref(false);
-const errorMessage = ref("");
+const errorMessage = ref('');
 
 const noteKeyOf = (note: RecentNote): string =>
-  `${note.filePath ?? ""}\u0000${note.dir ?? ""}\u0000${note.fileName}`;
+  `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
 
 const noteKeyOfEntry = (note: NoteSetEntry): string =>
-  `${note.filePath ?? ""}\u0000${note.dir ?? ""}\u0000${note.fileName}`;
+  `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
 
-const noteByKey = computed(
-  () => new Map(notes.value.map((note) => [noteKeyOfEntry(note), note])),
-);
+const noteByKey = computed(() => new Map(notes.value.map((note) => [noteKeyOfEntry(note), note])));
 
 const recentNotes = computed(() => {
   const opened = recentRefs.value
@@ -100,7 +91,7 @@ const heatmapDays = computed(() => {
     const total = counts.created + counts.modified + counts.deleted;
     return {
       key: dayKey,
-      title: `${date.toLocaleDateString("zh-CN")} · 新建 ${counts.created} · 修改 ${counts.modified} · 删除 ${counts.deleted}`,
+      title: `${date.toLocaleDateString('zh-CN')} · 新建 ${counts.created} · 修改 ${counts.modified} · 删除 ${counts.deleted}`,
       level: total === 0 ? 0 : Math.min(4, Math.ceil(total / 2)),
     };
   });
@@ -121,14 +112,11 @@ const activitySeries = computed(() => {
       deleted: counts?.deleted ?? 0,
     };
   });
-  const max = Math.max(
-    1,
-    ...values.flatMap((item) => [item.created, item.modified, item.deleted]),
-  );
+  const max = Math.max(1, ...values.flatMap((item) => [item.created, item.modified, item.deleted]));
   const series: { kind: FileActivityKind; label: string; color: string }[] = [
-    { kind: "created", label: "新建", color: "#5b9b76" },
-    { kind: "modified", label: "修改", color: "#7398cf" },
-    { kind: "deleted", label: "删除", color: "#cf7d70" },
+    { kind: 'created', label: '新建', color: '#5b9b76' },
+    { kind: 'modified', label: '修改', color: '#7398cf' },
+    { kind: 'deleted', label: '删除', color: '#cf7d70' },
   ];
   return {
     values,
@@ -140,35 +128,36 @@ const activitySeries = computed(() => {
           const y = 154 - (value[item.kind] / max) * 120;
           return `${x},${y}`;
         })
-        .join(" "),
+        .join(' '),
     })),
-    total: (kind: FileActivityKind) =>
-      values.reduce((sum, item) => sum + item[kind], 0),
+    total: (kind: FileActivityKind) => values.reduce((sum, item) => sum + item[kind], 0),
   };
 });
 
 const greeting = computed(() => {
   const hour = new Date().getHours();
-  if (hour < 6) return "夜深了";
-  if (hour < 12) return "早上好";
-  if (hour < 18) return "下午好";
-  return "晚上好";
+  if (hour < 6) return '夜深了';
+  if (hour < 12) return '早上好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
 });
 
 const heatmapStartTitle = computed(() => {
   const firstDay = heatmapDays.value[0]?.key;
-  return firstDay ? new Date(`${firstDay}T00:00:00`).toLocaleDateString("zh-CN", { month: "long" }) : "";
+  return firstDay
+    ? new Date(`${firstDay}T00:00:00`).toLocaleDateString('zh-CN', { month: 'long' })
+    : '';
 });
 
 function dateKey(date: Date): string {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 async function loadHomeData() {
-  errorMessage.value = "";
+  errorMessage.value = '';
   try {
     await loadWorkspaceState();
     const directories = [
@@ -182,11 +171,7 @@ async function loadHomeData() {
       externalNotes.value.map(async (record) => {
         const fileName = record.localName ?? record.fileName;
         try {
-          return await fetchNoteSetEntry(
-            fileName,
-            undefined,
-            record.path,
-          );
+          return await fetchNoteSetEntry(fileName, undefined, record.path);
         } catch (error) {
           console.warn(`最近打开的文件不可用：${fileName}`, error);
           return null;
@@ -196,9 +181,7 @@ async function loadHomeData() {
     const merged = [...workspaceEntries.flat(), ...externalEntries].filter(
       (item): item is NoteSetEntry => item !== null,
     );
-    notes.value = [
-      ...new Map(merged.map((note) => [noteKeyOfEntry(note), note])).values(),
-    ];
+    notes.value = [...new Map(merged.map((note) => [noteKeyOfEntry(note), note])).values()];
     recentRefs.value = loadRecentNotes();
     activity.value = loadFileActivity();
   } catch (error) {
@@ -222,14 +205,14 @@ function showCommandPalette() {
 }
 
 function openAbout() {
-  void router.push("/settings/about");
+  void router.push('/settings/about');
 }
 
 function formatDate(timestamp: number): string {
-  if (!timestamp) return "未知";
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "numeric",
-    day: "numeric",
+  if (!timestamp) return '未知';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
   }).format(timestamp);
 }
 
@@ -342,9 +325,7 @@ onMounted(() => {
             <v-card-text>
               <div class="heatmap-month">{{ heatmapStartTitle }} — 今天</div>
               <div class="heatmap-wrap" role="img" aria-label="过去 90 天文件活动热力图">
-                <div class="heatmap-weekdays">
-                  <span>一</span><span>三</span><span>五</span>
-                </div>
+                <div class="heatmap-weekdays"><span>一</span><span>三</span><span>五</span></div>
                 <div class="heatmap-grid">
                   <span
                     v-for="day in heatmapDays"
@@ -387,7 +368,15 @@ onMounted(() => {
                 role="img"
                 aria-label="最近七天新建、修改、删除文件数量折线图"
               >
-                <line v-for="y in [34, 74, 114, 154]" :key="y" x1="30" :y1="y" x2="546" :y2="y" class="chart-grid-line" />
+                <line
+                  v-for="y in [34, 74, 114, 154]"
+                  :key="y"
+                  x1="30"
+                  :y1="y"
+                  x2="546"
+                  :y2="y"
+                  class="chart-grid-line"
+                />
                 <polyline
                   v-for="item in activitySeries.series"
                   :key="item.kind"
@@ -406,7 +395,7 @@ onMounted(() => {
                   text-anchor="middle"
                   class="chart-date"
                 >
-                  {{ item.date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }) }}
+                  {{ item.date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) }}
                 </text>
               </svg>
               <div class="chart-note text-caption text-medium-emphasis">

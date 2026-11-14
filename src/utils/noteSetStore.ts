@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-import { ref } from "vue";
-import { isTauri } from "@tauri-apps/api/core";
-import { info } from "@tauri-apps/plugin-log";
+import { ref } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
+import { info } from '@tauri-apps/plugin-log';
 
-import { fileOperations } from "../fileOperations";
-import { getErrorMessage } from "./getErrorMessage";
-import { sanitizeTags } from "./tagStore";
-import { workspaceDirectories } from "./workspaceStore";
+import { fileOperations } from '../fileOperations';
+import { getErrorMessage } from './getErrorMessage';
+import { sanitizeTags } from './tagStore';
+import { workspaceDirectories } from './workspaceStore';
 
 export interface NoteSetEntry {
   fileName: string;
@@ -28,7 +28,7 @@ const entriesByDir = new Map<string, NoteSetEntry[]>();
 const pendingLoads = new Map<string, Promise<NoteSetEntry[]>>();
 export const lastNoteSetLoad = ref<NoteSetLoadResult | null>(null);
 
-const cacheKeyOf = (dir?: string): string => dir ?? "";
+const cacheKeyOf = (dir?: string): string => dir ?? '';
 
 // 插件日志在浏览器里没有 IPC，上报会直接抛错，所以只在桌面端输出
 function appendNoteSetLog(message: string): void {
@@ -58,9 +58,7 @@ export async function fetchNoteSetEntry(
 
 async function fetchNoteSetEntries(dir?: string): Promise<NoteSetEntry[]> {
   const fileNames = await fileOperations.fetchFileNames(dir);
-  return Promise.all(
-    fileNames.map((fileName) => fetchNoteSetEntry(fileName, dir)),
-  );
+  return Promise.all(fileNames.map((fileName) => fetchNoteSetEntry(fileName, dir)));
 }
 
 function commitNoteSetEntries(
@@ -75,18 +73,13 @@ function commitNoteSetEntries(
     durationMs,
     fromCache: false,
   };
-  appendNoteSetLog(
-    `拉取完成，${entries.length} 条，耗时 ${durationMs.toFixed(1)} ms`,
-  );
+  appendNoteSetLog(`拉取完成，${entries.length} 条，耗时 ${durationMs.toFixed(1)} ms`);
   return entries;
 }
 
-function startNoteSetLoad(
-  dir: string | undefined,
-  key: string,
-): Promise<NoteSetEntry[]> {
+function startNoteSetLoad(dir: string | undefined, key: string): Promise<NoteSetEntry[]> {
   const startedAt = performance.now();
-  appendNoteSetLog("开始拉取列表");
+  appendNoteSetLog('开始拉取列表');
   const loading = fetchNoteSetEntries(dir)
     .then((entries) => commitNoteSetEntries(key, entries, startedAt))
     .catch((error: unknown) => {
@@ -101,10 +94,7 @@ function startNoteSetLoad(
 }
 
 // 离开 /set 会销毁 NoteSets，不缓存得在每次返回时重跑一遍「列表 + 逐条元信息」
-export function loadNoteSetEntries(
-  dir?: string,
-  force = false,
-): Promise<NoteSetEntry[]> {
+export function loadNoteSetEntries(dir?: string, force = false): Promise<NoteSetEntry[]> {
   const key = cacheKeyOf(dir);
   const cached = entriesByDir.get(key);
   if (cached && !force) {
@@ -118,7 +108,7 @@ export function loadNoteSetEntries(
   }
   const pending = pendingLoads.get(key);
   if (pending) {
-    appendNoteSetLog("复用进行中的拉取");
+    appendNoteSetLog('复用进行中的拉取');
     return pending;
   }
   return startNoteSetLoad(dir, key);
@@ -132,14 +122,12 @@ export function invalidateNoteSetEntries(dir?: string): void {
   } else {
     entriesByDir.delete(dir);
   }
-  appendNoteSetLog("缓存失效");
+  appendNoteSetLog('缓存失效');
 }
 
 // 保存只刷新归档 mtime，改时间戳即可让列表保持最新，无须回头重取整份列表
 export function touchNoteSetUpdatedAt(fileName: string, dir?: string): void {
-  const entry = entriesByDir
-    .get(cacheKeyOf(dir))
-    ?.find((item) => item.fileName === fileName);
+  const entry = entriesByDir.get(cacheKeyOf(dir))?.find((item) => item.fileName === fileName);
   if (!entry) return;
   entry.updatedAt = Date.now();
   appendNoteSetLog(`更新时间戳：${fileName}`);
@@ -180,19 +168,13 @@ async function patchNoteTags(patch: NoteTagPatch): Promise<boolean> {
 }
 
 // 标签以名字标识，库里改名或删除都得回写引用它的笔记，否则会留下悬空标签
-async function updateNoteTags(
-  resolveTags: (tags: string[]) => string[] | null,
-): Promise<number> {
-  const dirs = [
-    undefined,
-    ...workspaceDirectories.value.map((entry) => entry.dir),
-  ];
+async function updateNoteTags(resolveTags: (tags: string[]) => string[] | null): Promise<number> {
+  const dirs = [undefined, ...workspaceDirectories.value.map((entry) => entry.dir)];
   let changedCount = 0;
   for (const dir of dirs) {
     const fileNames = await fileOperations.fetchFileNames(dir);
     for (const fileName of fileNames) {
-      if (await patchNoteTags({ fileName, dir, resolveTags }))
-        changedCount += 1;
+      if (await patchNoteTags({ fileName, dir, resolveTags })) changedCount += 1;
     }
   }
   if (changedCount) invalidateNoteSetEntries();
@@ -200,15 +182,10 @@ async function updateNoteTags(
   return changedCount;
 }
 
-export function renameTagInNotes(
-  oldName: string,
-  nextName: string,
-): Promise<number> {
+export function renameTagInNotes(oldName: string, nextName: string): Promise<number> {
   return updateNoteTags((tags) => {
     if (!tags.includes(oldName)) return null;
-    return sanitizeTags(
-      tags.map((item) => (item === oldName ? nextName : item)),
-    );
+    return sanitizeTags(tags.map((item) => (item === oldName ? nextName : item)));
   });
 }
 

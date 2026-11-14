@@ -1,8 +1,7 @@
-import { ref, type InjectionKey } from "vue";
-import type { RouteLocationRaw } from "vue-router";
+import { ref, type InjectionKey } from 'vue';
+import type { RouteLocationRaw } from 'vue-router';
 
-export type TransitionName =
-  "VSlideXTransition" | "VSlideXReverseTransition" | "VFadeTransition";
+export type TransitionName = 'VSlideXTransition' | 'VSlideXReverseTransition' | 'VFadeTransition';
 
 export interface NoteLoadController {
   setProgress(progress: number): void;
@@ -16,11 +15,10 @@ export type StartEditorTransition = (
   prepare: PrepareEditorNavigation,
 ) => Promise<boolean>;
 
-export const noteLoadControllerKey: InjectionKey<NoteLoadController> =
-  Symbol("noteLoadController");
+export const noteLoadControllerKey: InjectionKey<NoteLoadController> = Symbol('noteLoadController');
 export const startEditorTransitionKey: InjectionKey<StartEditorTransition> =
-  Symbol("startEditorTransition");
+  Symbol('startEditorTransition');
 export const isDebugLoadingEnabled = ref(false);
 
 // main.ts 要导 App.vue、App.vue 又要读过渡名，放一起会形成循环导入，故单独成模块
-export const routeTransition = ref<TransitionName>("VFadeTransition");
+export const routeTransition = ref<TransitionName>('VFadeTransition');

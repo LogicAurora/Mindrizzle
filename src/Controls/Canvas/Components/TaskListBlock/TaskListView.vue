@@ -42,18 +42,11 @@
           <v-icon :icon="mdiClose" size="14" />
         </button>
       </div>
-      <div v-if="tasks.length === 0" class="task-empty">
-        还没有任务，按下方按钮添加
-      </div>
+      <div v-if="tasks.length === 0" class="task-empty">还没有任务，按下方按钮添加</div>
     </div>
 
     <div class="task-footer">
-      <button
-        v-if="!readOnly"
-        class="task-add"
-        type="button"
-        @click="addTask(true)"
-      >
+      <button v-if="!readOnly" class="task-add" type="button" @click="addTask(true)">
         <v-icon :icon="mdiPlus" size="14" />
         添加任务
       </button>
@@ -63,11 +56,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
-import { mdiClose, mdiPlus } from "@mdi/js";
+import { computed, nextTick, ref, watch } from 'vue';
+import { mdiClose, mdiPlus } from '@mdi/js';
 
-import type { TaskItem } from "../../Registry/canvasComponents.ts";
-import { createTaskId } from "./taskItems.ts";
+import type { TaskItem } from '../../Registry/canvasComponents.ts';
+import { createTaskId } from './taskItems.ts';
 
 const props = defineProps<{
   title: string;
@@ -76,15 +69,13 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update:title", title: string): void;
-  (e: "update:tasks", tasks: TaskItem[]): void;
+  (e: 'update:title', title: string): void;
+  (e: 'update:tasks', tasks: TaskItem[]): void;
 }>();
 
 const rootRef = ref<HTMLElement | null>(null);
 const draftTitle = ref(props.title);
-const doneCount = computed(
-  () => props.tasks.filter((task) => task.done).length,
-);
+const doneCount = computed(() => props.tasks.filter((task) => task.done).length);
 
 watch(
   () => props.title,
@@ -95,20 +86,18 @@ watch(
 
 const focusTask = async (id: string) => {
   await nextTick();
-  rootRef.value
-    ?.querySelector<HTMLInputElement>(`[data-task="${CSS.escape(id)}"]`)
-    ?.focus();
+  rootRef.value?.querySelector<HTMLInputElement>(`[data-task="${CSS.escape(id)}"]`)?.focus();
 };
 
 const addTask = (shouldFocus = true) => {
-  const task: TaskItem = { id: createTaskId(), text: "", done: false };
-  emit("update:tasks", [...props.tasks, task]);
+  const task: TaskItem = { id: createTaskId(), text: '', done: false };
+  emit('update:tasks', [...props.tasks, task]);
   if (shouldFocus) void focusTask(task.id);
 };
 
 const removeTask = (id: string) => {
   emit(
-    "update:tasks",
+    'update:tasks',
     props.tasks.filter((task) => task.id !== id),
   );
 };
@@ -117,16 +106,16 @@ const removeTask = (id: string) => {
 const onTextInput = (task: TaskItem, event: Event) => {
   const text = (event.target as HTMLInputElement).value;
   emit(
-    "update:tasks",
+    'update:tasks',
     props.tasks.map((item) => (item.id === task.id ? { ...item, text } : item)),
   );
 };
 
 // Enter 续写下一行，空文本再按 Enter 收尾，连续录入不用离开键盘
 const onTextKeydown = (event: KeyboardEvent, task: TaskItem) => {
-  if (event.key !== "Enter") return;
+  if (event.key !== 'Enter') return;
   event.preventDefault();
-  if (task.text.trim() === "") {
+  if (task.text.trim() === '') {
     (event.target as HTMLInputElement).blur();
     return;
   }
@@ -136,7 +125,7 @@ const onTextKeydown = (event: KeyboardEvent, task: TaskItem) => {
 const onToggle = (task: TaskItem, event: Event) => {
   const done = (event.target as HTMLInputElement).checked;
   emit(
-    "update:tasks",
+    'update:tasks',
     props.tasks.map((item) => (item.id === task.id ? { ...item, done } : item)),
   );
 };
@@ -146,7 +135,7 @@ const onTitleInput = (event: Event) => {
 };
 
 const onTitleBlur = () => {
-  emit("update:title", draftTitle.value.trim());
+  emit('update:title', draftTitle.value.trim());
 };
 </script>
 

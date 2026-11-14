@@ -65,10 +65,12 @@ fn apply_linux_graphics_settings() -> Result<(), String> {
     // WebKitGTK 在 Wayland 下走 DMABUF 会整帧回退致窗口闪烁，只能在进程启动时用环境变量切换缓冲路径
     match mode {
         DMABUF_RENDERER_MODE_DISABLE_RENDERER => {
-            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") }
         }
         DMABUF_RENDERER_MODE_FORCE_SHM => {
-            std::env::set_var("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1")
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1") }
         }
         _ => {}
     }

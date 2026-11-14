@@ -1,17 +1,17 @@
 // Tauri Linux 的 WebKitGTK 不派发 HTML5 DnD 的 dragover/drop，所以改用 pointerdown + window 级指针事件实现拖拽
 
-import { onUnmounted, ref } from "vue";
-import type { Editor } from "@prosekit/core";
-import type { Ref } from "vue";
-import { NodeSelection } from "prosekit/pm/state";
+import { onUnmounted, ref } from 'vue';
+import type { Editor } from '@prosekit/core';
+import type { Ref } from 'vue';
+import { NodeSelection } from 'prosekit/pm/state';
 import {
   getVisibleBlockRect,
   getView,
   layoutToViewportSize,
   layoutToViewportX,
   layoutToViewportY,
-} from "./blockHandleUtils";
-import type { HoveredBlock } from "./useHoverState";
+} from './blockHandleUtils';
+import type { HoveredBlock } from './useHoverState';
 
 interface DragSource {
   editor: Editor;
@@ -59,31 +59,26 @@ export function useBlockDrag(options: {
   function editorOfPm(pm: HTMLElement): Editor | null {
     let comp = (pm as any).__vueParentComponent;
     while (comp) {
-      if (comp.setupState && comp.setupState.editor)
-        return comp.setupState.editor as Editor;
+      if (comp.setupState && comp.setupState.editor) return comp.setupState.editor as Editor;
       comp = comp.parent;
     }
     return null;
   }
 
-  const clampTo = (min: number, max: number, value: number) =>
-    Math.min(Math.max(value, min), max);
+  const clampTo = (min: number, max: number, value: number) => Math.min(Math.max(value, min), max);
 
   // gutter 是 pointer-events:none 的留白、手柄正落在其中，所以未直接命中时按 wrapper 盒子兜底并夹回落点
   // （布局坐标与视口坐标需先经 layoutToViewport* 换算）
   function resolveEditorHit(x: number, y: number): EditorHit | null {
-    const direct = (
-      document.elementFromPoint(x, y) as HTMLElement | null
-    )?.closest?.(".ProseMirror") as HTMLElement | null;
+    const direct = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest?.(
+      '.ProseMirror',
+    ) as HTMLElement | null;
     const directEditor = direct ? editorOfPm(direct) : null;
-    if (direct && directEditor)
-      return { editor: directEditor, pm: direct, x, y };
+    if (direct && directEditor) return { editor: directEditor, pm: direct, x, y };
 
-    const pms = Array.from(
-      document.querySelectorAll<HTMLElement>(".ProseMirror"),
-    );
+    const pms = Array.from(document.querySelectorAll<HTMLElement>('.ProseMirror'));
     const pm = pms.find((el) => {
-      const wrapper = el.closest(".editor-wrapper") as HTMLElement | null;
+      const wrapper = el.closest('.editor-wrapper') as HTMLElement | null;
       if (!wrapper) return false;
       const r = wrapper.getBoundingClientRect();
       const left = layoutToViewportX(el, r.left);
@@ -114,8 +109,8 @@ export function useBlockDrag(options: {
   function autoScroll(x: number, y: number, hit: EditorHit | null): boolean {
     const el = document.elementFromPoint(x, y);
     const scrollEl =
-      (el?.closest?.(".editor-scroll") as HTMLElement | null) ??
-      (hit?.pm.closest(".editor-scroll") as HTMLElement | null) ??
+      (el?.closest?.('.editor-scroll') as HTMLElement | null) ??
+      (hit?.pm.closest('.editor-scroll') as HTMLElement | null) ??
       null;
     if (!scrollEl) return false;
     // gutter 内同样命不中滚动容器，所以经编辑器归属兜底
@@ -126,18 +121,12 @@ export function useBlockDrag(options: {
     const inBottom = y < bottom && y > bottom - SCROLL_EDGE;
     if (!inTop && !inBottom) return false;
     const dist = inTop ? y - top : bottom - y;
-    const step = Math.max(
-      2,
-      Math.round(SCROLL_MAX_SPEED * (1 - dist / SCROLL_EDGE)),
-    );
+    const step = Math.max(2, Math.round(SCROLL_MAX_SPEED * (1 - dist / SCROLL_EDGE)));
     if (inTop && scrollEl.scrollTop > 0) {
       scrollEl.scrollTop -= step;
       return true;
     }
-    if (
-      inBottom &&
-      scrollEl.scrollTop < scrollEl.scrollHeight - scrollEl.clientHeight
-    ) {
+    if (inBottom && scrollEl.scrollTop < scrollEl.scrollHeight - scrollEl.clientHeight) {
       scrollEl.scrollTop += step;
       return true;
     }
@@ -148,25 +137,19 @@ export function useBlockDrag(options: {
   const CANVAS_PAN_EDGE = 60;
   const CANVAS_PAN_MAX = 8;
   function panCanvas(x: number, y: number): boolean {
-    const canvasEl = document.querySelector(
-      ".canvas-container",
-    ) as HTMLElement | null;
+    const canvasEl = document.querySelector('.canvas-container') as HTMLElement | null;
     if (!canvasEl) return false;
     const r = canvasEl.getBoundingClientRect();
     let dx = 0;
     let dy = 0;
-    if (x < r.left + CANVAS_PAN_EDGE)
-      dx = Math.min(r.left + CANVAS_PAN_EDGE - x, CANVAS_PAN_MAX);
+    if (x < r.left + CANVAS_PAN_EDGE) dx = Math.min(r.left + CANVAS_PAN_EDGE - x, CANVAS_PAN_MAX);
     else if (x > r.right - CANVAS_PAN_EDGE)
       dx = -Math.min(x - (r.right - CANVAS_PAN_EDGE), CANVAS_PAN_MAX);
-    if (y < r.top + CANVAS_PAN_EDGE)
-      dy = Math.min(r.top + CANVAS_PAN_EDGE - y, CANVAS_PAN_MAX);
+    if (y < r.top + CANVAS_PAN_EDGE) dy = Math.min(r.top + CANVAS_PAN_EDGE - y, CANVAS_PAN_MAX);
     else if (y > r.bottom - CANVAS_PAN_EDGE)
       dy = -Math.min(y - (r.bottom - CANVAS_PAN_EDGE), CANVAS_PAN_MAX);
     if (!dx && !dy) return false;
-    window.dispatchEvent(
-      new CustomEvent("Mindrizzle:canvas-pan", { detail: { dx, dy } }),
-    );
+    window.dispatchEvent(new CustomEvent('Mindrizzle:canvas-pan', { detail: { dx, dy } }));
     return true;
   }
 
@@ -185,10 +168,7 @@ export function useBlockDrag(options: {
     if (needsIndicator || scrolled || panned) {
       needsIndicator = false;
       if (hit)
-        updateIndicator(
-          hit.editor.view,
-          resolveDropAnchor(hit.pm, hit.editor.view, hit.x, hit.y),
-        );
+        updateIndicator(hit.editor.view, resolveDropAnchor(hit.pm, hit.editor.view, hit.x, hit.y));
       else hideIndicator();
     }
     ensureDragLoop();
@@ -218,17 +198,17 @@ export function useBlockDrag(options: {
     active = true;
     isDragging.value = true;
     // 跨编辑器全局抑制 popup/高亮
-    document.body.classList.add("block-handle-dragging");
+    document.body.classList.add('block-handle-dragging');
     suppressUI();
     createGhost(node, e.clientX, e.clientY);
     lastX = e.clientX;
     lastY = e.clientY;
     ensureDragLoop();
     // 部分环境 mouse.down 后不派发 mousemove，所以同时监听 pointermove；hover 自解析会 stopPropagation，所以用捕获阶段
-    window.addEventListener("pointermove", onDragMove, true);
-    window.addEventListener("mousemove", onDragMove, true);
-    window.addEventListener("mouseup", onDragUp);
-    window.addEventListener("pointerup", onDragUp);
+    window.addEventListener('pointermove', onDragMove, true);
+    window.addEventListener('mousemove', onDragMove, true);
+    window.addEventListener('mouseup', onDragUp);
+    window.addEventListener('pointerup', onDragUp);
   }
 
   function onDragMove(e: MouseEvent) {
@@ -260,12 +240,7 @@ export function useBlockDrag(options: {
   }
 
   // 用命中块元素经 posAtDOM 映射回文档位置（与坐标无关），再按鼠标 y 与块视觉中心比较取前/后
-  function resolveDropAnchor(
-    pm: HTMLElement,
-    v: any,
-    x: number,
-    y: number,
-  ): DropAnchor {
+  function resolveDropAnchor(pm: HTMLElement, v: any, x: number, y: number): DropAnchor {
     const hit = document.elementFromPoint(x, y) as HTMLElement | null;
     let el: HTMLElement | null = hit && pm.contains(hit) ? hit : null;
     while (el && el.parentElement !== pm) el = el.parentElement;
@@ -274,8 +249,7 @@ export function useBlockDrag(options: {
     const $pos = v.state.doc.resolve(at);
     const rect = getVisibleBlockRect(el);
     const mid = rect
-      ? layoutToViewportY(v, rect.top) +
-        layoutToViewportSize(v, rect.height) / 2
+      ? layoutToViewportY(v, rect.top) + layoutToViewportSize(v, rect.height) / 2
       : y;
     const before = y < mid;
     // 原子块的 $pos.depth 为 0，所以需按 nodeSize 取前后
@@ -341,31 +315,31 @@ export function useBlockDrag(options: {
       rafId = 0;
     }
     isDragging.value = false;
-    document.body.classList.remove("block-handle-dragging");
+    document.body.classList.remove('block-handle-dragging');
     source = null;
     removeGhost();
     removeIndicator();
-    window.removeEventListener("pointermove", onDragMove, true);
-    window.removeEventListener("mousemove", onDragMove, true);
-    window.removeEventListener("mouseup", onDragUp);
-    window.removeEventListener("pointerup", onDragUp);
+    window.removeEventListener('pointermove', onDragMove, true);
+    window.removeEventListener('mousemove', onDragMove, true);
+    window.removeEventListener('mouseup', onDragUp);
+    window.removeEventListener('pointerup', onDragUp);
   }
 
   function createGhost(node: any, x: number, y: number) {
     removeGhost();
-    ghostEl = document.createElement("div");
+    ghostEl = document.createElement('div');
     ghostEl.style.cssText = [
-      "position:fixed;pointer-events:none;z-index:9999;",
-      "background:transparent;",
-      "outline:2px solid #8cf;",
-      "padding:3px 10px;",
-      "max-width:280px;",
-      "white-space:pre-wrap;",
-      "word-break:break-word;",
-      "overflow:hidden;",
-      "box-sizing:border-box;",
-    ].join("");
-    ghostEl.textContent = node.textContent || " ";
+      'position:fixed;pointer-events:none;z-index:9999;',
+      'background:transparent;',
+      'outline:2px solid #8cf;',
+      'padding:3px 10px;',
+      'max-width:280px;',
+      'white-space:pre-wrap;',
+      'word-break:break-word;',
+      'overflow:hidden;',
+      'box-sizing:border-box;',
+    ].join('');
+    ghostEl.textContent = node.textContent || ' ';
     document.body.appendChild(ghostEl);
     ghostEl.style.left = `${x + 12}px`;
     ghostEl.style.top = `${y + 12}px`;
@@ -378,10 +352,10 @@ export function useBlockDrag(options: {
   // coordsAtPos 在 zoom 下拿的是布局坐标会偏移，所以按块元素视觉矩形取上/下边缘
   function updateIndicator(v: any, anchor: DropAnchor) {
     if (!indicatorEl) {
-      indicatorEl = document.createElement("div");
+      indicatorEl = document.createElement('div');
       indicatorEl.style.cssText =
-        "position:fixed;pointer-events:none;height:2px;" +
-        "background:rgba(var(--v-theme-primary),0.9);z-index:9998;left:0;top:0;";
+        'position:fixed;pointer-events:none;height:2px;' +
+        'background:rgba(var(--v-theme-primary),0.9);z-index:9998;left:0;top:0;';
       document.body.appendChild(indicatorEl);
     }
     const pmRect = v.dom.getBoundingClientRect();
@@ -389,16 +363,14 @@ export function useBlockDrag(options: {
     if (anchor.el) {
       const r = getVisibleBlockRect(anchor.el);
       if (r)
-        y = anchor.before
-          ? layoutToViewportY(v, r.top)
-          : layoutToViewportY(v, r.top + r.height);
+        y = anchor.before ? layoutToViewportY(v, r.top) : layoutToViewportY(v, r.top + r.height);
     }
-    indicatorEl.style.display = "block";
+    indicatorEl.style.display = 'block';
     indicatorEl.style.width = `${Math.max(2, Math.round(layoutToViewportSize(v, pmRect.width)))}px`;
     indicatorEl.style.transform = `translate(${Math.round(layoutToViewportX(v, pmRect.left))}px, ${Math.round(y - 1)}px)`;
   }
   function hideIndicator() {
-    if (indicatorEl) indicatorEl.style.display = "none";
+    if (indicatorEl) indicatorEl.style.display = 'none';
   }
   function removeIndicator() {
     indicatorEl?.remove();

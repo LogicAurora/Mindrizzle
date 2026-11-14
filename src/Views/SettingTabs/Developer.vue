@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { mdiBug, mdiFlaskOutline, mdiTelescope } from "@mdi/js";
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { mdiBug, mdiFlaskOutline, mdiTelescope } from '@mdi/js';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 
-import MdrSettingsPageBase from "./MdrSettingsPageBase.vue";
-import { isDeveloperMode, saveDeveloperMode } from "../../utils/developerMode";
+import MdrSettingsPageBase from './MdrSettingsPageBase.vue';
+import { isDeveloperMode, saveDeveloperMode } from '../../utils/developerMode';
 
 const router = useRouter();
-const settingsError = ref("");
+const settingsError = ref('');
 
 function reportSettingsError(error: unknown) {
   settingsError.value = error instanceof Error ? error.message : String(error);
@@ -18,16 +18,12 @@ function updateDeveloperMode(value: unknown) {
 }
 
 function openDebugPage() {
-  void router.push("/debug");
+  void router.push('/debug');
 }
 </script>
 
 <template>
-  <MdrSettingsPageBase
-    title="开发者"
-    subtitle="调试入口与测试块。"
-    :icon="mdiBug"
-  >
+  <MdrSettingsPageBase title="开发者" subtitle="调试入口与测试块。" :icon="mdiBug">
     <section class="settings-section">
       <div class="settings-section-head">
         <div>

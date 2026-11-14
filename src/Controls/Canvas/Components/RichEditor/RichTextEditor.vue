@@ -20,11 +20,7 @@
     >
       <ProseKit :editor="editor">
         <div class="editor-scroll-shell">
-          <div
-            ref="scrollRef"
-            class="editor-scroll"
-            @scroll="updateScrollMetrics"
-          >
+          <div ref="scrollRef" class="editor-scroll" @scroll="updateScrollMetrics">
             <div ref="editorMount" class="editor-mount" />
           </div>
           <!-- 原生 ::selection 只能方角，所以按行铺圆角块自绘；节点在滚动容器外，不随内容滚动 -->
@@ -112,17 +108,11 @@
           >
             <v-card-text class="text-center pb-0">
               <div>切换「{{ pendingDisplayLabel }}」？</div>
-              <div class="text-caption text-medium-emphasis mt-1">
-                左键应用 : 右键取消
-              </div>
+              <div class="text-caption text-medium-emphasis mt-1">左键应用 : 右键取消</div>
             </v-card-text>
             <v-card-actions class="justify-end ga-1">
-              <v-btn size="small" variant="text" @click.stop="cancelApply"
-                >取消</v-btn
-              >
-              <v-btn size="small" color="primary" @click.stop="confirmApply"
-                >应用</v-btn
-              >
+              <v-btn size="small" variant="text" @click.stop="cancelApply">取消</v-btn>
+              <v-btn size="small" color="primary" @click.stop="confirmApply">应用</v-btn>
             </v-card-actions>
           </v-card>
         </div>
@@ -148,63 +138,54 @@
   </MdrCanvasComponentBase>
 </template>
 <script lang="ts">
-import type { RichTextConfig } from "../../Registry/canvasComponents.ts";
+import type { RichTextConfig } from '../../Registry/canvasComponents.ts';
 
-export { RICH_TEXT_CONSTRAINTS as resizeConstraints } from "../../Registry/componentConstraints.ts";
+export { RICH_TEXT_CONSTRAINTS as resizeConstraints } from '../../Registry/componentConstraints.ts';
 
-export const RICH_TEXT_LABEL = "富文本";
+export const RICH_TEXT_LABEL = '富文本';
 
 // 高度由内容驱动时联结不得改它的高度
-export const isHeightChangable = (config: RichTextConfig): boolean =>
-  config.autoHeight !== true;
+export const isHeightChangable = (config: RichTextConfig): boolean => config.autoHeight !== true;
 </script>
 <script setup lang="ts">
-import "prosekit/basic/style.css";
-import "prosekit/basic/typography.css";
-import "prosekit/pm/view/style/prosemirror.css";
-import "./selectionStyles.css";
+import 'prosekit/basic/style.css';
+import 'prosekit/basic/typography.css';
+import 'prosekit/pm/view/style/prosemirror.css';
+import './selectionStyles.css';
 
-import blockHandle from "./extensions/block-handle.vue";
-import RowDropIndicator from "./extensions/RowDropIndicator.vue";
-import {
-  ref,
-  onMounted,
-  onUnmounted,
-  computed,
-  reactive,
-  watch,
-  nextTick,
-} from "vue";
-import { ProseKit, useDocChange } from "@prosekit/vue";
-import { mdiNoteText } from "@mdi/js";
+import blockHandle from './extensions/block-handle.vue';
+import RowDropIndicator from './extensions/RowDropIndicator.vue';
+import { ref, onMounted, onUnmounted, computed, reactive, watch, nextTick } from 'vue';
+import { ProseKit, useDocChange } from '@prosekit/vue';
+import { mdiNoteText } from '@mdi/js';
 
-import { defineExtension } from "./extension.ts";
-import { createEditor, NodeJSON } from "@prosekit/core";
-import { useTextSelectionHighlight } from "./extensions/useTextSelectionHighlight.ts";
-import { TextSelection } from "prosekit/pm/state";
+import { defineExtension } from './extension.ts';
+import { createEditor, NodeJSON } from '@prosekit/core';
+import { useTextSelectionHighlight } from './extensions/useTextSelectionHighlight.ts';
+import { TextSelection } from 'prosekit/pm/state';
 import {
   layoutToViewportSize,
   layoutToViewportX,
   layoutToViewportY,
   viewportToLayout,
-} from "./extensions/blockHandleUtils.ts";
-import MdrCanvasComponentBase from "../../Core/MdrCanvasComponentBase.vue";
-import { Z_LAYER } from "../../Core/zIndex.ts";
-import FormatModePicker from "./FormatModePicker.vue";
-import FormatDetailPicker from "./FormatDetailPicker.vue";
+} from './extensions/blockHandleUtils.ts';
+import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue';
+import { Z_LAYER } from '../../Core/zIndex.ts';
+import FormatModePicker from './FormatModePicker.vue';
+import FormatDetailPicker from './FormatDetailPicker.vue';
 import {
   FORMAT_MODES,
   HEADING_DETAILS,
   colorDetailsOf,
   isHeadingCancelIndex,
-} from "./formatModes.ts";
-import type { FormatModeId } from "./formatModes.ts";
-import type { MdrCanvasComponentContentProps } from "../../Core/MdrCanvasComponentBase.types.ts";
-import type { WidgetConfig } from "../../Registry/canvasComponents.ts";
+} from './formatModes.ts';
+import type { FormatModeId } from './formatModes.ts';
+import type { MdrCanvasComponentContentProps } from '../../Core/MdrCanvasComponentBase.types.ts';
+import type { WidgetConfig } from '../../Registry/canvasComponents.ts';
 import type {
   BlockCanvasController,
   BlockComponentController,
-} from "../../Core/canvasComponentControllers.ts";
+} from '../../Core/canvasComponentControllers.ts';
 
 const props = defineProps<
   MdrCanvasComponentContentProps<WidgetConfig> & {
@@ -233,8 +214,10 @@ const editor = createEditor({ extension });
 const editorMount = ref<HTMLDivElement>();
 const wrapperRef = ref<HTMLDivElement>();
 const scrollRef = ref<HTMLDivElement>();
-const { rects: textSelectionRects, refresh: refreshTextSelection } =
-  useTextSelectionHighlight({ editor, scrollRef });
+const { rects: textSelectionRects, refresh: refreshTextSelection } = useTextSelectionHighlight({
+  editor,
+  scrollRef,
+});
 const scrollMetrics = reactive({
   scrollTop: 0,
   scrollLeft: 0,
@@ -251,7 +234,7 @@ const syncReadOnly = (readOnly: boolean) => {
   if (!editorMounted) return;
   editor.view.setProps({ editable: () => !readOnly });
   wrapperRef.value?.dispatchEvent(
-    new CustomEvent("Mindrizzle:rich-text-read-only", { detail: readOnly }),
+    new CustomEvent('Mindrizzle:rich-text-read-only', { detail: readOnly }),
   );
 };
 
@@ -285,25 +268,18 @@ const thumbGeometry = (viewport: number, content: number) => {
 
 const verticalThumbStyle = computed(() => ({
   height: `${thumbGeometry(scrollMetrics.clientHeight, scrollMetrics.scrollHeight).thumb}px`,
-  transform: `translateY(${getThumbOffset("vertical")}px)`,
+  transform: `translateY(${getThumbOffset('vertical')}px)`,
 }));
 
 const horizontalThumbStyle = computed(() => ({
   width: `${thumbGeometry(scrollMetrics.clientWidth, scrollMetrics.scrollWidth).thumb}px`,
-  transform: `translateX(${getThumbOffset("horizontal")}px)`,
+  transform: `translateX(${getThumbOffset('horizontal')}px)`,
 }));
 
-const getThumbOffset = (axis: "vertical" | "horizontal") => {
-  const viewport =
-    axis === "vertical"
-      ? scrollMetrics.clientHeight
-      : scrollMetrics.clientWidth;
-  const content =
-    axis === "vertical"
-      ? scrollMetrics.scrollHeight
-      : scrollMetrics.scrollWidth;
-  const current =
-    axis === "vertical" ? scrollMetrics.scrollTop : scrollMetrics.scrollLeft;
+const getThumbOffset = (axis: 'vertical' | 'horizontal') => {
+  const viewport = axis === 'vertical' ? scrollMetrics.clientHeight : scrollMetrics.clientWidth;
+  const content = axis === 'vertical' ? scrollMetrics.scrollHeight : scrollMetrics.scrollWidth;
+  const current = axis === 'vertical' ? scrollMetrics.scrollTop : scrollMetrics.scrollLeft;
   const { travel, maxScroll } = thumbGeometry(viewport, content);
   return (current / maxScroll) * travel;
 };
@@ -313,12 +289,7 @@ const scrollVertical = (event: WheelEvent) => {
   event.stopPropagation();
   const scroll = scrollRef.value;
   if (!scroll) return;
-  const unit =
-    event.deltaMode === 1
-      ? 16
-      : event.deltaMode === 2
-        ? scroll.clientHeight
-        : 1;
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroll.clientHeight : 1;
   scroll.scrollTop += event.deltaY * unit;
 };
 
@@ -327,81 +298,69 @@ const scrollHorizontal = (event: WheelEvent) => {
   event.stopPropagation();
   const scroll = scrollRef.value;
   if (!scroll) return;
-  const unit =
-    event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroll.clientWidth : 1;
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroll.clientWidth : 1;
   scroll.scrollLeft += (event.deltaX || event.deltaY) * unit;
 };
 
 const startVerticalScrollbar = (event: PointerEvent) => {
-  if (
-    (event.target as HTMLElement).classList.contains("custom-scrollbar-thumb")
-  )
-    return;
+  if ((event.target as HTMLElement).classList.contains('custom-scrollbar-thumb')) return;
   const scroll = scrollRef.value;
   if (!scroll) return;
   const track = event.currentTarget as HTMLElement;
   // BCR 与 thumb 偏移是布局坐标、event.clientY 是视觉坐标，所以统一换算到视觉空间再比
   const thumbEnd =
     layoutToViewportY(track, track.getBoundingClientRect().top) +
-    layoutToViewportSize(track, getThumbOffset("vertical"));
+    layoutToViewportSize(track, getThumbOffset('vertical'));
   scroll.scrollTop += (event.clientY < thumbEnd ? -1 : 1) * scroll.clientHeight;
 };
 
 const startHorizontalScrollbar = (event: PointerEvent) => {
-  if (
-    (event.target as HTMLElement).classList.contains("custom-scrollbar-thumb")
-  )
-    return;
+  if ((event.target as HTMLElement).classList.contains('custom-scrollbar-thumb')) return;
   const scroll = scrollRef.value;
   if (!scroll) return;
   const track = event.currentTarget as HTMLElement;
   const thumbEnd =
     layoutToViewportX(track, track.getBoundingClientRect().left) +
-    layoutToViewportSize(track, getThumbOffset("horizontal"));
+    layoutToViewportSize(track, getThumbOffset('horizontal'));
   scroll.scrollLeft += (event.clientX < thumbEnd ? -1 : 1) * scroll.clientWidth;
 };
 
 let scrollbarDrag: {
-  axis: "vertical" | "horizontal";
+  axis: 'vertical' | 'horizontal';
   start: number;
   scroll: number;
 } | null = null;
-const startVerticalThumb = (event: PointerEvent) =>
-  startScrollbarDrag("vertical", event);
-const startHorizontalThumb = (event: PointerEvent) =>
-  startScrollbarDrag("horizontal", event);
+const startVerticalThumb = (event: PointerEvent) => startScrollbarDrag('vertical', event);
+const startHorizontalThumb = (event: PointerEvent) => startScrollbarDrag('horizontal', event);
 // 块内事件需块 uuid，逐层上溯到 wrapper 的 data-uuid
 const blockUuid = (): string | null => {
   let el: HTMLElement | null = wrapperRef.value ?? null;
-  while (el && !el.classList.contains("drag-wrapper")) el = el.parentElement;
-  return el?.getAttribute("data-uuid") ?? null;
+  while (el && !el.classList.contains('drag-wrapper')) el = el.parentElement;
+  return el?.getAttribute('data-uuid') ?? null;
 };
 // 拖拽滚动条时指针会滑出块行、原生 hover 扩展反复清/置 hover 致 popup 与滚动条闪烁，所以通知本块收起 popup
 const notifyScrollbarDrag = (active: boolean) => {
   const uuid = blockUuid();
   if (uuid)
     window.dispatchEvent(
-      new CustomEvent("Mindrizzle:scrollbar-drag", {
+      new CustomEvent('Mindrizzle:scrollbar-drag', {
         detail: { active, uuid },
       }),
     );
 };
 
-const startScrollbarDrag = (
-  axis: "vertical" | "horizontal",
-  event: PointerEvent,
-) => {
+const startScrollbarDrag = (axis: 'vertical' | 'horizontal', event: PointerEvent) => {
   const scroll = scrollRef.value;
   if (!scroll) return;
   // scroll 事件异步、scrollMetrics 可能滞后，所以基准取实时 scrollTop/scrollLeft
   scrollbarDrag = {
     axis,
-    start: axis === "vertical" ? event.clientY : event.clientX,
-    scroll: axis === "vertical" ? scroll.scrollTop : scroll.scrollLeft,
+    start: axis === 'vertical' ? event.clientY : event.clientX,
+    scroll: axis === 'vertical' ? scroll.scrollTop : scroll.scrollLeft,
   };
   // hover 自解析会 stopPropagation，所以用捕获阶段
-  window.addEventListener("pointermove", moveScrollbarDrag, true);
-  window.addEventListener("pointerup", stopScrollbarDrag, { once: true });
+  window.addEventListener('pointermove', moveScrollbarDrag, true);
+  window.addEventListener('pointerup', stopScrollbarDrag, { once: true });
   notifyScrollbarDrag(true);
   event.preventDefault();
 };
@@ -409,7 +368,7 @@ const moveScrollbarDrag = (event: PointerEvent) => {
   const session = scrollbarDrag;
   const scroll = scrollRef.value;
   if (!session || !scroll) return;
-  const vertical = session.axis === "vertical";
+  const vertical = session.axis === 'vertical';
   const viewport = vertical ? scroll.clientHeight : scroll.clientWidth;
   const content = vertical ? scroll.scrollHeight : scroll.scrollWidth;
   const { travel, maxScroll } = thumbGeometry(viewport, content);
@@ -425,21 +384,16 @@ const moveScrollbarDrag = (event: PointerEvent) => {
 const stopScrollbarDrag = () => {
   if (scrollbarDrag) notifyScrollbarDrag(false);
   scrollbarDrag = null;
-  window.removeEventListener("pointermove", moveScrollbarDrag, true);
+  window.removeEventListener('pointermove', moveScrollbarDrag, true);
 };
 
 // posAtCoords/coordsAtPos 混用 BCR 与鼠标坐标、zoom 下必然偏移，所以改用 posAtDOM（只做 DOM↔文档映射）
-function resolveDropAtElement(
-  el: HTMLElement | null,
-  preferBefore: boolean,
-): number | null {
+function resolveDropAtElement(el: HTMLElement | null, preferBefore: boolean): number | null {
   const view = editor.view;
   if (!view || !el || !view.dom.contains(el)) return null;
   let block: HTMLElement = el;
-  while (block.parentElement && block.parentElement !== view.dom)
-    block = block.parentElement;
-  if (block.parentElement !== view.dom)
-    return preferBefore ? 0 : view.state.doc.content.size;
+  while (block.parentElement && block.parentElement !== view.dom) block = block.parentElement;
+  if (block.parentElement !== view.dom) return preferBefore ? 0 : view.state.doc.content.size;
   const at = view.posAtDOM(block, 0);
   const $pos = view.state.doc.resolve(at);
   // 原子块对应文档级位置，所以需按节点自身取前后
@@ -462,41 +416,29 @@ const isFormatPickerExpanded = ref(false);
 const isFormatPopupOpen = ref(false);
 const isDetailPopupOpen = ref(false);
 const formatPickerZ = computed(() =>
-  isFormatPopupOpen.value
-    ? Z_LAYER.formatDetailPicker
-    : Z_LAYER.formatModePicker,
+  isFormatPopupOpen.value ? Z_LAYER.formatDetailPicker : Z_LAYER.formatModePicker,
 );
 const detailPickerZ = computed(() =>
   isFormatPopupOpen.value && !isDetailPopupOpen.value
     ? Z_LAYER.formatModePicker
     : Z_LAYER.formatDetailPicker,
 );
-const showFormatModes = computed(
-  () => props.base.active === true && !readOnly.value,
-);
+const showFormatModes = computed(() => props.base.active === true && !readOnly.value);
 const currentModeId = computed(() => FORMAT_MODES[modeIndex.value]?.id);
 // 自定义颜色按模式各存一份，色板用当前值展示
-const customColors = reactive({ textColor: "#111827", highlight: "#fde68a" });
-const textColorDetails = computed(() =>
-  colorDetailsOf("text", customColors.textColor),
-);
-const highlightDetails = computed(() =>
-  colorDetailsOf("background", customColors.highlight),
-);
+const customColors = reactive({ textColor: '#111827', highlight: '#fde68a' });
+const textColorDetails = computed(() => colorDetailsOf('text', customColors.textColor));
+const highlightDetails = computed(() => colorDetailsOf('background', customColors.highlight));
 
 const detailOptionsFor = (modeId: FormatModeId | undefined) => {
-  if (modeId === "heading") return HEADING_DETAILS;
-  if (modeId === "textColor") return textColorDetails.value;
-  if (modeId === "highlight") return highlightDetails.value;
+  if (modeId === 'heading') return HEADING_DETAILS;
+  if (modeId === 'textColor') return textColorDetails.value;
+  if (modeId === 'highlight') return highlightDetails.value;
   return [];
 };
 
-const formatDetailOptions = computed(() =>
-  detailOptionsFor(currentModeId.value),
-);
-const detailIndex = computed(
-  () => detailIndexByMode[currentModeId.value ?? ""] ?? 0,
-);
+const formatDetailOptions = computed(() => detailOptionsFor(currentModeId.value));
+const detailIndex = computed(() => detailIndexByMode[currentModeId.value ?? ''] ?? 0);
 const showFormatDetail = computed(
   () => showFormatModes.value && formatDetailOptions.value.length > 0,
 );
@@ -508,7 +450,7 @@ const onSelectDetail = (index: number | null) => {
 
 const onPickCustomColor = (color: string) => {
   const modeId = currentModeId.value;
-  if (modeId !== "textColor" && modeId !== "highlight") return;
+  if (modeId !== 'textColor' && modeId !== 'highlight') return;
   customColors[modeId] = color;
   detailIndexByMode[modeId] = detailOptionsFor(modeId).length - 1;
 };
@@ -522,20 +464,14 @@ const clearEditorSelection = () => {
   const { state, view } = editor;
   if (!state.selection.empty) {
     view.dispatch(
-      state.tr.setSelection(
-        TextSelection.near(state.doc.resolve(state.selection.head)),
-      ),
+      state.tr.setSelection(TextSelection.near(state.doc.resolve(state.selection.head))),
     );
   }
-  if (
-    document.activeElement instanceof HTMLElement &&
-    view.dom.contains(document.activeElement)
-  ) {
+  if (document.activeElement instanceof HTMLElement && view.dom.contains(document.activeElement)) {
     document.activeElement.blur();
   }
   const selection = window.getSelection();
-  if (selection?.anchorNode && view.dom.contains(selection.anchorNode))
-    selection.removeAllRanges();
+  if (selection?.anchorNode && view.dom.contains(selection.anchorNode)) selection.removeAllRanges();
 };
 
 // 取消选中后不该保留旧格式模式，否则再次选中同一块会直接套用上次的选择
@@ -554,13 +490,13 @@ watch(
 
 const onAltKeyDown = (event: KeyboardEvent) => {
   // Alt+Ctrl 是详情菜单的层级快捷键，不能顺手把应用确认武装起来
-  if (event.key !== "Alt" || event.ctrlKey) return;
+  if (event.key !== 'Alt' || event.ctrlKey) return;
   if (showFormatModes.value) formatArmed = true;
 };
 
 // 松开 Alt 立刻解除武装，纯选字不再弹出确认
 const onAltKeyUp = (event: KeyboardEvent) => {
-  if (event.key === "Alt") formatArmed = false;
+  if (event.key === 'Alt') formatArmed = false;
 };
 
 const onSelectMode = (index: number | null) => {
@@ -575,25 +511,25 @@ const applyFormatMode = (index: number) => {
   const detailIdx = detailIndexByMode[mode.id] ?? 0;
   const detail = detailOptionsFor(mode.id)[detailIdx];
   switch (mode.id) {
-    case "heading":
+    case 'heading':
       // 详情最后一项是取消标题，其余索引 + 1 就是标题级别
       if (isHeadingCancelIndex(detailIdx)) commands.setParagraph();
       else commands.toggleHeading({ level: detailIdx + 1 });
       break;
-    case "bold":
+    case 'bold':
       commands.toggleBold();
       break;
-    case "italic":
+    case 'italic':
       commands.toggleItalic();
       break;
-    case "underline":
+    case 'underline':
       commands.toggleUnderline();
       break;
-    case "textColor":
+    case 'textColor':
       if (detail?.swatch) commands.addTextColor({ color: detail.swatch });
       else commands.removeTextColor();
       break;
-    case "highlight":
+    case 'highlight':
       if (detail?.swatch) commands.addBackgroundColor({ color: detail.swatch });
       else commands.removeBackgroundColor();
       break;
@@ -629,14 +565,11 @@ interface ViewportRect {
 
 const pendingApply = ref(false);
 const pendingFormat = ref(0);
-const pendingLabel = computed(
-  () => FORMAT_MODES[pendingFormat.value]?.label ?? "格式",
-);
+const pendingLabel = computed(() => FORMAT_MODES[pendingFormat.value]?.label ?? '格式');
 // 标题/颜色等带详情选项的模式，把具体选项一并带进确认文案
 const pendingDisplayLabel = computed(() => {
   const modeId = FORMAT_MODES[pendingFormat.value]?.id;
-  const detail =
-    detailOptionsFor(modeId)[detailIndexByMode[modeId ?? ""] ?? 0]?.label;
+  const detail = detailOptionsFor(modeId)[detailIndexByMode[modeId ?? ''] ?? 0]?.label;
   return detail ? `${pendingLabel.value} : ${detail}` : pendingLabel.value;
 });
 const overlayPos = ref({ left: 0, top: 0 });
@@ -645,14 +578,10 @@ const applyCardElement = ref<HTMLElement | null>(null);
 
 const setApplyCardElement = (element: unknown) => {
   applyCardElement.value =
-    (element as { $el?: HTMLElement } | null)?.$el ??
-    (element as HTMLElement | null);
+    (element as { $el?: HTMLElement } | null)?.$el ?? (element as HTMLElement | null);
 };
 
-const applyAnchorRectOf = (
-  rect: DOMRect,
-  element: HTMLElement,
-): ViewportRect => {
+const applyAnchorRectOf = (rect: DOMRect, element: HTMLElement): ViewportRect => {
   const width = layoutToViewportSize(element, rect.width);
   const height = layoutToViewportSize(element, rect.height);
   const left = layoutToViewportX(element, rect.left);
@@ -678,17 +607,13 @@ const positionApplyCard = (anchor: ViewportRect, card: HTMLElement) => {
     window.innerHeight - rect.height - APPLY_OVERLAY_MARGIN,
   );
   const left = Math.min(
-    Math.max(
-      anchor.left + (anchor.width - rect.width) / 2,
-      APPLY_OVERLAY_MARGIN,
-    ),
+    Math.max(anchor.left + (anchor.width - rect.width) / 2, APPLY_OVERLAY_MARGIN),
     maxLeft,
   );
   const above = anchor.top - rect.height - APPLY_OVERLAY_MARGIN;
   const below = anchor.bottom + APPLY_OVERLAY_MARGIN;
   const availableAbove = anchor.top - APPLY_OVERLAY_MARGIN * 2;
-  const availableBelow =
-    window.innerHeight - anchor.bottom - APPLY_OVERLAY_MARGIN * 2;
+  const availableBelow = window.innerHeight - anchor.bottom - APPLY_OVERLAY_MARGIN * 2;
   const preferredTop =
     above >= APPLY_OVERLAY_MARGIN
       ? above
@@ -716,10 +641,7 @@ const keepApplyCardInViewport = () => {
     window.innerHeight - rect.height - APPLY_OVERLAY_MARGIN,
   );
   overlayPos.value = {
-    left: Math.min(
-      Math.max(overlayPos.value.left, APPLY_OVERLAY_MARGIN),
-      maxLeft,
-    ),
+    left: Math.min(Math.max(overlayPos.value.left, APPLY_OVERLAY_MARGIN), maxLeft),
     top: Math.min(Math.max(overlayPos.value.top, APPLY_OVERLAY_MARGIN), maxTop),
   };
 };
@@ -743,9 +665,7 @@ const onSelectionMouseUp = (event: MouseEvent) => {
   if (!event.altKey || !formatArmed) return;
   if (Date.now() < applyLockUntil || !isSelectionInsideEditor()) return;
   const selection = window.getSelection();
-  const rect = selection?.rangeCount
-    ? selection.getRangeAt(0).getBoundingClientRect()
-    : null;
+  const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;
   if (!rect?.width || !rect.height) return;
   applyLockUntil = Date.now() + APPLY_LOCK_MS;
   pendingFormat.value = modeIndex.value;
@@ -776,9 +696,7 @@ const AUTO_HEIGHT_EXTRA = 10;
 // auto-height 类解除了 height:100% 钳制，所以 offsetHeight 即内容自然高度
 const syncAutoHeight = () => {
   if (!autoHeight.value) return;
-  const scrollEl = wrapperRef.value?.querySelector(
-    ".editor-scroll",
-  ) as HTMLElement | null;
+  const scrollEl = wrapperRef.value?.querySelector('.editor-scroll') as HTMLElement | null;
   if (!scrollEl) return;
   const height = Math.ceil(scrollEl.offsetHeight + AUTO_HEIGHT_EXTRA);
   baseRef.value?.controller.resizeTo({ height });
@@ -791,12 +709,8 @@ const cursorVisualY = (height: number): number => {
   const wrapperRect = wrapperRef.value?.getBoundingClientRect();
   if (head == null || !wrapperRect) return height;
   const coords = editor.view!.coordsAtPos(head);
-  const cursorY = coords
-    ? Math.min(Math.max(coords.bottom - wrapperRect.top, 0), height)
-    : height;
-  return wrapperRef.value
-    ? layoutToViewportSize(wrapperRef.value, cursorY)
-    : cursorY;
+  const cursorY = coords ? Math.min(Math.max(coords.bottom - wrapperRect.top, 0), height) : height;
+  return wrapperRef.value ? layoutToViewportSize(wrapperRef.value, cursorY) : cursorY;
 };
 
 const CURSOR_VISIBLE_MARGIN = 24;
@@ -807,11 +721,7 @@ const followCursor = (cursorY: number) => {
   if (!view?.viewport || view.isPanning) return;
   // 屏幕 y = 容器顶 + content*zoom + origin + pan，与画布侧几何同公式
   const cursorBottom =
-    view.viewport.top +
-    view.block.y * view.zoom +
-    view.origin.y +
-    view.pan.y +
-    cursorY;
+    view.viewport.top + view.block.y * view.zoom + view.origin.y + view.pan.y + cursorY;
   const over = cursorBottom - (view.viewport.bottom - CURSOR_VISIBLE_MARGIN);
   if (over > 0) canvas?.panBy(0, -Math.round(over));
 };
@@ -882,11 +792,11 @@ onMounted(() => {
       syncAutoHeight();
     });
   }
-  window.addEventListener("Mindrizzle:canvas-transform", onCanvasTransform);
-  window.addEventListener("keydown", onAltKeyDown);
-  window.addEventListener("keyup", onAltKeyUp);
-  window.addEventListener("mouseup", onSelectionMouseUp);
-  window.addEventListener("resize", keepApplyCardInViewport);
+  window.addEventListener('Mindrizzle:canvas-transform', onCanvasTransform);
+  window.addEventListener('keydown', onAltKeyDown);
+  window.addEventListener('keyup', onAltKeyUp);
+  window.addEventListener('mouseup', onSelectionMouseUp);
+  window.addEventListener('resize', keepApplyCardInViewport);
   onUnmounted(() => observer.disconnect());
 });
 
@@ -898,11 +808,11 @@ onUnmounted(() => {
   contentResizeFrame = 0;
   stopScrollbarDrag();
   editor.unmount();
-  window.removeEventListener("Mindrizzle:canvas-transform", onCanvasTransform);
-  window.removeEventListener("keydown", onAltKeyDown);
-  window.removeEventListener("keyup", onAltKeyUp);
-  window.removeEventListener("mouseup", onSelectionMouseUp);
-  window.removeEventListener("resize", keepApplyCardInViewport);
+  window.removeEventListener('Mindrizzle:canvas-transform', onCanvasTransform);
+  window.removeEventListener('keydown', onAltKeyDown);
+  window.removeEventListener('keyup', onAltKeyUp);
+  window.removeEventListener('mouseup', onSelectionMouseUp);
+  window.removeEventListener('resize', keepApplyCardInViewport);
 });
 
 // 开启瞬间按当前内容测一次
@@ -1085,10 +995,8 @@ defineExpose({
   user-select: text;
 }
 
-.editor-wrapper
-  :deep(.block-handle-positioner.placement-top .block-handle-popup),
-.editor-wrapper
-  :deep(.block-handle-positioner.placement-bottom .block-handle-popup) {
+.editor-wrapper :deep(.block-handle-positioner.placement-top .block-handle-popup),
+.editor-wrapper :deep(.block-handle-positioner.placement-bottom .block-handle-popup) {
   transform: translateY(var(--block-handle-shift, 0px));
 }
 

@@ -1,18 +1,18 @@
-import type { Point } from "../../../utils/canvasCoords.ts";
-import type { Rect } from "../Registry/canvasComponents.ts";
+import type { Point } from '../../../utils/canvasCoords.ts';
+import type { Rect } from '../Registry/canvasComponents.ts';
 
-export type ConnectorShape = "line" | "arrow" | "curve";
-export type AnnotationTool = "pen" | ConnectorShape | "eraser";
+export type ConnectorShape = 'line' | 'arrow' | 'curve';
+export type AnnotationTool = 'pen' | ConnectorShape | 'eraser';
 
 export interface AnnotationStroke {
   id: string;
-  kind: "stroke";
+  kind: 'stroke';
   points: Point[];
 }
 
 export interface AnnotationConnector {
   id: string;
-  kind: "connector";
+  kind: 'connector';
   shape: ConnectorShape;
   fromUuid: string;
   toUuid: string;
@@ -39,8 +39,7 @@ const COORD_SCALE = 100;
 const THIRD = 1 / 3;
 const EPSILON = 1e-6;
 
-const roundCoord = (value: number): number =>
-  Math.round(value * COORD_SCALE) / COORD_SCALE;
+const roundCoord = (value: number): number => Math.round(value * COORD_SCALE) / COORD_SCALE;
 
 const centerOf = (rect: Rect): Point => ({
   x: rect.x + rect.w / 2,
@@ -67,12 +66,8 @@ export const anchorOnRect = (rect: Rect, towards: Point): Point => {
 };
 
 // 曲线走主轴中线出弯，贴边接线才不会在块角处急拐
-const curveControls = (
-  start: Point,
-  end: Point,
-): { first: Point; second: Point } => {
-  const isHorizontal =
-    Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
+const curveControls = (start: Point, end: Point): { first: Point; second: Point } => {
+  const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
   if (isHorizontal) {
     const midX = (start.x + end.x) / 2;
     return {
@@ -87,21 +82,12 @@ const curveControls = (
   };
 };
 
-const linearControls = (
-  start: Point,
-  end: Point,
-): { first: Point; second: Point } => ({
+const linearControls = (start: Point, end: Point): { first: Point; second: Point } => ({
   first: lerp(start, end, THIRD),
   second: lerp(start, end, THIRD * 2),
 });
 
-const cubicAt = (
-  start: Point,
-  first: Point,
-  second: Point,
-  end: Point,
-  t: number,
-): Point => {
+const cubicAt = (start: Point, first: Point, second: Point, end: Point, t: number): Point => {
   const mt = 1 - t;
   const a = mt * mt * mt;
   const b = 3 * mt * mt * t;
@@ -113,12 +99,7 @@ const cubicAt = (
   };
 };
 
-const samplePath = (
-  start: Point,
-  first: Point,
-  second: Point,
-  end: Point,
-): Point[] => {
+const samplePath = (start: Point, first: Point, second: Point, end: Point): Point[] => {
   const samples: Point[] = [];
   for (let i = 0; i <= CURVE_SAMPLES; i++) {
     samples.push(cubicAt(start, first, second, end, i / CURVE_SAMPLES));
@@ -126,21 +107,12 @@ const samplePath = (
   return samples;
 };
 
-const pathOf = (
-  start: Point,
-  first: Point,
-  second: Point,
-  end: Point,
-): string =>
+const pathOf = (start: Point, first: Point, second: Point, end: Point): string =>
   `M ${roundCoord(start.x)} ${roundCoord(start.y)} C ${roundCoord(first.x)} ${roundCoord(first.y)} ${roundCoord(second.x)} ${roundCoord(second.y)} ${roundCoord(end.x)} ${roundCoord(end.y)}`;
 
-const buildPath = (
-  start: Point,
-  end: Point,
-  shape: ConnectorShape,
-): ConnectorPath => {
+const buildPath = (start: Point, end: Point, shape: ConnectorShape): ConnectorPath => {
   const { first, second } =
-    shape === "curve" ? curveControls(start, end) : linearControls(start, end);
+    shape === 'curve' ? curveControls(start, end) : linearControls(start, end);
   return {
     d: pathOf(start, first, second, end),
     tip: end,
@@ -149,11 +121,7 @@ const buildPath = (
   };
 };
 
-export const connectorPathOf = (
-  from: Rect,
-  to: Rect,
-  shape: ConnectorShape,
-): ConnectorPath => {
+export const connectorPathOf = (from: Rect, to: Rect, shape: ConnectorShape): ConnectorPath => {
   const start = anchorOnRect(from, centerOf(to));
   const end = anchorOnRect(to, centerOf(from));
   return buildPath(start, end, shape);
@@ -167,10 +135,7 @@ export const previewConnectorPath = (
 ): ConnectorPath => buildPath(anchorOnRect(from, point), point, shape);
 
 export const arrowHeadOf = (path: ConnectorPath): string => {
-  const angle = Math.atan2(
-    path.tip.y - path.approach.y,
-    path.tip.x - path.approach.x,
-  );
+  const angle = Math.atan2(path.tip.y - path.approach.y, path.tip.x - path.approach.x);
   const baseX = path.tip.x - Math.cos(angle) * ARROW_LENGTH;
   const baseY = path.tip.y - Math.sin(angle) * ARROW_LENGTH;
   const offsetX = Math.sin(angle) * ARROW_HALF_WIDTH;
@@ -179,7 +144,7 @@ export const arrowHeadOf = (path: ConnectorPath): string => {
     `${roundCoord(path.tip.x)},${roundCoord(path.tip.y)}`,
     `${roundCoord(baseX + offsetX)},${roundCoord(baseY + offsetY)}`,
     `${roundCoord(baseX - offsetX)},${roundCoord(baseY - offsetY)}`,
-  ].join(" ");
+  ].join(' ');
 };
 
 const distanceToSegment = (point: Point, from: Point, to: Point): number => {
@@ -189,17 +154,13 @@ const distanceToSegment = (point: Point, from: Point, to: Point): number => {
   if (lengthSq < EPSILON) return Math.hypot(point.x - from.x, point.y - from.y);
   const t = Math.max(
     0,
-    Math.min(
-      1,
-      ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSq,
-    ),
+    Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSq),
   );
   return Math.hypot(point.x - (from.x + dx * t), point.y - (from.y + dy * t));
 };
 
 const distanceToPolyline = (point: Point, samples: Point[]): number => {
-  if (samples.length === 1)
-    return Math.hypot(point.x - samples[0].x, point.y - samples[0].y);
+  if (samples.length === 1) return Math.hypot(point.x - samples[0].x, point.y - samples[0].y);
   let best = Infinity;
   for (let i = 1; i < samples.length; i++) {
     const distance = distanceToSegment(point, samples[i - 1], samples[i]);
@@ -208,11 +169,8 @@ const distanceToPolyline = (point: Point, samples: Point[]): number => {
   return best;
 };
 
-const polylineOf = (
-  item: AnnotationItem,
-  blockMap: Map<string, Rect>,
-): Point[] | null => {
-  if (item.kind === "stroke") return item.points;
+const polylineOf = (item: AnnotationItem, blockMap: Map<string, Rect>): Point[] | null => {
+  if (item.kind === 'stroke') return item.points;
   const from = blockMap.get(item.fromUuid);
   const to = blockMap.get(item.toUuid);
   if (!from || !to) return null;
@@ -231,22 +189,17 @@ export const hitAnnotationId = (input: AnnotationHit): string | null => {
   for (let i = input.items.length - 1; i >= 0; i--) {
     const samples = polylineOf(input.items[i], input.blockMap);
     if (!samples || samples.length === 0) continue;
-    if (distanceToPolyline(input.point, samples) <= input.tolerance)
-      return input.items[i].id;
+    if (distanceToPolyline(input.point, samples) <= input.tolerance) return input.items[i].id;
   }
   return null;
 };
 
 const isConnectorShape = (value: unknown): value is ConnectorShape =>
-  value === "line" || value === "arrow" || value === "curve";
+  value === 'line' || value === 'arrow' || value === 'curve';
 
 const isFinitePoint = (value: unknown): value is Point => {
   const point = value as Point | null;
-  return (
-    !!point &&
-    Number.isFinite(point.x) &&
-    Number.isFinite(point.y)
-  );
+  return !!point && Number.isFinite(point.x) && Number.isFinite(point.y);
 };
 
 const normalizeStroke = (raw: any): AnnotationStroke | null => {
@@ -256,22 +209,18 @@ const normalizeStroke = (raw: any): AnnotationStroke | null => {
   // 外部文件可能被手改，所以坐标必须重建成新对象
   return {
     id: String(raw.id),
-    kind: "stroke",
+    kind: 'stroke',
     points: points.map((point) => ({ x: point.x, y: point.y })),
   };
 };
 
-const normalizeConnector = (
-  raw: any,
-  blockIds: Set<string>,
-): AnnotationConnector | null => {
-  if (typeof raw?.fromUuid !== "string" || typeof raw?.toUuid !== "string")
-    return null;
+const normalizeConnector = (raw: any, blockIds: Set<string>): AnnotationConnector | null => {
+  if (typeof raw?.fromUuid !== 'string' || typeof raw?.toUuid !== 'string') return null;
   if (!isConnectorShape(raw?.shape)) return null;
   if (!blockIds.has(raw.fromUuid) || !blockIds.has(raw.toUuid)) return null;
   return {
     id: String(raw.id),
-    kind: "connector",
+    kind: 'connector',
     shape: raw.shape,
     fromUuid: raw.fromUuid,
     toUuid: raw.toUuid,
@@ -279,19 +228,16 @@ const normalizeConnector = (
 };
 
 // 连接线依赖块几何，块已不存在的连接直接丢弃，避免渲染出悬空箭头
-export const normalizeAnnotations = (
-  raw: unknown,
-  blockIds: Set<string>,
-): AnnotationItem[] => {
+export const normalizeAnnotations = (raw: unknown, blockIds: Set<string>): AnnotationItem[] => {
   if (!Array.isArray(raw)) return [];
   const items: AnnotationItem[] = [];
   raw.forEach((entry) => {
-    if (entry?.kind === "stroke") {
+    if (entry?.kind === 'stroke') {
       const stroke = normalizeStroke(entry);
       if (stroke && stroke.id) items.push(stroke);
       return;
     }
-    if (entry?.kind === "connector") {
+    if (entry?.kind === 'connector') {
       const connector = normalizeConnector(entry, blockIds);
       if (connector && connector.id) items.push(connector);
     }

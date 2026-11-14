@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  inject,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   mdiCheckboxBlankOutline,
   mdiCheckboxMarked,
@@ -29,27 +21,25 @@ import {
   mdiSelectAll,
   mdiSort,
   mdiUpload,
-} from "@mdi/js";
-import { isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { open as openNativeDialog } from "@tauri-apps/plugin-dialog";
-import { info } from "@tauri-apps/plugin-log";
+} from '@mdi/js';
+import { isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { open as openNativeDialog } from '@tauri-apps/plugin-dialog';
+import { info } from '@tauri-apps/plugin-log';
 
-import NewFileDialog from "../Controls/NewFileDialog.vue";
-import NoteDetailDialog, {
-  type NoteDetailTarget,
-} from "../Controls/NoteDetailDialog.vue";
-import TagLibraryMenu from "../Controls/TagLibraryMenu.vue";
-import WorkspaceSwitcher from "../Controls/WorkspaceSwitcher.vue";
+import NewFileDialog from '../Controls/NewFileDialog.vue';
+import NoteDetailDialog, { type NoteDetailTarget } from '../Controls/NoteDetailDialog.vue';
+import TagLibraryMenu from '../Controls/TagLibraryMenu.vue';
+import WorkspaceSwitcher from '../Controls/WorkspaceSwitcher.vue';
 import {
   loadEditorComponent,
   storePendingEditorBody,
   type EditorBodyResult,
   type EditorNoteRef,
-} from "../utils/editorRoute";
-import { OPEN_COMMAND_PALETTE_EVENT } from "../utils/commandPaletteShortcut";
-import { getErrorMessage } from "../utils/getErrorMessage";
-import { recordRecentNote } from "../utils/homeActivity";
+} from '../utils/editorRoute';
+import { OPEN_COMMAND_PALETTE_EVENT } from '../utils/commandPaletteShortcut';
+import { getErrorMessage } from '../utils/getErrorMessage';
+import { recordRecentNote } from '../utils/homeActivity';
 import {
   exportLocalNoteMdrf,
   fileOperations,
@@ -58,27 +48,27 @@ import {
   NOTE_FILE_NAME_MAX_LEN,
   NOTE_FILE_NAME_RULE_HINT,
   moveLocalNoteToWorkspace,
-} from "../fileOperations";
+} from '../fileOperations';
 import {
   fetchNoteSetEntry,
   invalidateNoteSetEntries,
   loadNoteSetEntries,
   patchNoteSetMeta,
   type NoteSetEntry,
-} from "../utils/noteSetStore";
+} from '../utils/noteSetStore';
 import {
   isDebugLoadingEnabled,
   noteLoadControllerKey,
   startEditorTransitionKey,
-} from "../utils/routeTransition";
+} from '../utils/routeTransition';
 import {
   loadTagLibrary,
   rememberTags,
   resolveTagColor,
   sanitizeTags,
   type TagLibraryChange,
-} from "../utils/tagStore";
-import { useToolbarSelection } from "../utils/toolbarSelection";
+} from '../utils/tagStore';
+import { useToolbarSelection } from '../utils/toolbarSelection';
 import {
   addWorkspaceDirectory,
   externalNotes,
@@ -89,21 +79,21 @@ import {
   removeWorkspaceDirectory,
   renameWorkspaceDirectory,
   workspaceDirectories,
-} from "../utils/workspaceStore";
+} from '../utils/workspaceStore';
 
 const startEditorTransition = inject(startEditorTransitionKey)!;
 const noteLoadController = inject(noteLoadControllerKey)!;
 let editorPreload: Promise<unknown> | undefined;
 
-const DEFAULT_SECTION_ID = "default";
-const EXTERNAL_SECTION_ID = "external";
+const DEFAULT_SECTION_ID = 'default';
+const EXTERNAL_SECTION_ID = 'external';
 const MDRF_EXTENSION_PATTERN = /\.mdrf$/i;
 const PATH_SEPARATORS = /[\\/]/;
 
 interface WorkspaceSection {
   id: string;
   name: string;
-  kind: "workspace" | "external";
+  kind: 'workspace' | 'external';
   dir?: string;
   isEditable?: boolean;
 }
@@ -125,16 +115,16 @@ async function prepareEditor(note: EditorNoteRef) {
   noteLoadController.setName(note.fileName);
   let unlisten: (() => void) | undefined;
   if (isTauri()) {
-    unlisten = await listen<number>("file-load-progress", (event) => {
+    unlisten = await listen<number>('file-load-progress', (event) => {
       noteLoadController.setProgress(event.payload);
     });
   }
   const bodyPromise: Promise<EditorBodyResult> = fileOperations
     .getNoteBody(note, isDebugLoadingEnabled.value)
     .then(
-    (body) => ({ content: body.content ?? "" }),
-    (error: unknown) => ({ error }),
-  );
+      (body) => ({ content: body.content ?? '' }),
+      (error: unknown) => ({ error }),
+    );
   storePendingEditorBody(note, bodyPromise);
   try {
     await Promise.all([preloadEditor(), bodyPromise]);
@@ -152,7 +142,7 @@ async function openEditor(noteSet: NoteSetItem) {
   };
   try {
     const didNavigate = await startEditorTransition(
-      { name: "editor", params: { fileName: note.fileName }, query },
+      { name: 'editor', params: { fileName: note.fileName }, query },
       () => prepareEditor(note),
     );
     if (didNavigate) recordRecentNote(note);
@@ -165,8 +155,8 @@ const isCreateDialogOpen = ref(false);
 
 // 桌面版的 .mdrf 已是真实文件，导出与上传都只对浏览器预览有意义
 const isWebEnv = !isTauri();
-const exportingFileName = ref("");
-const hint = ref("");
+const exportingFileName = ref('');
+const hint = ref('');
 const isHintOpen = ref(false);
 
 function showHint(message: string) {
@@ -181,53 +171,49 @@ async function exportNoteSet(noteSet: NoteSetItem) {
   } catch (error) {
     showHint(`导出失败：${getErrorMessage(error)}`);
   } finally {
-    exportingFileName.value = "";
+    exportingFileName.value = '';
   }
 }
 
 const activeSectionId = ref(DEFAULT_SECTION_ID);
 const sections = computed<WorkspaceSection[]>(() => [
-  { id: DEFAULT_SECTION_ID, name: "默认工作区", kind: "workspace" },
+  { id: DEFAULT_SECTION_ID, name: '默认工作区', kind: 'workspace' },
   ...workspaceDirectories.value.map((item) => ({
     id: item.id,
     name: item.name,
-    kind: "workspace" as const,
+    kind: 'workspace' as const,
     dir: item.dir,
     isEditable: true,
   })),
-  { id: EXTERNAL_SECTION_ID, name: "最近打开的外部文件", kind: "external" },
+  { id: EXTERNAL_SECTION_ID, name: '最近打开的外部文件', kind: 'external' },
 ]);
 const activeSection = computed(
-  () =>
-    sections.value.find((section) => section.id === activeSectionId.value) ??
-    sections.value[0],
+  () => sections.value.find((section) => section.id === activeSectionId.value) ?? sections.value[0],
 );
 const activeDir = computed(() => activeSection.value.dir);
-const isExternalSection = computed(
-  () => activeSection.value.kind === "external",
-);
+const isExternalSection = computed(() => activeSection.value.kind === 'external');
 const INITIAL_VISIBLE_COUNT = 12;
 const VISIBLE_BATCH_SIZE = 12;
 const SKELETON_COUNT = 6;
 const SENTINEL_MARGIN_PX = 240;
 const SORT_OPTIONS = [
-  { value: "updated-desc", label: "最近编辑" },
-  { value: "updated-asc", label: "最早编辑" },
-  { value: "name-asc", label: "名称 A-Z" },
-  { value: "name-desc", label: "名称 Z-A" },
+  { value: 'updated-desc', label: '最近编辑' },
+  { value: 'updated-asc', label: '最早编辑' },
+  { value: 'name-asc', label: '名称 A-Z' },
+  { value: 'name-desc', label: '名称 Z-A' },
 ] as const;
 const UPDATED_WITHIN_OPTIONS = [
-  { value: "all", label: "不限时间" },
-  { value: "7", label: "最近 7 天" },
-  { value: "30", label: "最近 30 天" },
-  { value: "90", label: "最近 90 天" },
+  { value: 'all', label: '不限时间' },
+  { value: '7', label: '最近 7 天' },
+  { value: '30', label: '最近 30 天' },
+  { value: '90', label: '最近 90 天' },
 ] as const;
 const MILLISECONDS_PER_DAY = 86_400_000;
 
 type NoteSetItem = NoteSetEntry & { loading: boolean; localName?: string };
-type NoteSetSort = (typeof SORT_OPTIONS)[number]["value"];
-type TagMatchMode = "all" | "any";
-type UpdatedWithin = (typeof UPDATED_WITHIN_OPTIONS)[number]["value"];
+type NoteSetSort = (typeof SORT_OPTIONS)[number]['value'];
+type TagMatchMode = 'all' | 'any';
+type UpdatedWithin = (typeof UPDATED_WITHIN_OPTIONS)[number]['value'];
 
 interface NoteSetFilters {
   tags: string[];
@@ -241,23 +227,23 @@ const isLoading = ref(true);
 const isSectionLoading = ref(false);
 const noteSets = ref<NoteSetItem[]>([]);
 const visibleCount = ref(INITIAL_VISIBLE_COUNT);
-const sortBy = ref<NoteSetSort>("updated-desc");
+const sortBy = ref<NoteSetSort>('updated-desc');
 const selectedTags = ref<string[]>([]);
 const includeUntagged = ref(false);
-const tagMatchMode = ref<TagMatchMode>("all");
-const updatedWithin = ref<UpdatedWithin>("all");
+const tagMatchMode = ref<TagMatchMode>('all');
+const updatedWithin = ref<UpdatedWithin>('all');
 const isFilterDialogOpen = ref(false);
-const filterTagSearch = ref("");
+const filterTagSearch = ref('');
 const draftSelectedTags = ref<string[]>([]);
 const draftIncludeUntagged = ref(false);
-const draftTagMatchMode = ref<TagMatchMode>("all");
-const draftUpdatedWithin = ref<UpdatedWithin>("all");
+const draftTagMatchMode = ref<TagMatchMode>('all');
+const draftUpdatedWithin = ref<UpdatedWithin>('all');
 const listSentinel = ref<HTMLElement | null>(null);
 let sectionLoadId = 0;
 let hasLoadedSection = false;
 const availableTags = computed(() =>
-  [...new Set(noteSets.value.flatMap((noteSet) => noteSet.tag))].sort(
-    (left, right) => left.localeCompare(right, "zh-CN"),
+  [...new Set(noteSets.value.flatMap((noteSet) => noteSet.tag))].sort((left, right) =>
+    left.localeCompare(right, 'zh-CN'),
   ),
 );
 const tagNoteCounts = computed(
@@ -273,7 +259,7 @@ const activeFilterCount = computed(
   () =>
     Number(selectedTags.value.length > 0) +
     Number(includeUntagged.value) +
-    Number(updatedWithin.value !== "all"),
+    Number(updatedWithin.value !== 'all'),
 );
 const sortLabel = computed(
   () => SORT_OPTIONS.find((option) => option.value === sortBy.value)!.label,
@@ -287,31 +273,29 @@ const appliedFilters = computed<NoteSetFilters>(() => ({
 }));
 
 function matchesFilters(noteSet: NoteSetItem, filters: NoteSetFilters): boolean {
-  const { tags, includeUntagged: includeNoTags, tagMatchMode, updatedWithin } =
-    filters;
+  const { tags, includeUntagged: includeNoTags, tagMatchMode, updatedWithin } = filters;
   const matchesTag =
     tags.length === 0
       ? !includeNoTags || noteSet.tag.length === 0
-      : (tagMatchMode === "all"
+      : (tagMatchMode === 'all'
           ? tags.every((tag) => noteSet.tag.includes(tag))
           : tags.some((tag) => noteSet.tag.includes(tag))) ||
         (includeNoTags && noteSet.tag.length === 0);
   if (!matchesTag) return false;
-  if (updatedWithin === "all") return true;
+  if (updatedWithin === 'all') return true;
   const cutoff = Date.now() - Number(updatedWithin) * MILLISECONDS_PER_DAY;
   return noteSet.updatedAt >= cutoff;
 }
 
 function sortNoteSets(items: NoteSetItem[]): NoteSetItem[] {
   return [...items].sort((left, right) => {
-    if (sortBy.value === "name-asc" || sortBy.value === "name-desc") {
-      const direction = sortBy.value === "name-asc" ? 1 : -1;
-      return direction * left.name.localeCompare(right.name, "zh-CN");
+    if (sortBy.value === 'name-asc' || sortBy.value === 'name-desc') {
+      const direction = sortBy.value === 'name-asc' ? 1 : -1;
+      return direction * left.name.localeCompare(right.name, 'zh-CN');
     }
-    const direction = sortBy.value === "updated-desc" ? -1 : 1;
+    const direction = sortBy.value === 'updated-desc' ? -1 : 1;
     return (
-      direction * (left.updatedAt - right.updatedAt) ||
-      left.name.localeCompare(right.name, "zh-CN")
+      direction * (left.updatedAt - right.updatedAt) || left.name.localeCompare(right.name, 'zh-CN')
     );
   });
 }
@@ -325,9 +309,7 @@ const filteredNoteSets = computed(() => {
 const visibleFilterTags = computed(() => {
   const keyword = filterTagSearch.value.trim().toLocaleLowerCase();
   return keyword
-    ? availableTags.value.filter((tag) =>
-        tag.toLocaleLowerCase().includes(keyword),
-      )
+    ? availableTags.value.filter((tag) => tag.toLocaleLowerCase().includes(keyword))
     : availableTags.value;
 });
 const draftFilterCount = computed(
@@ -341,9 +323,7 @@ const draftFilterCount = computed(
       }),
     ).length,
 );
-const visibleNoteSets = computed(() =>
-  filteredNoteSets.value.slice(0, visibleCount.value),
-);
+const visibleNoteSets = computed(() => filteredNoteSets.value.slice(0, visibleCount.value));
 
 // 一次性建几百张卡片会把首屏主线程占满，所以按需追加；不能按条数夹取，否则复制/导入后新增的卡片会被截在可见区外
 function growVisibleNoteSets() {
@@ -357,11 +337,7 @@ async function fillListViewport(): Promise<void> {
   const sentinel = listSentinel.value;
   if (!sentinel || visibleCount.value >= filteredNoteSets.value.length) return;
   await nextTick();
-  if (
-    sentinel.getBoundingClientRect().top >
-    window.innerHeight + SENTINEL_MARGIN_PX
-  )
-    return;
+  if (sentinel.getBoundingClientRect().top > window.innerHeight + SENTINEL_MARGIN_PX) return;
   growVisibleNoteSets();
   await fillListViewport();
 }
@@ -374,9 +350,7 @@ function toggleDraftTag(tag: string) {
 
 function toggleVisibleDraftTags() {
   const visibleTags = visibleFilterTags.value;
-  const areAllVisibleSelected = visibleTags.every((tag) =>
-    draftSelectedTags.value.includes(tag),
-  );
+  const areAllVisibleSelected = visibleTags.every((tag) => draftSelectedTags.value.includes(tag));
   draftSelectedTags.value = areAllVisibleSelected
     ? draftSelectedTags.value.filter((tag) => !visibleTags.includes(tag))
     : [...new Set([...draftSelectedTags.value, ...visibleTags])];
@@ -387,7 +361,7 @@ function openFilterDialog() {
   draftIncludeUntagged.value = includeUntagged.value;
   draftTagMatchMode.value = tagMatchMode.value;
   draftUpdatedWithin.value = updatedWithin.value;
-  filterTagSearch.value = "";
+  filterTagSearch.value = '';
   isFilterDialogOpen.value = true;
 }
 
@@ -406,27 +380,24 @@ function openCommandPalette() {
 function clearTagFilters() {
   selectedTags.value = [];
   includeUntagged.value = false;
-  tagMatchMode.value = "all";
-  updatedWithin.value = "all";
+  tagMatchMode.value = 'all';
+  updatedWithin.value = 'all';
 }
 
 function clearAllFilters() {
   clearTagFilters();
   draftSelectedTags.value = [];
   draftIncludeUntagged.value = false;
-  draftTagMatchMode.value = "all";
-  draftUpdatedWithin.value = "all";
+  draftTagMatchMode.value = 'all';
+  draftUpdatedWithin.value = 'all';
   isFilterDialogOpen.value = false;
 }
 
-watch(
-  [selectedTags, includeUntagged, tagMatchMode, updatedWithin],
-  async () => {
-    visibleCount.value = INITIAL_VISIBLE_COUNT;
-    await nextTick();
-    void fillListViewport();
-  },
-);
+watch([selectedTags, includeUntagged, tagMatchMode, updatedWithin], async () => {
+  visibleCount.value = INITIAL_VISIBLE_COUNT;
+  await nextTick();
+  void fillListViewport();
+});
 
 async function loadExternalItems(): Promise<NoteSetItem[]> {
   const items = await Promise.all(
@@ -444,7 +415,7 @@ async function loadExternalItems(): Promise<NoteSetItem[]> {
           localName,
           filePath: record.path,
           name: record.name,
-          description: "文件已不可用",
+          description: '文件已不可用',
           tag: [],
           updatedAt: record.updatedAt,
           loading: false,
@@ -464,7 +435,7 @@ async function loadActiveSection() {
   else isSectionLoading.value = true;
   try {
     const items =
-      section.kind === "external"
+      section.kind === 'external'
         ? await loadExternalItems()
         : (await loadNoteSetEntries(section.dir)).map((entry) => ({
             ...entry,
@@ -526,7 +497,7 @@ function triggerUpload() {
 async function onUploadSelected(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
-  input.value = "";
+  input.value = '';
   if (!file) return;
   isImporting.value = true;
   try {
@@ -549,16 +520,15 @@ async function onUploadSelected(event: Event) {
 }
 
 const fileNameOfPath = (path: string): string =>
-  path.split(PATH_SEPARATORS).pop()?.replace(MDRF_EXTENSION_PATTERN, "") ??
-  "未命名笔记";
+  path.split(PATH_SEPARATORS).pop()?.replace(MDRF_EXTENSION_PATTERN, '') ?? '未命名笔记';
 
 async function openExternalFile() {
   const selected = await openNativeDialog({
     multiple: false,
     directory: false,
-    filters: [{ name: "Mindrizzle 笔记", extensions: ["mdrf"] }],
+    filters: [{ name: 'Mindrizzle 笔记', extensions: ['mdrf'] }],
   });
-  if (typeof selected !== "string") return;
+  if (typeof selected !== 'string') return;
   const fileName = fileNameOfPath(selected);
   let entry: NoteSetEntry;
   try {
@@ -580,7 +550,7 @@ async function openExternalFile() {
 
 async function pickWorkspaceDirectory() {
   const selected = await openNativeDialog({ directory: true, multiple: false });
-  if (typeof selected !== "string") return;
+  if (typeof selected !== 'string') return;
   const entry = await addWorkspaceDirectory(selected);
   activeSectionId.value = entry.id;
   await loadActiveSection();
@@ -594,7 +564,7 @@ async function removeExternalNote(noteSet: NoteSetItem) {
   await loadActiveSection();
 }
 
-const COPY_NAME_SUFFIX = "_副本";
+const COPY_NAME_SUFFIX = '_副本';
 const COPY_NAME_MAX_ATTEMPTS = 100;
 const FILE_NAME_IN_PATH = /[^\\/]*$/;
 
@@ -617,12 +587,10 @@ watch(
 onBeforeUnmount(() => toolbarSelection.clearSelection());
 
 const noteSetKeyOf = (item: NoteSetItem): string =>
-  `${item.dir ?? ""}|${item.filePath ?? ""}|${item.fileName}`;
+  `${item.dir ?? ''}|${item.filePath ?? ''}|${item.fileName}`;
 
 const selectedItems = computed(() =>
-  noteSets.value.filter((item) =>
-    selectedKeys.value.includes(noteSetKeyOf(item)),
-  ),
+  noteSets.value.filter((item) => selectedKeys.value.includes(noteSetKeyOf(item))),
 );
 
 const noteSetArgsOf = (item: NoteSetItem) => ({
@@ -658,9 +626,7 @@ function exitSelectMode() {
 
 function toggleSelectAll() {
   selectedKeys.value =
-    selectedKeys.value.length === noteSets.value.length
-      ? []
-      : noteSets.value.map(noteSetKeyOf);
+    selectedKeys.value.length === noteSets.value.length ? [] : noteSets.value.map(noteSetKeyOf);
 }
 
 function onCardClick(item: NoteSetItem) {
@@ -677,7 +643,7 @@ async function runOnItems(
   items: NoteSetItem[],
   action: (item: NoteSetItem) => Promise<void>,
 ): Promise<BatchOutcome> {
-  const outcome: BatchOutcome = { succeeded: 0, failed: 0, firstError: "" };
+  const outcome: BatchOutcome = { succeeded: 0, failed: 0, firstError: '' };
   for (const item of items) {
     try {
       await action(item);
@@ -698,12 +664,8 @@ function reportBatch(label: string, outcome: BatchOutcome) {
   );
 }
 
-async function isNameAvailable(
-  item: NoteSetItem,
-  name: string,
-): Promise<boolean> {
-  if (!item.filePath)
-    return fileOperations.isFileNameAvailable(name, item.dir);
+async function isNameAvailable(item: NoteSetItem, name: string): Promise<boolean> {
+  if (!item.filePath) return fileOperations.isFileNameAvailable(name, item.dir);
   try {
     await fileOperations.getNoteMeta({
       fileName: name,
@@ -717,22 +679,17 @@ async function isNameAvailable(
 }
 
 async function allocateCopyName(item: NoteSetItem): Promise<string> {
-  const base = `${item.fileName}${COPY_NAME_SUFFIX}`.slice(
-    0,
-    NOTE_FILE_NAME_MAX_LEN,
-  );
+  const base = `${item.fileName}${COPY_NAME_SUFFIX}`.slice(0, NOTE_FILE_NAME_MAX_LEN);
   for (let attempt = 1; attempt <= COPY_NAME_MAX_ATTEMPTS; attempt += 1) {
-    const suffix = attempt === 1 ? "" : String(attempt);
+    const suffix = attempt === 1 ? '' : String(attempt);
     const candidate = `${base.slice(0, NOTE_FILE_NAME_MAX_LEN - suffix.length)}${suffix}`;
     if (await isNameAvailable(item, candidate)) return candidate;
   }
-  throw new Error("同名副本过多");
+  throw new Error('同名副本过多');
 }
 
 const externalRecordOf = (item: NoteSetItem, fileName: string) => ({
-  ...(item.filePath
-    ? { path: renamePathFileName(item.filePath, fileName) }
-    : {}),
+  ...(item.filePath ? { path: renamePathFileName(item.filePath, fileName) } : {}),
   ...(item.localName ? { localName: fileName } : {}),
   fileName,
   name: fileName,
@@ -758,7 +715,7 @@ async function copyFromCard(item: NoteSetItem) {
   try {
     await copyNoteSet(item);
     if (isExternalSection.value) await loadActiveSection();
-    showHint("已创建副本");
+    showHint('已创建副本');
   } catch (error) {
     showHint(`复制失败：${getErrorMessage(error)}`);
   }
@@ -769,7 +726,7 @@ async function copySelected() {
   exitSelectMode();
   const outcome = await runOnItems(items, copyNoteSet);
   if (isExternalSection.value && outcome.succeeded) await loadActiveSection();
-  reportBatch("复制", outcome);
+  reportBatch('复制', outcome);
 }
 
 async function deleteNoteSet(item: NoteSetItem): Promise<void> {
@@ -801,19 +758,19 @@ async function confirmDelete() {
   exitSelectMode();
   const outcome = await runOnItems(items, deleteNoteSet);
   if (isExternalSection.value && outcome.succeeded) await loadActiveSection();
-  reportBatch("删除", outcome);
+  reportBatch('删除', outcome);
   deleteTargets.value = [];
 }
 
 const isRenameNoteOpen = ref(false);
 const renameNoteTarget = ref<NoteSetItem | null>(null);
-const renameNoteDraft = ref("");
-const renameNoteError = ref("");
+const renameNoteDraft = ref('');
+const renameNoteError = ref('');
 
 function openRenameNote(item: NoteSetItem) {
   renameNoteTarget.value = item;
   renameNoteDraft.value = item.fileName;
-  renameNoteError.value = "";
+  renameNoteError.value = '';
   isRenameNoteOpen.value = true;
 }
 
@@ -832,17 +789,14 @@ async function submitRenameNote() {
   try {
     await renameNoteSet(item, name);
     isRenameNoteOpen.value = false;
-    showHint("已重命名");
+    showHint('已重命名');
   } catch (error) {
     renameNoteError.value = getErrorMessage(error);
   }
 }
 
 // 卡片标题取自归档 meta，只改文件名用户看不出差别，所以标题跟着文件名一起改
-async function renameNoteSet(
-  item: NoteSetItem,
-  newName: string,
-): Promise<void> {
+async function renameNoteSet(item: NoteSetItem, newName: string): Promise<void> {
   const isTitleFollowing = item.name === item.fileName;
   const renamed = await fileOperations.renameNote({
     location: noteSetArgsOf(item),
@@ -869,15 +823,13 @@ async function applyRenamedNoteSet(item: NoteSetItem, fileName: string) {
   }
   const isTitleFollowing = item.name === item.fileName;
   item.fileName = fileName;
-  item.filePath = item.filePath
-    ? renamePathFileName(item.filePath, fileName)
-    : undefined;
+  item.filePath = item.filePath ? renamePathFileName(item.filePath, fileName) : undefined;
   if (isTitleFollowing) item.name = fileName;
   item.updatedAt = Date.now();
 }
 
 const workspaceTargets = computed(() => [
-  { id: "default", name: "默认工作区", dir: undefined },
+  { id: 'default', name: '默认工作区', dir: undefined },
   ...workspaceDirectories.value.map((item) => ({
     id: item.id,
     name: item.name,
@@ -889,10 +841,7 @@ const detailTarget = ref<NoteSetItem | null>(null);
 const isDetailOpen = ref(false);
 // 网页端只有默认工作区，跨工作区移动仅桌面端可用
 const canMoveNote = computed(
-  () =>
-    !isWebEnv &&
-    activeSection.value.kind === "workspace" &&
-    workspaceTargets.value.length > 1,
+  () => !isWebEnv && activeSection.value.kind === 'workspace' && workspaceTargets.value.length > 1,
 );
 
 const moveTargetsOf = (noteSet: NoteSetItem) =>
@@ -907,7 +856,7 @@ async function moveNoteToWorkspace(noteSet: NoteSetItem, targetDir?: string) {
     });
     invalidateNoteSetEntries();
     await loadActiveSection();
-    showHint("已移动到工作区");
+    showHint('已移动到工作区');
   } catch (error) {
     showHint(`移动失败：${getErrorMessage(error)}`);
   }
@@ -921,9 +870,7 @@ function openDetail(noteSet: NoteSetItem) {
 // 就地更新卡片，避免整表重取把滚动位置和加载骨架一起翻出来
 async function onDetailSaved(payload: { note: NoteDetailTarget }) {
   invalidateNoteSetEntries();
-  const entry = noteSets.value.find(
-    (item) => item.fileName === payload.note.fileName,
-  );
+  const entry = noteSets.value.find((item) => item.fileName === payload.note.fileName);
   if (!entry) return;
   Object.assign(entry, {
     name: payload.note.name,
@@ -932,7 +879,7 @@ async function onDetailSaved(payload: { note: NoteDetailTarget }) {
     updatedAt: Date.now(),
   });
   patchNoteSetMeta(entry);
-  showHint("详情已保存");
+  showHint('详情已保存');
 }
 
 // 整页重取会用骨架替换列表，删/改标签只就地改卡片，不闪
@@ -943,26 +890,19 @@ function onTagLibraryChanged(change: TagLibraryChange) {
   invalidateNoteSetEntries();
 }
 
-function resolveChangedTags(
-  tags: string[],
-  change: TagLibraryChange,
-): string[] {
+function resolveChangedTags(tags: string[], change: TagLibraryChange): string[] {
   if (!tags.includes(change.name)) return tags;
-  if (change.kind === "remove")
-    return tags.filter((tag) => tag !== change.name);
-  return sanitizeTags(
-    tags.map((tag) => (tag === change.name ? (change.nextName ?? tag) : tag)),
-  );
+  if (change.kind === 'remove') return tags.filter((tag) => tag !== change.name);
+  return sanitizeTags(tags.map((tag) => (tag === change.name ? (change.nextName ?? tag) : tag)));
 }
 
 const isRenameDialogOpen = ref(false);
-const renameTargetId = ref("");
-const renameDraft = ref("");
+const renameTargetId = ref('');
+const renameDraft = ref('');
 
 function openRenameWorkspace(id: string) {
   renameTargetId.value = id;
-  renameDraft.value =
-    workspaceDirectories.value.find((item) => item.id === id)?.name ?? "";
+  renameDraft.value = workspaceDirectories.value.find((item) => item.id === id)?.name ?? '';
   isRenameDialogOpen.value = true;
 }
 
@@ -970,7 +910,7 @@ async function submitRenameWorkspace() {
   try {
     await renameWorkspaceDirectory(renameTargetId.value, renameDraft.value);
     isRenameDialogOpen.value = false;
-    showHint("工作区已重命名");
+    showHint('工作区已重命名');
   } catch (error) {
     showHint(`重命名失败：${getErrorMessage(error)}`);
   }
@@ -987,9 +927,8 @@ async function moveWorkspace(id: string, offset: number) {
 async function removeWorkspace(id: string) {
   try {
     await removeWorkspaceDirectory(id);
-    if (activeSectionId.value === id)
-      activeSectionId.value = DEFAULT_SECTION_ID;
-    showHint("已移出工作区列表");
+    if (activeSectionId.value === id) activeSectionId.value = DEFAULT_SECTION_ID;
+    showHint('已移出工作区列表');
   } catch (error) {
     showHint(`移出失败：${getErrorMessage(error)}`);
   }
@@ -1009,7 +948,7 @@ async function moveExternalNote(noteSet: NoteSetItem, targetDir?: string) {
     await forgetExternalNote(key);
     invalidateNoteSetEntries();
     await loadActiveSection();
-    showHint("已移动到工作区");
+    showHint('已移动到工作区');
   } catch (error) {
     showHint(`移动失败：${getErrorMessage(error)}`);
   }
@@ -1020,26 +959,25 @@ const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 30;
 
-const relativeTime = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
+const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
 
 // Date 只有绝对时间，所以按分钟/小时/天折算，超过一月退回日期
 function formatUpdatedAt(timestamp: number): string {
-  if (!timestamp) return "未知";
+  if (!timestamp) return '未知';
   const minutes = Math.round((timestamp - Date.now()) / MILLIS_PER_MINUTE);
-  if (Math.abs(minutes) < MINUTES_PER_HOUR)
-    return relativeTime.format(minutes, "minute");
+  if (Math.abs(minutes) < MINUTES_PER_HOUR) return relativeTime.format(minutes, 'minute');
   const hours = Math.round(minutes / MINUTES_PER_HOUR);
-  if (Math.abs(hours) < HOURS_PER_DAY)
-    return relativeTime.format(hours, "hour");
+  if (Math.abs(hours) < HOURS_PER_DAY) return relativeTime.format(hours, 'hour');
   const days = Math.round(hours / HOURS_PER_DAY);
-  if (Math.abs(days) < DAYS_PER_MONTH) return relativeTime.format(days, "day");
-  return new Date(timestamp).toLocaleDateString("zh-CN");
+  if (Math.abs(days) < DAYS_PER_MONTH) return relativeTime.format(days, 'day');
+  return new Date(timestamp).toLocaleDateString('zh-CN');
 }
 </script>
 <template>
   <v-sheet class="note-sets-page" elevation="0">
     <Teleport to="#title-right-actions" defer>
-      <v-btn color="white"
+      <v-btn
+        color="white"
         :icon="mdiMagnify"
         title="搜索（打开命令面板）"
         variant="text"
@@ -1047,7 +985,8 @@ function formatUpdatedAt(timestamp: number): string {
       />
       <v-menu location="bottom end">
         <template #activator="{ props: menuProps }">
-          <v-btn color="white"
+          <v-btn
+            color="white"
             v-bind="menuProps"
             :icon="mdiSort"
             :title="`排序：${sortLabel}`"
@@ -1117,17 +1056,11 @@ function formatUpdatedAt(timestamp: number): string {
         />
       </template>
     </Teleport>
-    <v-snackbar v-model="isError" timeout="2000">
-      Oh no!便签怎么皱成一团了！
-    </v-snackbar>
+    <v-snackbar v-model="isError" timeout="2000"> Oh no!便签怎么皱成一团了！ </v-snackbar>
     <v-snackbar v-model="isHintOpen" timeout="2500">
       {{ hint }}
     </v-snackbar>
-    <v-dialog
-      v-model="isFilterDialogOpen"
-      max-width="520"
-      scrollable
-    >
+    <v-dialog v-model="isFilterDialogOpen" max-width="520" scrollable>
       <v-card>
         <v-card-title>筛选便签</v-card-title>
         <v-card-text class="note-filter-dialog__content">
@@ -1142,9 +1075,7 @@ function formatUpdatedAt(timestamp: number): string {
             clearable
           />
           <div class="d-flex align-center justify-space-between mt-2 mb-1">
-            <span class="text-body-2">
-              已选 {{ draftSelectedTags.length }} 个标签
-            </span>
+            <span class="text-body-2"> 已选 {{ draftSelectedTags.length }} 个标签 </span>
             <div class="d-flex">
               <v-btn
                 :disabled="visibleFilterTags.length === 0"
@@ -1154,11 +1085,9 @@ function formatUpdatedAt(timestamp: number): string {
               >
                 {{
                   visibleFilterTags.length &&
-                  visibleFilterTags.every((tag) =>
-                    draftSelectedTags.includes(tag),
-                  )
-                    ? "取消当前列表"
-                    : "全选当前列表"
+                  visibleFilterTags.every((tag) => draftSelectedTags.includes(tag))
+                    ? '取消当前列表'
+                    : '全选当前列表'
                 }}
               </v-btn>
               <v-btn
@@ -1186,18 +1115,14 @@ function formatUpdatedAt(timestamp: number): string {
                   />
                 </template>
                 <template #append>
-                  <v-chip
-                    :color="resolveTagColor(tag)"
-                    size="x-small"
-                    variant="tonal"
-                  >
+                  <v-chip :color="resolveTagColor(tag)" size="x-small" variant="tonal">
                     {{ tagNoteCounts.get(tag) ?? 0 }}
                   </v-chip>
                 </template>
               </v-list-item>
             </v-list>
             <div v-else class="text-medium-emphasis text-body-2 pa-4 text-center">
-              {{ availableTags.length ? "没有匹配的标签" : "当前工作区还没有标签" }}
+              {{ availableTags.length ? '没有匹配的标签' : '当前工作区还没有标签' }}
             </div>
           </div>
           <v-checkbox
@@ -1234,46 +1159,22 @@ function formatUpdatedAt(timestamp: number): string {
         </v-card-text>
         <v-divider />
         <v-card-actions class="note-filter-dialog__actions">
-          <v-btn variant="text" @click="clearAllFilters">
-            清除条件
-          </v-btn>
+          <v-btn variant="text" @click="clearAllFilters"> 清除条件 </v-btn>
           <v-spacer />
-          <span class="text-medium-emphasis text-body-2">
-            匹配 {{ draftFilterCount }} 条
-          </span>
-          <v-btn
-            color="primary"
-            variant="text"
-            @click="isFilterDialogOpen = false"
-          >
-            取消
-          </v-btn>
-          <v-btn color="primary" variant="text" @click="applyFilters">
-            应用
-          </v-btn>
+          <span class="text-medium-emphasis text-body-2"> 匹配 {{ draftFilterCount }} 条 </span>
+          <v-btn color="primary" variant="text" @click="isFilterDialogOpen = false"> 取消 </v-btn>
+          <v-btn color="primary" variant="text" @click="applyFilters"> 应用 </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
     <div class="note-sets-scroll pa-4">
       <div v-if="isLoading" class="note-sets-grid">
-        <v-skeleton-loader
-          v-for="index in SKELETON_COUNT"
-          :key="index"
-          type="card"
-        />
+        <v-skeleton-loader v-for="index in SKELETON_COUNT" :key="index" type="card" />
       </div>
       <v-empty-state
         v-else-if="noteSets.length === 0"
-        :icon="
-          activeSection.kind === 'external'
-            ? mdiFileDocumentOutline
-            : mdiNoteOffOutline
-        "
-        :title="
-          activeSection.kind === 'external'
-            ? '还没有打开过外部文件'
-            : '还没有便签……'
-        "
+        :icon="activeSection.kind === 'external' ? mdiFileDocumentOutline : mdiNoteOffOutline"
+        :title="activeSection.kind === 'external' ? '还没有打开过外部文件' : '还没有便签……'"
         :text="
           activeSection.kind === 'external'
             ? '点击右下角按钮打开 .mdrf 文件'
@@ -1286,11 +1187,7 @@ function formatUpdatedAt(timestamp: number): string {
         title="没有符合条件的便签"
         text="请调整右上角的标签过滤条件"
       />
-      <div
-        v-else
-        class="note-sets-grid"
-        :class="{ 'note-sets-grid--loading': isSectionLoading }"
-      >
+      <div v-else class="note-sets-grid" :class="{ 'note-sets-grid--loading': isSectionLoading }">
         <v-card
           v-for="noteSet in visibleNoteSets"
           :key="noteSetKeyOf(noteSet)"
@@ -1304,11 +1201,7 @@ function formatUpdatedAt(timestamp: number): string {
           <v-card-title class="d-flex align-center">
             <v-icon
               v-if="isSelectMode"
-              :icon="
-                isSelected(noteSet)
-                  ? mdiCheckboxMarked
-                  : mdiCheckboxBlankOutline
-              "
+              :icon="isSelected(noteSet) ? mdiCheckboxMarked : mdiCheckboxBlankOutline"
               :color="isSelected(noteSet) ? 'primary' : undefined"
               class="me-2"
               size="small"
@@ -1323,7 +1216,7 @@ function formatUpdatedAt(timestamp: number): string {
             class="note-sets-card__location text-truncate"
             :title="noteSet.filePath ?? '浏览器本地存储'"
           >
-            文件位置：{{ noteSet.filePath ?? "浏览器本地存储" }}
+            文件位置：{{ noteSet.filePath ?? '浏览器本地存储' }}
           </v-card-subtitle>
           <v-card-text>
             {{ noteSet.description }}
@@ -1362,16 +1255,9 @@ function formatUpdatedAt(timestamp: number): string {
               :loading="exportingFileName === noteSet.fileName"
               variant="text"
             ></v-btn>
-            <v-menu
-              v-if="activeSection.kind === 'external'"
-              location="bottom end"
-            >
+            <v-menu v-if="activeSection.kind === 'external'" location="bottom end">
               <template #activator="{ props: menuProps }">
-                <v-btn
-                  v-bind="menuProps"
-                  :icon="mdiFolderMove"
-                  variant="text"
-                />
+                <v-btn v-bind="menuProps" :icon="mdiFolderMove" variant="text" />
               </template>
               <v-list density="compact" min-width="200">
                 <v-list-item
@@ -1411,12 +1297,7 @@ function formatUpdatedAt(timestamp: number): string {
             <v-spacer />
             <v-menu location="bottom end">
               <template #activator="{ props: menuProps }">
-                <v-btn
-                  v-bind="menuProps"
-                  :icon="mdiDotsVertical"
-                  title="更多操作"
-                  variant="text"
-                />
+                <v-btn v-bind="menuProps" :icon="mdiDotsVertical" title="更多操作" variant="text" />
               </template>
               <v-list density="compact" min-width="160">
                 <v-list-item @click="openRenameNote(noteSet)">
@@ -1445,40 +1326,15 @@ function formatUpdatedAt(timestamp: number): string {
         <div ref="listSentinel" class="note-sets-grid__sentinel" />
       </div>
     </div>
-    <input
-      ref="uploadInput"
-      type="file"
-      accept=".mdrf"
-      class="d-none"
-      @change="onUploadSelected"
-    />
+    <input ref="uploadInput" type="file" accept=".mdrf" class="d-none" @change="onUploadSelected" />
     <div class="speed-dial-anchor">
       <v-speed-dial location="top center" transition="fade-transition">
         <template #activator="{ props: activatorProps }">
-          <v-fab
-            v-bind="activatorProps"
-            :icon="mdiPlus"
-            :loading="isImporting"
-            color="primary"
-          />
+          <v-fab v-bind="activatorProps" :icon="mdiPlus" :loading="isImporting" color="primary" />
         </template>
-        <v-btn
-          key="create"
-          :icon="mdiPlus"
-          @click="isCreateDialogOpen = true"
-        />
-        <v-btn
-          v-if="isWebEnv"
-          key="upload"
-          :icon="mdiUpload"
-          @click="triggerUpload"
-        />
-        <v-btn
-          v-else
-          key="open"
-          :icon="mdiFileDocumentOutline"
-          @click="openExternalFile"
-        />
+        <v-btn key="create" :icon="mdiPlus" @click="isCreateDialogOpen = true" />
+        <v-btn v-if="isWebEnv" key="upload" :icon="mdiUpload" @click="triggerUpload" />
+        <v-btn v-else key="open" :icon="mdiFileDocumentOutline" @click="openExternalFile" />
       </v-speed-dial>
     </div>
     <NewFileDialog
@@ -1505,16 +1361,9 @@ function formatUpdatedAt(timestamp: number): string {
           />
         </v-card-text>
         <v-card-actions>
-          <v-btn
-            color="error"
-            variant="text"
-            @click="isRenameDialogOpen = false"
-            >取消</v-btn
-          >
+          <v-btn color="error" variant="text" @click="isRenameDialogOpen = false">取消</v-btn>
           <v-spacer />
-          <v-btn color="primary" variant="text" @click="submitRenameWorkspace"
-            >保存</v-btn
-          >
+          <v-btn color="primary" variant="text" @click="submitRenameWorkspace">保存</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1533,16 +1382,9 @@ function formatUpdatedAt(timestamp: number): string {
           />
         </v-card-text>
         <v-card-actions>
-          <v-btn
-            color="error"
-            variant="text"
-            @click="isRenameNoteOpen = false"
-            >取消</v-btn
-          >
+          <v-btn color="error" variant="text" @click="isRenameNoteOpen = false">取消</v-btn>
           <v-spacer />
-          <v-btn color="primary" variant="text" @click="submitRenameNote"
-            >保存</v-btn
-          >
+          <v-btn color="primary" variant="text" @click="submitRenameNote">保存</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1551,13 +1393,9 @@ function formatUpdatedAt(timestamp: number): string {
         <v-card-title>删除 {{ deleteTargets.length }} 份笔记？</v-card-title>
         <v-card-text>文件会从磁盘移除，此操作无法撤销。</v-card-text>
         <v-card-actions>
-          <v-btn color="primary" variant="text" @click="isDeleteOpen = false"
-            >取消</v-btn
-          >
+          <v-btn color="primary" variant="text" @click="isDeleteOpen = false">取消</v-btn>
           <v-spacer />
-          <v-btn color="error" variant="text" @click="confirmDelete"
-            >删除</v-btn
-          >
+          <v-btn color="error" variant="text" @click="confirmDelete">删除</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1569,16 +1407,8 @@ function formatUpdatedAt(timestamp: number): string {
 .note-sets-page {
   height: 100%;
   background-image:
-    radial-gradient(
-      1200px 600px at 88% -10%,
-      rgba(var(--v-theme-primary), 0.1),
-      transparent 70%
-    ),
-    linear-gradient(
-      90deg,
-      rgba(var(--v-theme-primary), 0.14) 0 1px,
-      transparent 1px
-    ),
+    radial-gradient(1200px 600px at 88% -10%, rgba(var(--v-theme-primary), 0.1), transparent 70%),
+    linear-gradient(90deg, rgba(var(--v-theme-primary), 0.14) 0 1px, transparent 1px),
     repeating-linear-gradient(
       180deg,
       transparent 0 27px,

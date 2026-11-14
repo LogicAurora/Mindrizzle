@@ -1,20 +1,16 @@
-import { inject } from "vue";
-import { isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { inject } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
-import { fileOperations } from "../fileOperations";
-import type { NoteFileLocation } from "../fileOperations/types";
-import {
-  loadEditorComponent,
-  storePendingEditorBody,
-  type EditorBodyResult,
-} from "./editorRoute";
+import { fileOperations } from '../fileOperations';
+import type { NoteFileLocation } from '../fileOperations/types';
+import { loadEditorComponent, storePendingEditorBody, type EditorBodyResult } from './editorRoute';
 import {
   isDebugLoadingEnabled,
   noteLoadControllerKey,
   startEditorTransitionKey,
-} from "./routeTransition";
-import { recordRecentNote } from "./homeActivity";
+} from './routeTransition';
+import { recordRecentNote } from './homeActivity';
 
 export function useOpenNote() {
   const startEditorTransition = inject(startEditorTransitionKey)!;
@@ -25,7 +21,7 @@ export function useOpenNote() {
     let unlisten: (() => void) | undefined;
     try {
       if (isTauri()) {
-        unlisten = await listen<number>("file-load-progress", (event) => {
+        unlisten = await listen<number>('file-load-progress', (event) => {
           noteLoadController.setProgress(event.payload);
         });
       }
@@ -33,14 +29,14 @@ export function useOpenNote() {
       const bodyPromise: Promise<EditorBodyResult> = fileOperations
         .getNoteBody(note, isDebugLoadingEnabled.value)
         .then(
-          (body) => ({ content: body.content ?? "" }),
+          (body) => ({ content: body.content ?? '' }),
           (error: unknown) => ({ error }),
         );
       storePendingEditorBody(note, bodyPromise);
       await Promise.all([loadEditorComponent(), bodyPromise]);
       const didNavigate = await startEditorTransition(
         {
-          name: "editor",
+          name: 'editor',
           params: { fileName: note.fileName },
           query: {
             ...(note.dir ? { dir: note.dir } : {}),

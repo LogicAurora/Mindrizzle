@@ -1,10 +1,10 @@
-import { onMounted, onUnmounted, ref } from "vue";
-import type { Ref } from "vue";
-import type { Editor } from "@prosekit/core";
+import { onMounted, onUnmounted, ref } from 'vue';
+import type { Ref } from 'vue';
+import type { Editor } from '@prosekit/core';
 
-import { getView, layoutToCanvasCss } from "./blockHandleUtils";
-import { uniqueClientRects } from "./textSelectionRects";
-import type { TextRect } from "./textSelectionRects";
+import { getView, layoutToCanvasCss } from './blockHandleUtils';
+import { uniqueClientRects } from './textSelectionRects';
+import type { TextRect } from './textSelectionRects';
 
 export type TextSelectionRect = TextRect;
 
@@ -14,9 +14,7 @@ interface TextSelectionHighlightOptions {
 }
 
 // 原生 ::selection 只能方角，所以按行取矩形、在编辑器外层自绘圆角高亮
-export function useTextSelectionHighlight(
-  options: TextSelectionHighlightOptions,
-) {
+export function useTextSelectionHighlight(options: TextSelectionHighlightOptions) {
   const { editor, scrollRef } = options;
   const rects = ref<TextSelectionRect[]>([]);
 
@@ -25,14 +23,11 @@ export function useTextSelectionHighlight(
 
   const rangeOfSelection = (view: any): Range | null => {
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0)
-      return null;
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
     const range = selection.getRangeAt(0);
     if (!view.dom.contains(range.commonAncestorContainer)) return null;
     // 嵌入块内部是原生控件，选区由浏览器自己画，再叠一层自绘会重影
-    return elementOf(range.commonAncestorContainer)?.closest(
-      "[data-node-view-root]",
-    )
+    return elementOf(range.commonAncestorContainer)?.closest('[data-node-view-root]')
       ? null
       : range;
   };
@@ -56,18 +51,18 @@ export function useTextSelectionHighlight(
   };
 
   onMounted(() => {
-    document.addEventListener("selectionchange", update);
+    document.addEventListener('selectionchange', update);
     // 块内滚动不冒泡，所以直接挂滚动容器；画布滚动用捕获阶段兜底
-    scrollRef.value?.addEventListener("scroll", update);
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
+    scrollRef.value?.addEventListener('scroll', update);
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
   });
 
   onUnmounted(() => {
-    document.removeEventListener("selectionchange", update);
-    scrollRef.value?.removeEventListener("scroll", update);
-    window.removeEventListener("scroll", update, true);
-    window.removeEventListener("resize", update);
+    document.removeEventListener('selectionchange', update);
+    scrollRef.value?.removeEventListener('scroll', update);
+    window.removeEventListener('scroll', update, true);
+    window.removeEventListener('resize', update);
   });
 
   return { rects, refresh: update };

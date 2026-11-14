@@ -17,9 +17,7 @@
       variant="outlined"
       hide-details
       :readonly="readOnly"
-      @update:model-value="
-        (value) => emitUpdate({ title: String(value ?? '') })
-      "
+      @update:model-value="(value) => emitUpdate({ title: String(value ?? '') })"
     />
     <v-textarea
       :model-value="description"
@@ -29,9 +27,7 @@
       variant="outlined"
       hide-details
       :readonly="readOnly"
-      @update:model-value="
-        (value) => emitUpdate({ description: String(value ?? '') })
-      "
+      @update:model-value="(value) => emitUpdate({ description: String(value ?? '') })"
     />
     <v-text-field
       :model-value="imageUrl"
@@ -40,9 +36,7 @@
       variant="outlined"
       hide-details
       :readonly="readOnly"
-      @update:model-value="
-        (value) => emitUpdate({ imageUrl: String(value ?? '') })
-      "
+      @update:model-value="(value) => emitUpdate({ imageUrl: String(value ?? '') })"
     />
     <div v-if="notice" class="text-caption text-medium-emphasis text-break">
       {{ notice }}
@@ -79,14 +73,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { isTauri } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { mdiOpenInNew, mdiRefresh } from "@mdi/js";
+import { ref, watch } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { mdiOpenInNew, mdiRefresh } from '@mdi/js';
 
-import { getErrorMessage } from "../../../../utils/getErrorMessage.ts";
-import { useAutoHideNotice } from "../../../../utils/useAutoHideNotice.ts";
-import { fetchLinkMeta, parseHttpUrl } from "./linkMeta.ts";
+import { getErrorMessage } from '../../../../utils/getErrorMessage.ts';
+import { useAutoHideNotice } from '../../../../utils/useAutoHideNotice.ts';
+import { fetchLinkMeta, parseHttpUrl } from './linkMeta.ts';
 
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -99,10 +93,10 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update", patch: Record<string, unknown>): void;
+  (e: 'update', patch: Record<string, unknown>): void;
 }>();
 
-const emitUpdate = (patch: Record<string, unknown>) => emit("update", patch);
+const emitUpdate = (patch: Record<string, unknown>) => emit('update', patch);
 const isFetching = ref(false);
 const { notice, showNotice, clearNotice } = useAutoHideNotice();
 const draftUrl = ref(props.url);
@@ -133,7 +127,7 @@ const refresh = async () => {
       siteName: meta.siteName,
       imageUrl: meta.imageUrl || props.imageUrl,
     });
-    if (!meta.title && !meta.description) showNotice("没有读到标题或描述");
+    if (!meta.title && !meta.description) showNotice('没有读到标题或描述');
   } catch (cause) {
     showNotice(`读取失败：${getErrorMessage(cause)}`);
   } finally {
@@ -149,7 +143,7 @@ const openLink = () => {
     void openUrl(parsed.href);
     return;
   }
-  window.open(parsed.href, "_blank", "noopener,noreferrer");
+  window.open(parsed.href, '_blank', 'noopener,noreferrer');
 };
 
 // 输入过程中只保存能解析的值，非法输入不提交也不覆盖已存的网址
@@ -157,12 +151,12 @@ const commitUrl = () => {
   if (props.readOnly || draftUrl.value === props.url) return;
   if (!draftUrl.value.trim()) {
     clearNotice();
-    emitUpdate({ url: "" });
+    emitUpdate({ url: '' });
     return;
   }
   const url = parseHttpUrl(draftUrl.value);
   if (!url) {
-    showNotice("网址无效，需要 http 或 https 开头");
+    showNotice('网址无效，需要 http 或 https 开头');
     return;
   }
   clearNotice();
@@ -171,10 +165,10 @@ const commitUrl = () => {
 
 const clearLink = () =>
   emitUpdate({
-    url: "",
-    title: "",
-    description: "",
-    siteName: "",
-    imageUrl: "",
+    url: '',
+    title: '',
+    description: '',
+    siteName: '',
+    imageUrl: '',
   });
 </script>

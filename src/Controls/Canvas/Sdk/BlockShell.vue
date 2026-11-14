@@ -19,11 +19,11 @@
 </template>
 
 <script setup lang="ts">
-import { useSlots } from "vue";
+import { useSlots } from 'vue';
 
-import MdrCanvasComponentBase from "../Core/MdrCanvasComponentBase.vue";
+import MdrCanvasComponentBase from '../Core/MdrCanvasComponentBase.vue';
 
-import { useBlockShell } from "./blockContext.ts";
+import { useBlockShell } from './blockContext.ts';
 
 const shell = useBlockShell();
 const slots = useSlots();

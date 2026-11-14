@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
-import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
+import { invoke, type InvokeArgs } from '@tauri-apps/api/core';
 
-export async function invokeCommand<T>(
-  command: string,
-  args?: InvokeArgs,
-): Promise<T> {
+export async function invokeCommand<T>(command: string, args?: InvokeArgs): Promise<T> {
   return invoke<T>(command, args);
 }

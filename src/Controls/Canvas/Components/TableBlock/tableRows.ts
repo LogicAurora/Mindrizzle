@@ -9,7 +9,7 @@ export const normalizeTableRows = (raw: unknown): string[][] => {
   const rows = source
     .filter((row) => Array.isArray(row))
     .slice(0, MAX_TABLE_ROWS)
-    .map((row) => (row as unknown[]).map((cell) => String(cell ?? "")));
+    .map((row) => (row as unknown[]).map((cell) => String(cell ?? '')));
   while (rows.length < MIN_TABLE_ROWS) rows.push([]);
   const columnCount = Math.min(
     MAX_TABLE_COLUMNS,
@@ -17,13 +17,12 @@ export const normalizeTableRows = (raw: unknown): string[][] => {
   );
   return rows.map((row) => {
     const cells = row.slice(0, columnCount);
-    while (cells.length < columnCount) cells.push("");
+    while (cells.length < columnCount) cells.push('');
     return cells;
   });
 };
 
-export const columnCountOf = (rows: string[][]): number =>
-  rows[0]?.length ?? MIN_TABLE_COLUMNS;
+export const columnCountOf = (rows: string[][]): number => rows[0]?.length ?? MIN_TABLE_COLUMNS;
 
 export const bodyRowCountOf = (rows: string[][], header: boolean): number =>
   Math.max(0, rows.length - (header ? 1 : 0));
@@ -47,21 +46,11 @@ export interface TableMerge {
 const isIndex = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) >= 0;
 
-const mergeOfRaw = (
-  raw: unknown,
-  rowCount: number,
-  columnCount: number,
-): TableMerge | null => {
-  if (!raw || typeof raw !== "object") return null;
+const mergeOfRaw = (raw: unknown, rowCount: number, columnCount: number): TableMerge | null => {
+  if (!raw || typeof raw !== 'object') return null;
   const { row, col, rowspan, colspan } = raw as Partial<TableMerge>;
-  if (!isIndex(row) || !isIndex(col) || !isIndex(rowspan) || !isIndex(colspan))
-    return null;
-  if (
-    rowspan === 0 ||
-    colspan === 0 ||
-    row + rowspan > rowCount ||
-    col + colspan > columnCount
-  )
+  if (!isIndex(row) || !isIndex(col) || !isIndex(rowspan) || !isIndex(colspan)) return null;
+  if (rowspan === 0 || colspan === 0 || row + rowspan > rowCount || col + colspan > columnCount)
     return null;
   return { row, col, rowspan, colspan };
 };
@@ -69,8 +58,7 @@ const mergeOfRaw = (
 const mergeKeysOf = (merge: TableMerge): string[] => {
   const keys: string[] = [];
   for (let row = merge.row; row < merge.row + merge.rowspan; row++) {
-    for (let col = merge.col; col < merge.col + merge.colspan; col++)
-      keys.push(`${row}-${col}`);
+    for (let col = merge.col; col < merge.col + merge.colspan; col++) keys.push(`${row}-${col}`);
   }
   return keys;
 };
@@ -135,5 +123,4 @@ export const removeMergesInSelection = (
   merges: TableMerge[],
   selection: TableSelection,
   header: boolean,
-): TableMerge[] =>
-  merges.filter((merge) => !mergeIntersectsSelection(merge, selection, header));
+): TableMerge[] => merges.filter((merge) => !mergeIntersectsSelection(merge, selection, header));

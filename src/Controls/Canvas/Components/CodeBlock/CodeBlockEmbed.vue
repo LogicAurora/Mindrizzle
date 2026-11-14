@@ -11,7 +11,7 @@
 </template>
 
 <script setup lang="ts">
-import CodeBlockEditor from "./CodeBlockEditor.vue";
+import CodeBlockEditor from './CodeBlockEditor.vue';
 
 defineProps<{
   modelValue?: string;
@@ -20,8 +20,8 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update:modelValue", value: string): void;
-  (e: "update:language", value: string): void;
+  (e: 'update:modelValue', value: string): void;
+  (e: 'update:language', value: string): void;
 }>();
 </script>
 

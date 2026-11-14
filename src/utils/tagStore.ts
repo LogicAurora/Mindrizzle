@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-import { computed, ref } from "vue";
+import { computed, ref } from 'vue';
 
-import { getSetting, setSetting } from "./settingsStore";
+import { getSetting, setSetting } from './settingsStore';
 
 export interface TagEntry {
   name: string;
@@ -10,7 +10,7 @@ export interface TagEntry {
 
 // 名称即标识，name 永远是被改之前的旧名；列表页据此就地改卡片，不必整表重取
 export interface TagLibraryChange {
-  kind: "rename" | "remove";
+  kind: 'rename' | 'remove';
   name: string;
   nextName?: string;
 }
@@ -18,19 +18,19 @@ export interface TagLibraryChange {
 export const TAG_NAME_MAX_LEN = 20;
 
 export const TAG_COLORS = [
-  "#e53935",
-  "#fb8c00",
-  "#fdd835",
-  "#43a047",
-  "#00897b",
-  "#1e88e5",
-  "#3949ab",
-  "#8e24aa",
-  "#d81b60",
-  "#6d4c41",
+  '#e53935',
+  '#fb8c00',
+  '#fdd835',
+  '#43a047',
+  '#00897b',
+  '#1e88e5',
+  '#3949ab',
+  '#8e24aa',
+  '#d81b60',
+  '#6d4c41',
 ];
 
-const TAG_LIBRARY_KEY = "note:tag-library";
+const TAG_LIBRARY_KEY = 'note:tag-library';
 const HASH_BASE = 31;
 const HASH_MODULUS = 100_000;
 
@@ -41,13 +41,11 @@ let isLibraryLoaded = false;
 // 名字是标签唯一标识，所以默认色由名字散列决定：换设备、重装后同名标签仍是同一色
 const defaultColorOf = (name: string): string => {
   let seed = 0;
-  for (const char of name)
-    seed = (seed * HASH_BASE + (char.codePointAt(0) ?? 0)) % HASH_MODULUS;
+  for (const char of name) seed = (seed * HASH_BASE + (char.codePointAt(0) ?? 0)) % HASH_MODULUS;
   return TAG_COLORS[seed % TAG_COLORS.length];
 };
 
-const persistLibrary = (): Promise<void> =>
-  setSetting(TAG_LIBRARY_KEY, tagLibrary.value);
+const persistLibrary = (): Promise<void> => setSetting(TAG_LIBRARY_KEY, tagLibrary.value);
 
 export const sanitizeTags = (rawTags: string[]): string[] => {
   const unique = new Set<string>();
@@ -60,12 +58,10 @@ export const sanitizeTags = (rawTags: string[]): string[] => {
 
 function buildEntry(raw: unknown): TagEntry | null {
   const source =
-    typeof raw === "string"
-      ? { name: raw, color: "" }
-      : (raw as Partial<TagEntry> | null);
-  const [name] = sanitizeTags([String(source?.name ?? "")]);
+    typeof raw === 'string' ? { name: raw, color: '' } : (raw as Partial<TagEntry> | null);
+  const [name] = sanitizeTags([String(source?.name ?? '')]);
   if (!name) return null;
-  const color = String(source?.color ?? "");
+  const color = String(source?.color ?? '');
   return { name, color: color || defaultColorOf(name) };
 }
 
@@ -88,10 +84,7 @@ export const loadTagLibrary = async (force = false): Promise<void> => {
   tagLibrary.value = normalizeLibrary(stored);
   isLibraryLoaded = true;
   // 旧版本只存名字数组，读一次就迁成带色条目，之后按名字管理颜色
-  if (
-    Array.isArray(stored) &&
-    stored.some((item) => typeof item === "string")
-  ) {
+  if (Array.isArray(stored) && stored.some((item) => typeof item === 'string')) {
     await persistLibrary();
   }
 };
@@ -114,10 +107,7 @@ export const forgetTag = async (name: string): Promise<void> => {
   await persistLibrary();
 };
 
-export const setTagColor = async (
-  name: string,
-  color: string,
-): Promise<void> => {
+export const setTagColor = async (name: string, color: string): Promise<void> => {
   const target = tagLibrary.value.find((entry) => entry.name === name);
   if (!target || target.color === color) return;
   // 命中的是 ref 数组里的响应式代理，改完换新数组才能触发依赖重算
@@ -127,10 +117,7 @@ export const setTagColor = async (
 };
 
 // 名字即标识，重名一律拒绝；返回 false 让调用方提示而不是静默吞掉
-export const renameTag = async (
-  name: string,
-  nextName: string,
-): Promise<boolean> => {
+export const renameTag = async (name: string, nextName: string): Promise<boolean> => {
   const [resolved] = sanitizeTags([nextName]);
   if (!resolved || resolved === name) return false;
   if (!tagLibrary.value.some((entry) => entry.name === name)) return false;

@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: "发布通道（beta/alpha 的序号自动递增）"
+        description: '发布通道（beta/alpha 的序号自动递增）'
         required: true
-        default: "stable"
+        default: 'stable'
         type: choice
         options: [stable, beta, alpha]
       version:
-        description: "主版本号（例：1.4.0；v 前缀可有可无；不要带 -beta.1 后缀）"
+        description: '主版本号（例：1.4.0；v 前缀可有可无；不要带 -beta.1 后缀）'
         required: true
         type: string
 
@@ -236,16 +236,16 @@ jobs:
         include:
           - name: macos-aarch64
             platform: macos-latest
-            args: "--target aarch64-apple-darwin"
+            args: '--target aarch64-apple-darwin'
           - name: macos-x86_64
             platform: macos-latest
-            args: "--target x86_64-apple-darwin"
+            args: '--target x86_64-apple-darwin'
           - name: linux-x64
             platform: ubuntu-22.04
-            args: ""
+            args: ''
           - name: windows-x64
             platform: windows-latest
-            args: ""
+            args: ''
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
@@ -352,7 +352,7 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
-        with: { workspaces: "./src-tauri -> target" }
+        with: { workspaces: './src-tauri -> target' }
 
       - run: bun install --frozen-lockfile
 
@@ -364,7 +364,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.build.outputs.release_id }}
-          releaseAssetNamePattern: "[name]-[platform]-[arch][setup][ext]"
+          releaseAssetNamePattern: '[name]-[platform]-[arch][setup][ext]'
           args: ${{ matrix.args }} ${{ env.BUNDLE_ARGS }}
 
       - name: Backup artifacts

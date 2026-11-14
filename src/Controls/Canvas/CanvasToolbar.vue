@@ -61,15 +61,9 @@
           />
         </template>
         <v-list density="compact" max-height="320" min-width="240">
-          <v-list-item
-            v-for="entry in clipboard"
-            :key="entry.id"
-            @click="emit('paste', entry)"
-          >
+          <v-list-item v-for="entry in clipboard" :key="entry.id" @click="emit('paste', entry)">
             <v-list-item-title>{{ entryTitle(entry) }}</v-list-item-title>
-            <v-list-item-subtitle>{{
-              formatTime(entry.createdAt)
-            }}</v-list-item-subtitle>
+            <v-list-item-subtitle>{{ formatTime(entry.createdAt) }}</v-list-item-subtitle>
           </v-list-item>
         </v-list>
       </v-menu>
@@ -109,11 +103,11 @@ import {
   mdiHistory,
   mdiPencil,
   mdiPencilOff,
-} from "@mdi/js";
+} from '@mdi/js';
 
-import { Z_LAYER } from "./Core/zIndex.ts";
-import { componentMetaOf } from "./Registry/canvasComponents.ts";
-import type { ClipboardEntry } from "../../utils/blockClipboard.ts";
+import { Z_LAYER } from './Core/zIndex.ts';
+import { componentMetaOf } from './Registry/canvasComponents.ts';
+import type { ClipboardEntry } from '../../utils/blockClipboard.ts';
 
 const props = defineProps<{
   isEditMode: boolean;
@@ -126,19 +120,19 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  "toggle-edit": [];
+  'toggle-edit': [];
   delete: [];
   copy: [];
   paste: [entry: ClipboardEntry];
-  "set-zoom": [value: number];
-  "toggle-annotation": [];
+  'set-zoom': [value: number];
+  'toggle-annotation': [];
 }>();
 
 const ZOOM_OPTIONS = [
-  { title: "50%", value: 0.5 },
-  { title: "100%", value: 1 },
-  { title: "200%", value: 2 },
-  { title: "300%", value: 3 },
+  { title: '50%', value: 0.5 },
+  { title: '100%', value: 1 },
+  { title: '200%', value: 2 },
+  { title: '300%', value: 3 },
 ] as const;
 
 // 历史只给出数量与类型摘要，缩略图级别就够用户辨认是哪一次复制
@@ -147,15 +141,15 @@ function entryTitle(entry: ClipboardEntry): string {
     (block) => componentMetaOf(block.component)?.title ?? block.component,
   );
   const unique = [...new Set(names)];
-  const suffix = unique.length > 2 ? "…" : "";
-  return `${entry.blocks.length} 个块 · ${unique.slice(0, 2).join("、")}${suffix}`;
+  const suffix = unique.length > 2 ? '…' : '';
+  return `${entry.blocks.length} 个块 · ${unique.slice(0, 2).join('、')}${suffix}`;
 }
 
 const formatTime = (timestamp: number): string => {
   const date = new Date(timestamp);
-  const time = date.toLocaleTimeString("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
+  const time = date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
   });
   const isToday = date.toDateString() === new Date().toDateString();
   return isToday ? time : `${date.getMonth() + 1}/${date.getDate()} ${time}`;
@@ -163,7 +157,7 @@ const formatTime = (timestamp: number): string => {
 
 const pasteLatest = () => {
   const [latest] = props.clipboard;
-  if (latest) emit("paste", latest);
+  if (latest) emit('paste', latest);
 };
 </script>
 

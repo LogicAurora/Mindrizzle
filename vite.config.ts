@@ -1,8 +1,8 @@
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import vuetify from "vite-plugin-vuetify";
-import fs from "node:fs";
-import ViteFonts from 'unplugin-fonts/vite'
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import vuetify from 'vite-plugin-vuetify';
+import fs from 'node:fs';
+import ViteFonts from 'unplugin-fonts/vite';
 
 const { TAURI_DEV_HOST: host, HOME: homeDir } = process.env;
 
@@ -17,7 +17,7 @@ export default defineConfig(async () => ({
       script: {
         fs: {
           fileExists: (filePath) => fs.existsSync(filePath),
-          readFile: (filePath) => fs.readFileSync(filePath, "utf-8"),
+          readFile: (filePath) => fs.readFileSync(filePath, 'utf-8'),
         },
       },
     }),
@@ -50,14 +50,14 @@ export default defineConfig(async () => ({
   clearScreen: false,
   resolve: {
     // bun 把依赖 realpath 到缓存目录，包内引用的同级依赖会解析失败，这里强制从项目 node_modules 取
-    dedupe: ["vxe-table", "@vxe-ui/core", "xe-utils", "dom-zindex"],
+    dedupe: ['vxe-table', '@vxe-ui/core', 'xe-utils', 'dom-zindex'],
   },
   build: {
     // Tauri 各平台 WebView 均为现代内核，无需为旧浏览器降级转译
-    target: "esnext",
+    target: 'esnext',
   },
   optimizeDeps: {
-    entries: ["index.html"],
+    entries: ['index.html'],
   },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
@@ -65,18 +65,18 @@ export default defineConfig(async () => ({
     strictPort: true,
     host: host || false,
     fs: {
-      allow: [".", ...(bunCacheDir ? [bunCacheDir] : [])],
+      allow: ['.', ...(bunCacheDir ? [bunCacheDir] : [])],
     },
     hmr: host
       ? {
-          protocol: "ws",
+          protocol: 'ws',
           host,
           port: 1421,
         }
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: ['**/src-tauri/**'],
     },
   },
 }));

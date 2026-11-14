@@ -1,11 +1,11 @@
-import type { NoteFileLocation } from "../fileOperations/types";
+import type { NoteFileLocation } from '../fileOperations/types';
 
-const ACTIVITY_KEY = "mindrizzle:home-activity";
-const RECENT_NOTES_KEY = "mindrizzle:recent-notes";
+const ACTIVITY_KEY = 'mindrizzle:home-activity';
+const RECENT_NOTES_KEY = 'mindrizzle:recent-notes';
 const MAX_ACTIVITY_EVENTS = 10_000;
 const MAX_RECENT_NOTES = 20;
 
-export type FileActivityKind = "created" | "modified" | "deleted";
+export type FileActivityKind = 'created' | 'modified' | 'deleted';
 
 export interface FileActivityEvent {
   kind: FileActivityKind;
@@ -16,11 +16,7 @@ export interface RecentNote extends NoteFileLocation {
   openedAt: number;
 }
 
-function readStorage<T>(
-  key: string,
-  isValid: (value: unknown) => value is T,
-  empty: T,
-): T {
+function readStorage<T>(key: string, isValid: (value: unknown) => value is T, empty: T): T {
   try {
     const stored = localStorage.getItem(key);
     if (!stored) return empty;
@@ -48,9 +44,7 @@ function isActivityEvents(value: unknown): value is FileActivityEvent[] {
     value.every(
       (item) =>
         item &&
-        (item.kind === "created" ||
-          item.kind === "modified" ||
-          item.kind === "deleted") &&
+        (item.kind === 'created' || item.kind === 'modified' || item.kind === 'deleted') &&
         Number.isFinite(item.timestamp),
     )
   );
@@ -60,10 +54,7 @@ function isRecentNotes(value: unknown): value is RecentNote[] {
   return (
     Array.isArray(value) &&
     value.every(
-      (item) =>
-        item &&
-        typeof item.fileName === "string" &&
-        Number.isFinite(item.openedAt),
+      (item) => item && typeof item.fileName === 'string' && Number.isFinite(item.openedAt),
     )
   );
 }
@@ -79,7 +70,7 @@ export function loadFileActivity(): FileActivityEvent[] {
 }
 
 function recentNoteKey(note: NoteFileLocation): string {
-  return `${note.filePath ?? ""}\u0000${note.dir ?? ""}\u0000${note.fileName}`;
+  return `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
 }
 
 export function recordRecentNote(note: NoteFileLocation): void {

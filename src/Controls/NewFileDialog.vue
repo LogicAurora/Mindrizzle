@@ -1,17 +1,13 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import {
-  fileOperations,
-  isValidNoteFileName,
-  NOTE_FILE_NAME_RULE_HINT,
-} from "../fileOperations";
-import { invalidateNoteSetEntries } from "../utils/noteSetStore";
-import { error as LogError } from "@tauri-apps/plugin-log";
-import { recordRecentNote } from "../utils/homeActivity";
+import { ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { fileOperations, isValidNoteFileName, NOTE_FILE_NAME_RULE_HINT } from '../fileOperations';
+import { invalidateNoteSetEntries } from '../utils/noteSetStore';
+import { error as LogError } from '@tauri-apps/plugin-log';
+import { recordRecentNote } from '../utils/homeActivity';
 
 const props = defineProps<{ isOpen: boolean; dir?: string }>();
-const emit = defineEmits<{ "update:close": [value: { status: boolean }] }>();
+const emit = defineEmits<{ 'update:close': [value: { status: boolean }] }>();
 
 let dialog = ref(false);
 
@@ -27,24 +23,18 @@ watch(
   () => dialog.value,
   (newVal) => {
     if (!newVal) {
-      emit("update:close", { status: false });
+      emit('update:close', { status: false });
     }
   },
 );
 
-const title = ref("");
-const description = ref("");
-const fileName = ref("");
+const title = ref('');
+const description = ref('');
+const fileName = ref('');
 
-const shortRules = [
-  (v: any) => !!v || "不可为空",
-  (v: string) => v.length <= 30 || "太长了",
-];
+const shortRules = [(v: any) => !!v || '不可为空', (v: string) => v.length <= 30 || '太长了'];
 
-const longRules = [
-  (v: any) => !!v || "不可为空",
-  (v: string) => v.length <= 1000 || "太长了",
-];
+const longRules = [(v: any) => !!v || '不可为空', (v: string) => v.length <= 1000 || '太长了'];
 
 const fileNameAsyncError = ref<true | string>(true);
 
@@ -62,9 +52,9 @@ const debouncedCheck = (name: string) => {
     }
     try {
       const valid = await fileOperations.isFileNameAvailable(name, props.dir);
-      fileNameAsyncError.value = valid ? true : "文件名已被占用";
+      fileNameAsyncError.value = valid ? true : '文件名已被占用';
     } catch {
-      fileNameAsyncError.value = "校验失败，请重试";
+      fileNameAsyncError.value = '校验失败，请重试';
     }
   }, 500);
 };
@@ -78,7 +68,7 @@ const fileRules = [
 const infoForm = ref();
 const router = useRouter();
 
-import { getErrorMessage } from "../utils/getErrorMessage";
+import { getErrorMessage } from '../utils/getErrorMessage';
 
 async function submit() {
   const { valid } = await infoForm.value.validate();
@@ -89,7 +79,7 @@ async function submit() {
       meta: {
         title: title.value,
         description: description.value,
-        tag: ["新笔记"],
+        tag: ['新笔记'],
       },
       fileName: fileName.value,
       dir: props.dir,
@@ -101,7 +91,7 @@ async function submit() {
       ...(props.dir ? { dir: props.dir } : {}),
     });
     router.push({
-      name: "editor",
+      name: 'editor',
       params: { fileName: createdFileName },
       query: props.dir ? { dir: props.dir } : {},
     });
@@ -115,12 +105,7 @@ async function submit() {
     <v-card>
       <v-card-text>
         <v-form ref="infoForm">
-          <v-text-field
-            v-model="title"
-            :counter="30"
-            :rules="shortRules"
-            label="标题"
-          />
+          <v-text-field v-model="title" :counter="30" :rules="shortRules" label="标题" />
           <v-textarea
             v-model="description"
             :counter="1000"
@@ -140,9 +125,7 @@ async function submit() {
       </v-card-text>
 
       <v-card-actions>
-        <v-btn color="error" variant="text" @click="dialog = false">
-          取消
-        </v-btn>
+        <v-btn color="error" variant="text" @click="dialog = false"> 取消 </v-btn>
         <v-spacer />
         <v-btn color="primary" variant="text" @click="submit()"> 提交 </v-btn>
       </v-card-actions>

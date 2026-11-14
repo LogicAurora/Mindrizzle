@@ -1,5 +1,5 @@
 // 网页端没有 Tauri IPC，笔记文件层退化为 IndexedDB：正文与元信息按结构化克隆存取，不做 tar/压缩
-import { buildMdrfBlob, parseMdrfArchive } from "./mdrfArchive";
+import { buildMdrfBlob, parseMdrfArchive } from './mdrfArchive';
 import type {
   ComponentDataFile,
   ComponentDataScope,
@@ -7,20 +7,20 @@ import type {
   FileOperations,
   NoteMeta,
   RenameNoteRequest,
-} from "./types";
+} from './types';
 
-const DB_NAME = "mindrizzle-local";
+const DB_NAME = 'mindrizzle-local';
 const DB_VERSION = 1;
-const STORE_NAME = "kv";
-const QUOTA_ERROR_NAME = "QuotaExceededError";
-const FILE_INDEX_KEY = "mindrizzle:file-index";
-const NOTE_KEY_PREFIX = "mindrizzle:note:";
-const COMPONENT_DATA_KEY_PREFIX = "mindrizzle:component-data:";
-const TEST_NOTE_PREFIX = "性能测试_";
-const MDRF_EXTENSION = ".mdrf";
+const STORE_NAME = 'kv';
+const QUOTA_ERROR_NAME = 'QuotaExceededError';
+const FILE_INDEX_KEY = 'mindrizzle:file-index';
+const NOTE_KEY_PREFIX = 'mindrizzle:note:';
+const COMPONENT_DATA_KEY_PREFIX = 'mindrizzle:component-data:';
+const TEST_NOTE_PREFIX = '性能测试_';
+const MDRF_EXTENSION = '.mdrf';
 const MDRF_EXTENSION_AT_END = /\.mdrf$/i;
 const IMPORT_NAME_FORBIDDEN_CHARS = /[\\/:*?"<>|]/g;
-const IMPORT_NAME_FALLBACK = "导入的笔记";
+const IMPORT_NAME_FALLBACK = '导入的笔记';
 const IMPORT_NAME_MAX_ATTEMPTS = 1000;
 const FILE_NAME_MAX_LEN = 50;
 const COMPONENT_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -30,28 +30,28 @@ const FILE_NAME_FORBIDDEN_CHARS = /[\\/:*?"<>|]/;
 // 与后端 resolve_mdrf_file_name 对齐：首字符不得空格，尾字符不得空格或点
 const FILE_NAME_EDGE_CHARS = /^ |[ .]$/;
 const FILE_NAME_RESERVED = [
-  "CON",
-  "PRN",
-  "AUX",
-  "NUL",
-  "COM1",
-  "COM2",
-  "COM3",
-  "COM4",
-  "COM5",
-  "COM6",
-  "COM7",
-  "COM8",
-  "COM9",
-  "LPT1",
-  "LPT2",
-  "LPT3",
-  "LPT4",
-  "LPT5",
-  "LPT6",
-  "LPT7",
-  "LPT8",
-  "LPT9",
+  'CON',
+  'PRN',
+  'AUX',
+  'NUL',
+  'COM1',
+  'COM2',
+  'COM3',
+  'COM4',
+  'COM5',
+  'COM6',
+  'COM7',
+  'COM8',
+  'COM9',
+  'LPT1',
+  'LPT2',
+  'LPT3',
+  'LPT4',
+  'LPT5',
+  'LPT6',
+  'LPT7',
+  'LPT8',
+  'LPT9',
 ];
 
 interface NoteRecord {
@@ -69,7 +69,7 @@ let isPersistenceRequested = false;
 const requestPersistentStorage = (): void => {
   if (isPersistenceRequested) return;
   isPersistenceRequested = true;
-  if (typeof navigator.storage?.persist !== "function") return;
+  if (typeof navigator.storage?.persist !== 'function') return;
   navigator.storage
     .persisted()
     .then((isPersisted) => (isPersisted ? true : navigator.storage.persist()))
@@ -89,8 +89,7 @@ const openDatabase = (): Promise<IDBDatabase> => {
       requestPersistentStorage();
       resolve(request.result);
     };
-    request.onerror = () =>
-      reject(request.error ?? new Error("IndexedDB 打开失败"));
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB 打开失败'));
   });
   // 打开失败不缓存，下次调用还能重试
   databasePromise = opening.catch((error: unknown) => {
@@ -101,31 +100,24 @@ const openDatabase = (): Promise<IDBDatabase> => {
 };
 
 const resolveTransactionError = (transaction: IDBTransaction): Error => {
-  if (transaction.error?.name === QUOTA_ERROR_NAME)
-    return new Error("浏览器站点存储空间不足");
-  return transaction.error ?? new Error("IndexedDB 事务失败");
+  if (transaction.error?.name === QUOTA_ERROR_NAME) return new Error('浏览器站点存储空间不足');
+  return transaction.error ?? new Error('IndexedDB 事务失败');
 };
 
 const runRead = async <T>(key: string): Promise<T | null> => {
   const database = await openDatabase();
   const value = await new Promise<T | undefined>((resolve, reject) => {
-    const request = database
-      .transaction(STORE_NAME, "readonly")
-      .objectStore(STORE_NAME)
-      .get(key);
+    const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key);
     request.onsuccess = () => resolve(request.result as T | undefined);
-    request.onerror = () =>
-      reject(request.error ?? new Error("IndexedDB 读取失败"));
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB 读取失败'));
   });
   return value ?? null;
 };
 
-const runWrite = async (
-  action: (store: IDBObjectStore) => void,
-): Promise<void> => {
+const runWrite = async (action: (store: IDBObjectStore) => void): Promise<void> => {
   const database = await openDatabase();
   return new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
     action(transaction.objectStore(STORE_NAME));
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(resolveTransactionError(transaction));
@@ -137,12 +129,11 @@ const runReadKeys = async (): Promise<IDBValidKey[]> => {
   const database = await openDatabase();
   return new Promise<IDBValidKey[]>((resolve, reject) => {
     const request = database
-      .transaction(STORE_NAME, "readonly")
+      .transaction(STORE_NAME, 'readonly')
       .objectStore(STORE_NAME)
       .getAllKeys();
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("IndexedDB 读取失败"));
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB 读取失败'));
   });
 };
 
@@ -158,46 +149,39 @@ const readNote = (fileName: string): Promise<NoteRecord | null> =>
 const writeNote = (fileName: string, note: NoteRecord): Promise<void> =>
   runWrite((store) => store.put(note, noteKeyOf(fileName)));
 
-const padNumber = (value: number): string => String(value).padStart(2, "0");
+const padNumber = (value: number): string => String(value).padStart(2, '0');
 
 const buildDefaultFileName = (): string => {
   const now = new Date();
-  const date = [
-    now.getFullYear(),
-    padNumber(now.getMonth() + 1),
-    padNumber(now.getDate()),
-  ].join("-");
+  const date = [now.getFullYear(), padNumber(now.getMonth() + 1), padNumber(now.getDate())].join(
+    '-',
+  );
   const time = [
     padNumber(now.getHours()),
     padNumber(now.getMinutes()),
     padNumber(now.getSeconds()),
-  ].join("-");
+  ].join('-');
   return `我的笔记_${date}_${time}`;
 };
 
 const resolveFileName = (fileName: string): string => {
-  const resolved = fileName === "" ? buildDefaultFileName() : fileName;
-  if (
-    resolved.length > FILE_NAME_MAX_LEN ||
-    FILE_NAME_EDGE_CHARS.test(resolved)
-  ) {
-    throw new Error("文件名过长或首尾含非法字符");
+  const resolved = fileName === '' ? buildDefaultFileName() : fileName;
+  if (resolved.length > FILE_NAME_MAX_LEN || FILE_NAME_EDGE_CHARS.test(resolved)) {
+    throw new Error('文件名过长或首尾含非法字符');
   }
   if (FILE_NAME_FORBIDDEN_CHARS.test(resolved)) {
     throw new Error('文件名不能包含 \\ / : * ? " < > | 等字符');
   }
   if (FILE_NAME_RESERVED.includes(resolved.toUpperCase())) {
-    throw new Error("文件名不能是系统保留设备名");
+    throw new Error('文件名不能是系统保留设备名');
   }
   return resolved;
 };
 
-const requireNote = async (
-  fileName: string,
-): Promise<{ resolved: string; note: NoteRecord }> => {
+const requireNote = async (fileName: string): Promise<{ resolved: string; note: NoteRecord }> => {
   const resolved = resolveFileName(fileName);
   const note = await readNote(resolved);
-  if (!note) throw new Error("文件不存在或者是个目录");
+  if (!note) throw new Error('文件不存在或者是个目录');
   return { resolved, note };
 };
 
@@ -207,9 +191,7 @@ const fetchFileList = (): Promise<string[]> => readFileIndex();
 const isFileNameValid = async (fileName: string): Promise<boolean> =>
   !(await readFileIndex()).includes(fileName);
 
-const getFileMeta = async (
-  fileName: string,
-): Promise<NoteMeta & { updatedAt: number }> => {
+const getFileMeta = async (fileName: string): Promise<NoteMeta & { updatedAt: number }> => {
   const { note } = await requireNote(fileName);
   // 旧存档无 updatedAt，故容忍缺失
   return { ...note.meta, updatedAt: note.updatedAt ?? 0 };
@@ -219,10 +201,7 @@ const getFileBody = async (fileName: string): Promise<{ content: string }> => ({
   content: (await requireNote(fileName)).note.content,
 });
 
-const setFileBody = async (
-  fileName: string,
-  content: string,
-): Promise<void> => {
+const setFileBody = async (fileName: string, content: string): Promise<void> => {
   const { resolved, note } = await requireNote(fileName);
   await writeNote(resolved, { ...note, content, updatedAt: Date.now() });
 };
@@ -232,28 +211,21 @@ const setFileMeta = async (fileName: string, meta: NoteMeta): Promise<void> => {
   await writeNote(resolved, { ...note, meta, updatedAt: Date.now() });
 };
 
-const createFile = async (
-  meta: NoteMeta,
-  fileName: string,
-): Promise<string> => {
+const createFile = async (meta: NoteMeta, fileName: string): Promise<string> => {
   const resolved = resolveFileName(fileName);
-  if (await readNote(resolved)) throw new Error("同名文件已存在");
-  await writeNote(resolved, { meta, content: "", updatedAt: Date.now() });
+  if (await readNote(resolved)) throw new Error('同名文件已存在');
+  await writeNote(resolved, { meta, content: '', updatedAt: Date.now() });
   await writeFileIndex([...(await readFileIndex()), resolved]);
   return resolved;
 };
 
 // 调试页清空测试存档用；这个库只存放本模块写入的键
-export const clearLocalNotes = (): Promise<void> =>
-  runWrite((store) => store.clear());
+export const clearLocalNotes = (): Promise<void> => runWrite((store) => store.clear());
 
 // 列表性能测试样本：整批样本与索引共用一个事务，样本数大时也不至于反复提交
 export const createTestNotes = async (count: number): Promise<string[]> => {
   const existing = new Set(await readFileIndex());
-  const fileNames = Array.from(
-    { length: count },
-    (_, index) => `${TEST_NOTE_PREFIX}${index}`,
-  );
+  const fileNames = Array.from({ length: count }, (_, index) => `${TEST_NOTE_PREFIX}${index}`);
   const updatedAt = Date.now();
   await runWrite((store) => {
     fileNames.forEach((fileName) => {
@@ -262,19 +234,16 @@ export const createTestNotes = async (count: number): Promise<string[]> => {
         {
           meta: {
             title: fileName,
-            description: "便签集列表性能测试样本",
-            tag: ["测试"],
+            description: '便签集列表性能测试样本',
+            tag: ['测试'],
           },
-          content: "",
+          content: '',
           updatedAt,
         },
         noteKeyOf(fileName),
       );
     });
-    const merged = [
-      ...existing,
-      ...fileNames.filter((name) => !existing.has(name)),
-    ];
+    const merged = [...existing, ...fileNames.filter((name) => !existing.has(name))];
     store.put(merged, FILE_INDEX_KEY);
   });
   return fileNames;
@@ -282,12 +251,8 @@ export const createTestNotes = async (count: number): Promise<string[]> => {
 
 export const clearTestNotes = async (): Promise<number> => {
   const fileNames = await readFileIndex();
-  const testNames = fileNames.filter((name) =>
-    name.startsWith(TEST_NOTE_PREFIX),
-  );
-  const remaining = fileNames.filter(
-    (name) => !name.startsWith(TEST_NOTE_PREFIX),
-  );
+  const testNames = fileNames.filter((name) => name.startsWith(TEST_NOTE_PREFIX));
+  const remaining = fileNames.filter((name) => !name.startsWith(TEST_NOTE_PREFIX));
   await runWrite((store) => {
     testNames.forEach((name) => store.delete(noteKeyOf(name)));
     store.put(remaining, FILE_INDEX_KEY);
@@ -301,70 +266,52 @@ interface ComponentScope {
   uuid: string;
 }
 
-const resolveComponentScope = (
-  request: ComponentDataScope,
-): ComponentScope => {
+const resolveComponentScope = (request: ComponentDataScope): ComponentScope => {
   const fileName = resolveFileName(request.fileName);
   const uuid = request.uuid;
-  if (!COMPONENT_UUID_PATTERN.test(uuid)) throw new Error("组件 UUID 非法");
+  if (!COMPONENT_UUID_PATTERN.test(uuid)) throw new Error('组件 UUID 非法');
   return { key: `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`, uuid };
 };
 
 // 浏览器端没有真实路径，入口校验仍与后端保持一致，避免两端行为漂移
-const resolveComponentFile = (
-  request: ComponentDataFile,
-): ComponentScope & { path: string } => {
+const resolveComponentFile = (request: ComponentDataFile): ComponentScope & { path: string } => {
   const scope = resolveComponentScope(request);
   const path = request.path;
   const hasBadSegment =
-    path === "" ||
+    path === '' ||
     path.length > COMPONENT_PATH_MAX_LEN ||
     COMPONENT_PATH_FORBIDDEN_CHARS.test(path) ||
-    path
-      .split("/")
-      .some((segment) => segment === "" || segment === "." || segment === "..");
-  if (hasBadSegment) throw new Error("组件数据路径为空或含非法片段");
+    path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..');
+  if (hasBadSegment) throw new Error('组件数据路径为空或含非法片段');
   return { ...scope, path };
 };
 
-const readComponentFiles = async (
-  key: string,
-): Promise<Record<string, string>> =>
+const readComponentFiles = async (key: string): Promise<Record<string, string>> =>
   (await runRead<Record<string, string>>(key)) ?? {};
 
-const writeComponentFiles = (
-  key: string,
-  files: Record<string, string>,
-): Promise<void> => runWrite((store) => store.put(files, key));
+const writeComponentFiles = (key: string, files: Record<string, string>): Promise<void> =>
+  runWrite((store) => store.put(files, key));
 
-const listComponentFiles = async (
-  request: ComponentDataScope,
-): Promise<string[]> => {
+const listComponentFiles = async (request: ComponentDataScope): Promise<string[]> => {
   const { key } = resolveComponentScope(request);
   return Object.keys(await readComponentFiles(key)).sort();
 };
 
-const readComponentFile = async (
-  request: ComponentDataFile,
-): Promise<string> => {
+const readComponentFile = async (request: ComponentDataFile): Promise<string> => {
   const { key, path } = resolveComponentFile(request);
   const content = (await readComponentFiles(key))[path];
-  if (content === undefined) throw new Error("组件数据文件不存在");
+  if (content === undefined) throw new Error('组件数据文件不存在');
   return content;
 };
 
-const writeComponentFile = async (
-  request: ComponentDataWriteRequest,
-): Promise<void> => {
+const writeComponentFile = async (request: ComponentDataWriteRequest): Promise<void> => {
   const { key, path } = resolveComponentFile(request);
   const files = await readComponentFiles(key);
   files[path] = request.contentBase64;
   await writeComponentFiles(key, files);
 };
 
-const deleteComponentFile = async (
-  request: ComponentDataFile,
-): Promise<void> => {
+const deleteComponentFile = async (request: ComponentDataFile): Promise<void> => {
   const { key, path } = resolveComponentFile(request);
   const files = await readComponentFiles(key);
   if (!(path in files)) return;
@@ -373,9 +320,7 @@ const deleteComponentFile = async (
   else await runWrite((store) => store.delete(key));
 };
 
-const componentFileExists = async (
-  request: ComponentDataFile,
-): Promise<boolean> => {
+const componentFileExists = async (request: ComponentDataFile): Promise<boolean> => {
   const { key, path } = resolveComponentFile(request);
   return path in (await readComponentFiles(key));
 };
@@ -387,7 +332,7 @@ const readComponentData = async (
   const keys = await runReadKeys();
   const scopes: Record<string, Record<string, string>> = {};
   for (const key of keys) {
-    if (typeof key !== "string" || !key.startsWith(prefix)) continue;
+    if (typeof key !== 'string' || !key.startsWith(prefix)) continue;
     const files = await readComponentFiles(key);
     scopes[key.slice(prefix.length)] = files;
   }
@@ -396,7 +341,7 @@ const readComponentData = async (
 
 const triggerDownload = (blob: Blob, fileName: string): void => {
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
   link.click();
@@ -404,9 +349,7 @@ const triggerDownload = (blob: Blob, fileName: string): void => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-export const exportLocalNoteMdrf = async (
-  fileName: string,
-): Promise<string> => {
+export const exportLocalNoteMdrf = async (fileName: string): Promise<string> => {
   const { resolved, note } = await requireNote(fileName);
   const blob = await buildMdrfBlob({
     meta: note.meta,
@@ -420,9 +363,9 @@ export const exportLocalNoteMdrf = async (
 
 const sanitizeImportName = (raw: string): string => {
   const cleaned = raw
-    .replace(IMPORT_NAME_FORBIDDEN_CHARS, "_")
-    .replace(/^ +/, "")
-    .replace(/[ .]+$/, "")
+    .replace(IMPORT_NAME_FORBIDDEN_CHARS, '_')
+    .replace(/^ +/, '')
+    .replace(/[ .]+$/, '')
     .slice(0, FILE_NAME_MAX_LEN);
   return cleaned || IMPORT_NAME_FALLBACK;
 };
@@ -436,12 +379,12 @@ const allocateImportName = async (preferred: string): Promise<string> => {
     const candidate = `${base.slice(0, FILE_NAME_MAX_LEN - suffix.length)}${suffix}`;
     if (!(await readNote(candidate))) return candidate;
   }
-  throw new Error("同名笔记过多，导入失败");
+  throw new Error('同名笔记过多，导入失败');
 };
 
 export const importLocalNoteMdrf = async (file: File): Promise<string> => {
   const archive = await parseMdrfArchive(await file.arrayBuffer());
-  const fallbackName = file.name.replace(MDRF_EXTENSION_AT_END, "");
+  const fallbackName = file.name.replace(MDRF_EXTENSION_AT_END, '');
   const fileName = await allocateImportName(archive.meta.title || fallbackName);
   const note: NoteRecord = {
     meta: { ...archive.meta, title: archive.meta.title || fileName },
@@ -452,18 +395,14 @@ export const importLocalNoteMdrf = async (file: File): Promise<string> => {
   const scopes = Object.entries(archive.componentData);
   await Promise.all(
     scopes.map(([uuid, files]) =>
-      runWrite((store) =>
-        store.put(files, `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`),
-      ),
+      runWrite((store) => store.put(files, `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`)),
     ),
   );
   return fileName;
 };
 
 // 外部笔记先不进工作区索引，用户点「移动到工作区」时才收录
-export const moveLocalNoteToWorkspace = async (
-  fileName: string,
-): Promise<void> => {
+export const moveLocalNoteToWorkspace = async (fileName: string): Promise<void> => {
   const { resolved } = await requireNote(fileName);
   const fileNames = await readFileIndex();
   if (fileNames.includes(resolved)) return;
@@ -477,18 +416,12 @@ const componentKeyPrefixOf = (fileName: string): string =>
 const staleComponentKeysOf = async (fileName: string): Promise<IDBValidKey[]> => {
   const prefix = componentKeyPrefixOf(fileName);
   const keys = await runReadKeys();
-  return keys.filter(
-    (key) => typeof key === "string" && key.startsWith(prefix),
-  );
+  return keys.filter((key) => typeof key === 'string' && key.startsWith(prefix));
 };
 
-const transferNote = async (
-  source: string,
-  target: string,
-  isMove: boolean,
-): Promise<void> => {
+const transferNote = async (source: string, target: string, isMove: boolean): Promise<void> => {
   const { note } = await requireNote(source);
-  if (await readNote(target)) throw new Error("同名文件已存在");
+  if (await readNote(target)) throw new Error('同名文件已存在');
   const componentData = await readComponentData(source);
   const fileNames = await readFileIndex();
   const staleKeys = await staleComponentKeysOf(source);
@@ -503,9 +436,7 @@ const transferNote = async (
   });
   if (!fileNames.includes(source)) return;
   await writeFileIndex(
-    isMove
-      ? fileNames.map((name) => (name === source ? target : name))
-      : [...fileNames, target],
+    isMove ? fileNames.map((name) => (name === source ? target : name)) : [...fileNames, target],
   );
 };
 
@@ -516,9 +447,7 @@ const deleteLocalNoteFile = async (fileName: string): Promise<void> => {
     store.delete(noteKeyOf(resolved));
     staleKeys.forEach((key) => store.delete(key));
   });
-  await writeFileIndex(
-    (await readFileIndex()).filter((name) => name !== resolved),
-  );
+  await writeFileIndex((await readFileIndex()).filter((name) => name !== resolved));
 };
 
 export const browserFileOperations: FileOperations = {
@@ -530,10 +459,10 @@ export const browserFileOperations: FileOperations = {
   setNoteMeta: ({ fileName }, meta) => setFileMeta(fileName, meta),
   createNote: ({ fileName, meta }) => createFile(meta, fileName),
   moveNote: async () => {
-    throw new Error("网页端只有默认工作区，无法跨工作区移动");
+    throw new Error('网页端只有默认工作区，无法跨工作区移动');
   },
   moveExternalNote: async () => {
-    throw new Error("网页端不支持移动本地文件");
+    throw new Error('网页端不支持移动本地文件');
   },
   deleteNote: ({ fileName }) => deleteLocalNoteFile(fileName),
   copyNote: async ({ location, newFileName }) => {
@@ -555,6 +484,6 @@ export const browserFileOperations: FileOperations = {
   deleteComponentDataFile: deleteComponentFile,
   componentDataFileExists: componentFileExists,
   exportComponentDataFile: async () => {
-    throw new Error("网页端不支持将组件数据直接导出到本地路径");
+    throw new Error('网页端不支持将组件数据直接导出到本地路径');
   },
 };
