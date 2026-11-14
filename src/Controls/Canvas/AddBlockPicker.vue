@@ -24,25 +24,20 @@
         :instant-close="isExpanded"
         @update:model-value="emit('update:modelValue', $event)"
       />
-      <v-sheet class="add-block-anchor" rounded="md" border>
-        <v-icon
-          v-if="!isExpanded"
-          :icon="currentOption.icon"
-          size="20"
-          color="primary"
-        />
+      <v-sheet class="add-block-anchor" rounded="lg" border>
+        <v-icon v-if="!isExpanded" :icon="currentOption.icon" size="20" color="primary" />
       </v-sheet>
     </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
-import { Z_LAYER } from "./Core/zIndex.ts";
-import ModeGrid from "./Core/ModeGrid.vue";
-import WheelSwitch from "./Core/WheelSwitch.vue";
-import { wrapWheelIndex, type WheelOption } from "./Core/wheelSwitch.ts";
+import { Z_LAYER } from './Core/zIndex.ts';
+import ModeGrid from './Core/ModeGrid.vue';
+import WheelSwitch from './Core/WheelSwitch.vue';
+import { wrapWheelIndex, type WheelOption } from './Core/wheelSwitch.ts';
 
 const props = defineProps<{
   options: readonly WheelOption[];
@@ -50,7 +45,7 @@ const props = defineProps<{
   visible: boolean;
 }>();
 
-const emit = defineEmits<{ (e: "update:modelValue", index: number): void }>();
+const emit = defineEmits<{ (e: 'update:modelValue', index: number): void }>();
 
 // 停手后弹窗自动收起，避免一直挡住右侧画布
 const HIDE_DELAY_MS = 900;
@@ -60,13 +55,9 @@ let hideTimer = 0;
 
 const isExpanded = computed(() => props.visible && isWheelActive.value);
 // 悬浮展开全部类型图标，点击切换；滚轮展开时与轮盘互斥
-const isGridVisible = computed(
-  () => props.visible && isAnchorHovered.value && !isExpanded.value,
-);
+const isGridVisible = computed(() => props.visible && isAnchorHovered.value && !isExpanded.value);
 const isPopupOpen = computed(() => isExpanded.value || isGridVisible.value);
-const currentOption = computed(
-  () => props.options[props.modelValue] ?? props.options[0],
-);
+const currentOption = computed(() => props.options[props.modelValue] ?? props.options[0]);
 
 const scheduleHide = () => {
   if (hideTimer) clearTimeout(hideTimer);
@@ -79,14 +70,14 @@ const scheduleHide = () => {
 // 块内滚动容器优先消费滚轮，避免把阅读内容误当成切换添加类型
 const isScrollableTarget = (target: EventTarget | null): boolean => {
   let el = target instanceof HTMLElement ? target : null;
-  while (el && !el.classList.contains("canvas-container")) {
-    if (el.classList.contains("custom-scrollbar")) return true;
+  while (el && !el.classList.contains('canvas-container')) {
+    if (el.classList.contains('custom-scrollbar')) return true;
     const style = getComputedStyle(el);
     const canScrollY =
-      (style.overflowY === "auto" || style.overflowY === "scroll") &&
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
       el.scrollHeight > el.clientHeight + 1;
     const canScrollX =
-      (style.overflowX === "auto" || style.overflowX === "scroll") &&
+      (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
       el.scrollWidth > el.clientWidth + 1;
     if (canScrollY || canScrollX) return true;
     el = el.parentElement;
@@ -97,8 +88,7 @@ const isScrollableTarget = (target: EventTarget | null): boolean => {
 // 展开后的连续滚动交给 WheelSwitch；首次滚动由这里负责展开并切一格
 const onWheel = (event: WheelEvent) => {
   if (!props.visible) return;
-  if (!(event.target as HTMLElement | null)?.closest(".canvas-container"))
-    return;
+  if (!(event.target as HTMLElement | null)?.closest('.canvas-container')) return;
   if (isScrollableTarget(event.target)) return;
   if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
   event.preventDefault();
@@ -107,10 +97,7 @@ const onWheel = (event: WheelEvent) => {
   if (isWheelActive.value) return;
   isWheelActive.value = true;
   const direction = event.deltaY > 0 ? 1 : -1;
-  emit(
-    "update:modelValue",
-    wrapWheelIndex(props.modelValue + direction, props.options.length),
-  );
+  emit('update:modelValue', wrapWheelIndex(props.modelValue + direction, props.options.length));
 };
 
 const onPointerDown = () => {
@@ -122,17 +109,17 @@ const onWindowBlur = () => {
 };
 
 onMounted(() => {
-  window.addEventListener("pointerdown", onPointerDown, true);
-  window.addEventListener("blur", onWindowBlur);
-  window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+  window.addEventListener('pointerdown', onPointerDown, true);
+  window.addEventListener('blur', onWindowBlur);
+  window.addEventListener('wheel', onWheel, { passive: false, capture: true });
 });
 
 onUnmounted(() => {
   if (hideTimer) clearTimeout(hideTimer);
   hideTimer = 0;
-  window.removeEventListener("pointerdown", onPointerDown, true);
-  window.removeEventListener("blur", onWindowBlur);
-  window.removeEventListener("wheel", onWheel, true);
+  window.removeEventListener('pointerdown', onPointerDown, true);
+  window.removeEventListener('blur', onWindowBlur);
+  window.removeEventListener('wheel', onWheel, true);
 });
 </script>
 

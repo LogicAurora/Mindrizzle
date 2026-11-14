@@ -4,8 +4,7 @@
       v-if="expanded"
       class="mode-wheel"
       color="surface"
-      elevation="8"
-      rounded="md"
+      rounded="lg"
       border
       :style="{ '--mode-wheel-width': `${wheelWidth}px` }"
     >

@@ -25,25 +25,20 @@
         :instant-close="isExpanded"
         @update:model-value="emit('update:modelValue', $event)"
       />
-      <v-sheet class="format-mode-anchor" rounded="md" border>
-        <v-icon
-          v-if="!isExpanded"
-          :icon="currentMode.icon"
-          size="20"
-          color="primary"
-        />
+      <v-sheet class="format-mode-anchor" rounded="lg" border>
+        <v-icon v-if="!isExpanded" :icon="currentMode.icon" size="20" color="primary" />
       </v-sheet>
     </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
-import { Z_LAYER } from "../../Core/zIndex.ts";
-import ModeGrid from "../../Core/ModeGrid.vue";
-import WheelSwitch from "../../Core/WheelSwitch.vue";
-import type { FormatMode } from "./formatModes.ts";
+import { Z_LAYER } from '../../Core/zIndex.ts';
+import ModeGrid from '../../Core/ModeGrid.vue';
+import WheelSwitch from '../../Core/WheelSwitch.vue';
+import type { FormatMode } from './formatModes.ts';
 
 const props = defineProps<{
   modes: readonly FormatMode[];
@@ -53,9 +48,9 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update:modelValue", index: number): void;
-  (e: "update:expanded", value: boolean): void;
-  (e: "update:popup-open", value: boolean): void;
+  (e: 'update:modelValue', index: number): void;
+  (e: 'update:expanded', value: boolean): void;
+  (e: 'update:popup-open', value: boolean): void;
 }>();
 
 const isAltDown = ref(false);
@@ -83,33 +78,28 @@ const scheduleHoverClose = () => {
 
 // Alt+Ctrl 保留给块下方的格式详情菜单，主轮盘此时不展开
 const isExpanded = computed(
-  () =>
-    props.visible && isAltDown.value && !isCtrlDown.value && !isDismissed.value,
+  () => props.visible && isAltDown.value && !isCtrlDown.value && !isDismissed.value,
 );
 // 详情菜单需要据此让位，避免两个面板在同一列叠在一起
-watch(isExpanded, (value) => emit("update:expanded", value), {
+watch(isExpanded, (value) => emit('update:expanded', value), {
   immediate: true,
 });
 // 悬浮图标面板与 Alt 轮盘互斥，避免同时压在锚点位置
-const isGridVisible = computed(
-  () => props.visible && isAnchorHovered.value && !isExpanded.value,
-);
+const isGridVisible = computed(() => props.visible && isAnchorHovered.value && !isExpanded.value);
 // 任一弹窗展开时由弹窗边框接管锚点描边，避免两条 1px 边框叠成更粗的线
 const isPopupOpen = computed(() => isExpanded.value || isGridVisible.value);
 // 悬浮网格/轮盘打开时把自身提到详情菜单之上
-watch(isPopupOpen, (value) => emit("update:popup-open", value), {
+watch(isPopupOpen, (value) => emit('update:popup-open', value), {
   immediate: true,
 });
-const currentMode = computed(
-  () => props.modes[props.modelValue] ?? props.modes[0],
-);
+const currentMode = computed(() => props.modes[props.modelValue] ?? props.modes[0]);
 
 const onKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Control") {
+  if (event.key === 'Control') {
     isCtrlDown.value = true;
     return;
   }
-  if (event.key !== "Alt") return;
+  if (event.key !== 'Alt') return;
   // 修饰键的重复 keydown 不能把已收起的弹窗重新打开
   if (event.repeat) return;
   // Alt+Ctrl 交给块下方的详情轮盘
@@ -119,11 +109,11 @@ const onKeyDown = (event: KeyboardEvent) => {
 };
 
 const onKeyUp = (event: KeyboardEvent) => {
-  if (event.key === "Control") {
+  if (event.key === 'Control') {
     isCtrlDown.value = false;
     return;
   }
-  if (event.key !== "Alt") return;
+  if (event.key !== 'Alt') return;
   isAltDown.value = false;
   isDismissed.value = false;
 };
@@ -139,19 +129,19 @@ const onWindowBlur = () => {
 };
 
 onMounted(() => {
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
-  window.addEventListener("blur", onWindowBlur);
-  window.addEventListener("pointerdown", onPointerDown, true);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onWindowBlur);
+  window.addEventListener('pointerdown', onPointerDown, true);
 });
 
 onUnmounted(() => {
   if (hoverCloseTimer) clearTimeout(hoverCloseTimer);
   hoverCloseTimer = 0;
-  window.removeEventListener("keydown", onKeyDown);
-  window.removeEventListener("keyup", onKeyUp);
-  window.removeEventListener("blur", onWindowBlur);
-  window.removeEventListener("pointerdown", onPointerDown, true);
+  window.removeEventListener('keydown', onKeyDown);
+  window.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('blur', onWindowBlur);
+  window.removeEventListener('pointerdown', onPointerDown, true);
 });
 </script>
 
