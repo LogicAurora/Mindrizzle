@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:bx="https://boxy-svg.com">
+  <defs>
+    <bx:grid x="0" y="0" width="16" height="16" divisions="1"/>
+    <filter id="drop-shadow-filter-1" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+      <title>投影</title>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="gaussian-blur-0"/>
+      <feOffset dx="-10" dy="-10" in="gaussian-blur-0" result="offset-0"/>
+      <feComponentTransfer result="offsetblur" in="offset-0">
+        <feFuncA id="spread-ctrl" type="linear" slope="0.6"/>
+      </feComponentTransfer>
+      <feFlood flood-color="rgba(0,0,0,0.3)" result="flood-0"/>
+      <feComposite in2="offsetblur" operator="in" in="flood-0" result="composite-0"/>
+      <feMerge result="merge-0">
+        <feMergeNode in="composite-0"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="round-edges-filter-0" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+      <title>圆边</title>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8 8" result="gaussian-blur-0"/>
+      <feColorMatrix mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 200 -100" in="gaussian-blur-0" result="color-matrix-0"/>
+      <feComposite in="SourceGraphic" operator="atop" in2="color-matrix-0" result="composite-0"/>
+    </filter>
+    <filter id="outline-filter-0" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+      <title>轮廓</title>
+      <feMorphology in="SourceAlpha" result="dilated" radius="8" operator="dilate"/>
+      <feFlood result="flood" style="flood-color: rgb(48, 48, 48);"/>
+      <feComposite in="flood" in2="dilated" operator="in" result="outline"/>
+      <feMerge result="merge-0">
+        <feMergeNode in="outline"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="96" y="96" width="208" height="208" style="stroke-linecap: round; stroke-linejoin: round; filter: url(&quot;#outline-filter-0&quot;); fill: rgb(255, 179, 0); stroke-width: 1;" rx="8" ry="8"/>
+  <polygon style="stroke-linecap: round; stroke-linejoin: round; filter: url(&quot;#round-edges-filter-0&quot;) url(&quot;#outline-filter-0&quot;) url(&quot;#drop-shadow-filter-1&quot;); fill: rgb(30, 136, 229); stroke-width: 1;" points="192.995 190.444 416 192 192 416"/>
+  <path d="M 312 352 L 352 352 L 352 312 C 352 307.582 355.582 304 360 304 C 364.418 304 368 307.582 368 312 L 368 352 L 408 352 C 412.418 352 416 355.582 416 360 C 416 364.418 412.418 368 408 368 L 368 368 L 368 408 C 368 412.418 364.418 416 360 416 C 355.582 416 352 412.418 352 408 L 352 368 L 312 368 C 307.582 368 304 364.418 304 360 C 304 355.582 307.582 352 312 352 Z" style="stroke-linejoin: round; stroke-linecap: round; stroke-width: 0; filter: url(&quot;#outline-filter-0&quot;) url(&quot;#drop-shadow-filter-1&quot;); fill: rgb(0, 137, 123);"/>
+</svg>

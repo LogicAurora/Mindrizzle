@@ -88,6 +88,10 @@ export interface ComponentController {
   commands?: EditorCommands;
   resolveDropAtElement?: (el: HTMLElement | null, preferBefore: boolean) => number | null;
   scrollContent?: (deltaY: number) => void;
+  beginTouchTextSelection?: (clientX: number, clientY: number) => boolean;
+  extendTouchTextSelection?: (clientX: number, clientY: number) => void;
+  tapTouchTextSelection?: (clientX: number, clientY: number) => void;
+  endTouchTextSelection?: (clientX: number, clientY: number, showToolbar?: boolean) => void;
 }
 
 export interface Rect {

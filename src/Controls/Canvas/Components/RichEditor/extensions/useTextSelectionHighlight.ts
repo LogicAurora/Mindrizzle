@@ -45,16 +45,16 @@ export function useTextSelectionHighlight(options: TextSelectionHighlightOptions
     const isToolbarFocused =
       activeElement instanceof Element && !!activeElement.closest('.text-selection-toolbar');
     const shouldPreserveSelection = isToolbarFocused || isToolbarInteractionActive();
+    if (shouldPreserveSelection) return rangeFromEditorSelection(view);
     if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
       if (view.dom.contains(range.commonAncestorContainer)) {
         // 嵌入块内部是原生控件，选区由浏览器自己画，再叠一层自绘会重影
         return isEmbeddedSelection(range) ? null : range;
       }
-      if (!shouldPreserveSelection) return null;
+      return null;
     }
-    if (!shouldPreserveSelection) return null;
-    return rangeFromEditorSelection(view);
+    return null;
   };
 
   const update = () => {

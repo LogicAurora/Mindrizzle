@@ -5,11 +5,14 @@
       class="add-block-picker"
       :class="{ 'is-popup-open': isPopupOpen }"
       :style="{ zIndex: Z_LAYER.formatModePicker }"
-      @pointerenter="isAnchorHovered = true"
-      @pointerleave="isAnchorHovered = false"
-      @pointerdown.stop
+      @pointerenter="onPointerEnter"
+      @pointerleave="onPointerLeave"
+      @pointerdown.stop="onTouchPointerDown"
       @mousedown.stop
       @click.stop
+      @pointermove="onTouchPointerMove"
+      @pointerup="onTouchPointerEnd"
+      @pointercancel="onTouchPointerEnd"
     >
       <WheelSwitch
         :options="options"
@@ -49,9 +52,15 @@ const emit = defineEmits<{ (e: 'update:modelValue', index: number): void }>();
 
 // 停手后弹窗自动收起，避免一直挡住右侧画布
 const HIDE_DELAY_MS = 900;
+const TOUCH_STEP_SIZE = 32;
 const isWheelActive = ref(false);
 const isAnchorHovered = ref(false);
 let hideTimer = 0;
+let touchPointerId: number | null = null;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchLastY = 0;
+let touchOffsetY = 0;
 
 const isExpanded = computed(() => props.visible && isWheelActive.value);
 // 悬浮展开全部类型图标，点击切换；滚轮展开时与轮盘互斥
@@ -65,6 +74,59 @@ const scheduleHide = () => {
     isWheelActive.value = false;
     hideTimer = 0;
   }, HIDE_DELAY_MS);
+};
+
+const onPointerEnter = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch') isAnchorHovered.value = true;
+};
+
+const onPointerLeave = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch') isAnchorHovered.value = false;
+};
+
+const onTouchPointerDown = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch') return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('.mode-wheel')) {
+    scheduleHide();
+    return;
+  }
+  if (isWheelActive.value) return;
+  if (!target?.closest('.add-block-anchor')) return;
+  touchPointerId = event.pointerId;
+  touchStartX = event.clientX;
+  touchStartY = event.clientY;
+  touchLastY = event.clientY;
+  touchOffsetY = 0;
+};
+
+const onTouchPointerMove = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch') return;
+  if (event.pointerId !== touchPointerId) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('.mode-wheel')) scheduleHide();
+    return;
+  }
+  if (Math.abs(event.clientX - touchStartX) > Math.abs(event.clientY - touchStartY)) return;
+  event.preventDefault();
+  touchOffsetY += touchLastY - event.clientY;
+  touchLastY = event.clientY;
+  const steps = Math.trunc(touchOffsetY / TOUCH_STEP_SIZE);
+  if (!steps) return;
+  touchOffsetY -= steps * TOUCH_STEP_SIZE;
+  scheduleHide();
+  isWheelActive.value = true;
+  const direction = steps > 0 ? 1 : -1;
+  emit(
+    'update:modelValue',
+    wrapWheelIndex(props.modelValue + direction * Math.abs(steps), props.options.length),
+  );
+};
+
+const onTouchPointerEnd = (event: PointerEvent) => {
+  if (event.pointerId !== touchPointerId) return;
+  touchPointerId = null;
+  touchOffsetY = 0;
 };
 
 // 块内滚动容器优先消费滚轮，避免把阅读内容误当成切换添加类型
@@ -100,7 +162,9 @@ const onWheel = (event: WheelEvent) => {
   emit('update:modelValue', wrapWheelIndex(props.modelValue + direction, props.options.length));
 };
 
-const onPointerDown = () => {
+const onPointerDown = (event: PointerEvent) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (event.pointerType === 'touch' && target?.closest('.add-block-picker')) return;
   isWheelActive.value = false;
 };
 
@@ -133,6 +197,7 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .add-block-anchor {

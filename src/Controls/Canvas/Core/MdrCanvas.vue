@@ -156,7 +156,9 @@
       </template>
 
       <div
-        v-if="addPreviewPos && addPreviewKey && previewVisible && !isAnnotationMode"
+        v-if="
+          !isMobileLayout && addPreviewPos && addPreviewKey && previewVisible && !isAnnotationMode
+        "
         class="add-preview"
         :style="addPreviewStyle"
       >
@@ -174,7 +176,7 @@
     />
     <!-- 箭头用屏幕坐标、不随画布变换，所以定位在容器层 -->
     <div
-      v-if="addPreviewPos && addPreviewKey && !previewVisible"
+      v-if="!isMobileLayout && addPreviewPos && addPreviewKey && !previewVisible"
       class="add-preview-arrow"
       :style="previewArrowStyle"
     >
@@ -211,6 +213,7 @@ import {
 } from 'vue';
 
 import { mdiPaperclip, mdiArrowUp } from '@mdi/js';
+import { useDisplay } from 'vuetify';
 import {
   CANVAS_COMPONENTS,
   DEFAULT_COMPONENT_KEY,
@@ -282,6 +285,7 @@ import {
 
 // #region 编辑模式
 const isEditMode = ref(true);
+const { mobile: isMobileLayout } = useDisplay();
 // #endregion 编辑模式
 
 // #region 画布状态与 z 层
@@ -2633,6 +2637,7 @@ const isRectIntersectingItem = (
 };
 
 const onCanvasMouseDown = (e: MouseEvent) => {
+  if (performance.now() < ignoreTouchMouseUntil) return;
   // 两个"刚结束"标记仅用于吞掉紧随的 click，新按下即新会话
   dragJustFinished = false;
   selectionState.justFinishedSelection = false;
@@ -2640,12 +2645,12 @@ const onCanvasMouseDown = (e: MouseEvent) => {
   startPan(e);
 };
 
-const startSelection = (e: MouseEvent) => {
-  const target = e.target as HTMLElement;
+const startSelection = (e: MouseEvent, allowBlockTarget = false, targetOverride?: HTMLElement) => {
+  const target = targetOverride ?? (e.target as HTMLElement);
   if (e.button !== 0) return;
   if (isAnnotationMode.value) return;
   if (
-    target.closest('.drag-wrapper') ||
+    (!allowBlockTarget && target.closest('.drag-wrapper')) ||
     target.closest('.drag-handle') ||
     target.closest('.toolbar')
   )
@@ -2692,6 +2697,295 @@ const onCanvasMousemove = (e: MouseEvent) => {
   updateAddPreview(e);
 };
 
+const TOUCH_LONG_PRESS_MS = 450;
+const TOUCH_MOVE_THRESHOLD = 8;
+// 富文本长按时允许更大的手指漂移，避免选字前误进入画布平移
+const TOUCH_TEXT_SELECTION_MOVE_THRESHOLD = 16;
+type TouchGestureMode = 'pending' | 'pan' | 'block-selection' | 'text-selection';
+type TouchPoint = { x: number; y: number };
+type CanvasTouchGesture = TouchPoint & {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  target: HTMLElement;
+  mode: TouchGestureMode;
+  richTextSelection?: { blockUuid: string };
+};
+
+const touchPoints = new Map<number, TouchPoint>();
+let touchGesture: CanvasTouchGesture | null = null;
+let touchLongPressTimer = 0;
+let ignoreTouchMouseUntil = 0;
+
+const clearTouchLongPress = () => {
+  if (!touchLongPressTimer) return;
+  clearTimeout(touchLongPressTimer);
+  touchLongPressTimer = 0;
+};
+
+const beginRichTextTouchSelection = (gesture: CanvasTouchGesture) => {
+  const blockUuid = gesture.target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid;
+  if (!blockUuid) return;
+  const didSelectWord = componentRefs.value[blockUuid]?.beginTouchTextSelection?.(
+    gesture.startX,
+    gesture.startY,
+  );
+  if (didSelectWord) gesture.richTextSelection = { blockUuid };
+};
+
+const extendRichTextTouchSelection = (gesture: CanvasTouchGesture, point: TouchPoint) => {
+  const blockUuid = gesture.richTextSelection?.blockUuid;
+  if (!blockUuid) return;
+  componentRefs.value[blockUuid]?.extendTouchTextSelection?.(point.x, point.y);
+};
+
+const tapRichTextTouch = (gesture: CanvasTouchGesture, point: TouchPoint) => {
+  const blockUuid = gesture.target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid;
+  if (!blockUuid) return;
+  componentRefs.value[blockUuid]?.tapTouchTextSelection?.(point.x, point.y);
+};
+
+const endRichTextTouchSelection = (
+  gesture: CanvasTouchGesture,
+  point: TouchPoint,
+  showToolbar = true,
+) => {
+  const blockUuid = gesture.richTextSelection?.blockUuid;
+  if (!blockUuid) return;
+  componentRefs.value[blockUuid]?.endTouchTextSelection?.(point.x, point.y, showToolbar);
+  gesture.richTextSelection = undefined;
+};
+
+const touchCenter = (): TouchPoint => {
+  const points = [...touchPoints.values()];
+  return points.reduce(
+    (center, point) => ({
+      x: center.x + point.x / points.length,
+      y: center.y + point.y / points.length,
+    }),
+    { x: 0, y: 0 },
+  );
+};
+
+const startTouchPan = ({ x, y }: TouchPoint) => {
+  if (panRafId) {
+    cancelAnimationFrame(panRafId);
+    applyPan();
+  }
+  panSession.active = true;
+  panSession.startClientX = x;
+  panSession.startClientY = y;
+  panSession.startPanX = pan.x;
+  panSession.startPanY = pan.y;
+  isPanning.value = true;
+};
+
+const updateTouchPan = ({ x, y }: TouchPoint) => {
+  if (!panSession.active) return;
+  panTargetX = panSession.startPanX + x - panSession.startClientX;
+  panTargetY = panSession.startPanY + y - panSession.startClientY;
+  if (!panRafId) panRafId = requestAnimationFrame(applyPan);
+};
+
+const dispatchTouchMouseEvent = (
+  target: HTMLElement,
+  type: 'mousedown' | 'mousemove' | 'mouseup',
+  { x, y }: TouchPoint,
+) => {
+  target.dispatchEvent(
+    new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      button: 0,
+      buttons: type === 'mouseup' ? 0 : 1,
+    }),
+  );
+};
+
+const beginTouchLongPress = (gesture: CanvasTouchGesture) => {
+  touchLongPressTimer = 0;
+  if (touchGesture !== gesture || touchPoints.size !== 1) return;
+  const editor = gesture.target.closest<HTMLElement>('.editor-mount.ProseMirror');
+  if (editor) {
+    gesture.mode = 'text-selection';
+    // 选区更新可能替换行内 DOM，捕获到稳定的编辑器根节点避免拖动断流。
+    editor.setPointerCapture(gesture.pointerId);
+    beginRichTextTouchSelection(gesture);
+    return;
+  }
+  if (gesture.target.closest('.edit-layer')) {
+    gesture.mode = 'text-selection';
+    dispatchTouchMouseEvent(gesture.target, 'mousedown', gesture);
+    return;
+  }
+  gesture.mode = 'block-selection';
+  startSelection(
+    new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      clientX: gesture.startX,
+      clientY: gesture.startY,
+      button: 0,
+    }),
+    true,
+    gesture.target,
+  );
+};
+
+const startMultiTouchPan = () => {
+  clearTouchLongPress();
+  if (touchGesture?.mode === 'text-selection') {
+    endRichTextTouchSelection(touchGesture, touchGesture, false);
+  }
+  if (touchGesture?.mode === 'block-selection') finishSelection();
+  touchGesture = null;
+  startTouchPan(touchCenter());
+};
+
+const onCanvasTouchPointerDown = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch') return;
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (!target || target.closest('.add-block-picker, .format-mode-picker, .format-detail-picker'))
+    return;
+  if (target.closest('.canvas-container') !== canvasContainerRef.value) return;
+  if (
+    isAnnotationMode.value ||
+    target.closest(
+      '.block-handle-popup, .drag-handle, .handle, .toolbar, .text-selection-toolbar, .text-selection-color-picker, .text-selection-handle, .side-settings, a, [data-node-view-root], button, input, select',
+    )
+  )
+    return;
+  const editor = target.closest<HTMLElement>('.editor-mount.ProseMirror');
+  if (editor) event.preventDefault();
+  touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  ignoreTouchMouseUntil = performance.now() + TOUCH_LONG_PRESS_MS * 2;
+  if (touchPoints.size > 1) {
+    startMultiTouchPan();
+    return;
+  }
+  const gesture: CanvasTouchGesture = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    startX: event.clientX,
+    startY: event.clientY,
+    target,
+    mode: 'pending',
+  };
+  touchGesture = gesture;
+  touchLongPressTimer = window.setTimeout(() => beginTouchLongPress(gesture), TOUCH_LONG_PRESS_MS);
+};
+
+const updateSingleTouchGesture = (
+  event: PointerEvent,
+  gesture: CanvasTouchGesture,
+  point: TouchPoint,
+) => {
+  gesture.x = point.x;
+  gesture.y = point.y;
+  const distance = Math.hypot(point.x - gesture.startX, point.y - gesture.startY);
+  const moveThreshold = gesture.target.closest('.editor-mount.ProseMirror')
+    ? TOUCH_TEXT_SELECTION_MOVE_THRESHOLD
+    : TOUCH_MOVE_THRESHOLD;
+  if (gesture.mode === 'pending' && distance > moveThreshold) {
+    clearTouchLongPress();
+    gesture.mode = 'pan';
+    startTouchPan({ x: gesture.startX, y: gesture.startY });
+  }
+  if (gesture.mode === 'pan') {
+    event.preventDefault();
+    updateTouchPan(point);
+  } else if (gesture.mode === 'block-selection') {
+    event.preventDefault();
+    updateSelectionAt(point.x, point.y);
+  } else if (gesture.mode === 'text-selection') {
+    event.preventDefault();
+    extendRichTextTouchSelection(gesture, point);
+  }
+};
+
+const onCanvasTouchPointerMove = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch' || !touchPoints.has(event.pointerId)) return;
+  const point = { x: event.clientX, y: event.clientY };
+  touchPoints.set(event.pointerId, point);
+  if (touchPoints.size > 1) {
+    event.preventDefault();
+    updateTouchPan(touchCenter());
+    return;
+  }
+  const gesture = touchGesture;
+  if (gesture?.pointerId === event.pointerId) updateSingleTouchGesture(event, gesture, point);
+};
+
+const finishTouchBlockSelection = (gesture: CanvasTouchGesture) => {
+  const selectedUuid = gesture.target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid;
+  const hasSelectionBox = !!selectionBox.value;
+  finishSelection();
+  if (selectedUuid && !hasSelectionBox) state.selectedIds = new Set([selectedUuid]);
+};
+
+const finishSingleTouchGesture = (gesture: CanvasTouchGesture, point: TouchPoint) => {
+  gesture.x = point.x;
+  gesture.y = point.y;
+  if (gesture.mode === 'pan') updateTouchPan(point);
+  if (gesture.mode === 'block-selection') updateSelectionAt(point.x, point.y);
+  clearTouchLongPress();
+  if (gesture.mode === 'text-selection') {
+    endRichTextTouchSelection(gesture, point);
+  } else if (gesture.mode === 'pending' && gesture.target.closest('.editor-mount.ProseMirror')) {
+    tapRichTextTouch(gesture, point);
+  }
+  if (gesture.mode === 'block-selection') finishTouchBlockSelection(gesture);
+  touchGesture = null;
+};
+
+const continueTouchPan = (event: PointerEvent) => {
+  if (touchPoints.size > 1) {
+    startTouchPan(touchCenter());
+  } else if (touchPoints.size === 1 && panSession.active) {
+    const remaining = touchPoints.entries().next().value;
+    if (!remaining) return;
+    const [pointerId, point] = remaining;
+    touchGesture = {
+      ...point,
+      startX: point.x,
+      startY: point.y,
+      pointerId,
+      target: event.target as HTMLElement,
+      mode: 'pan',
+    };
+    startTouchPan(point);
+  } else if (touchPoints.size === 0 && panSession.active) {
+    if (panRafId) applyPan();
+    stopPan();
+  }
+};
+
+const onCanvasTouchPointerUp = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch' || !touchPoints.has(event.pointerId)) return;
+  const point = { x: event.clientX, y: event.clientY };
+  touchPoints.set(event.pointerId, point);
+  touchPoints.delete(event.pointerId);
+  if (touchGesture?.pointerId === event.pointerId) finishSingleTouchGesture(touchGesture, point);
+  continueTouchPan(event);
+};
+
+const abortTouchGestures = () => {
+  clearTouchLongPress();
+  if (touchGesture?.mode === 'text-selection') {
+    endRichTextTouchSelection(touchGesture, touchGesture, false);
+  }
+  if (touchGesture?.mode === 'block-selection') finishSelection();
+  touchGesture = null;
+  touchPoints.clear();
+  // 手势被取消后残留的鼠标事件屏蔽会让下一次真实点击失效
+  ignoreTouchMouseUntil = 0;
+  if (panSession.active) stopPan();
+};
+
 // 预览跟随鼠标：落位解析每帧 O(N)，所以节流到 ~30fps；拖拽/框选会话激活时清空
 const addPreviewKey = ref<CanvasItem['component'] | null>(null);
 const addPreviewPos = ref<{ x: number; y: number } | null>(null);
@@ -2709,6 +3003,7 @@ const applyAddPreview = () => {
   previewRafId = 0;
   if (
     !isEditMode.value ||
+    isMobileLayout.value ||
     state.selectedIds.size > 0 ||
     !addPreviewKey.value ||
     selectionState.active ||
@@ -2726,6 +3021,7 @@ const applyAddPreview = () => {
 const updateAddPreview = (e: MouseEvent) => {
   if (
     !isEditMode.value ||
+    isMobileLayout.value ||
     state.selectedIds.size > 0 ||
     !addPreviewKey.value ||
     selectionState.active ||
@@ -3944,6 +4240,7 @@ const deleteSelected = () => {
 
 // mouseup 丢失会让会话残留、守卫永久禁用，所以失焦/指针取消时统一重置
 const abortSessions = () => {
+  abortTouchGestures();
   if (customDrag.active) onCustomDragUp();
   if (selectionState.active) finishSelection();
   if (panSession.active) stopPan();
@@ -3958,6 +4255,9 @@ onMounted(() => {
   canvasContainerRef.value?.addEventListener('mousedown', handleCanvasMouseDownCapture, true);
   window.addEventListener('mousedown', onGlobalMouseDownCapture, true);
   window.addEventListener('mousedown', trackLeftButtonDown, true);
+  window.addEventListener('pointerdown', onCanvasTouchPointerDown, true);
+  window.addEventListener('pointermove', onCanvasTouchPointerMove, true);
+  window.addEventListener('pointerup', onCanvasTouchPointerUp, true);
   window.addEventListener('mouseup', trackLeftButtonUp, true);
   window.addEventListener('mouseup', onRightClickTextSelectionMouseUp, true);
   window.addEventListener('resize', onResize);
@@ -3978,12 +4278,16 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  abortTouchGestures();
   cancelPreviewFrame();
   if (geometryRafId) cancelAnimationFrame(geometryRafId);
   if (virtualRafId) cancelAnimationFrame(virtualRafId);
   canvasContainerRef.value?.removeEventListener('mousedown', handleCanvasMouseDownCapture, true);
   window.removeEventListener('mousedown', onGlobalMouseDownCapture, true);
   window.removeEventListener('mousedown', trackLeftButtonDown, true);
+  window.removeEventListener('pointerdown', onCanvasTouchPointerDown, true);
+  window.removeEventListener('pointermove', onCanvasTouchPointerMove, true);
+  window.removeEventListener('pointerup', onCanvasTouchPointerUp, true);
   window.removeEventListener('mouseup', trackLeftButtonUp, true);
   window.removeEventListener('mouseup', onRightClickTextSelectionMouseUp, true);
   window.removeEventListener('resize', onResize);
@@ -4046,6 +4350,7 @@ defineExpose({
   /* flex item 默认 min-height:auto 会被内容撑高、溢出 v-main，所以允许收缩 */
   min-height: 0;
   position: relative;
+  touch-action: none;
   /* overflow:hidden 仍是滚动容器、会被 scrollIntoView 改写 scrollLeft/Top，所以用 clip；旧引擎回退 hidden */
   overflow: hidden;
   overflow: clip;

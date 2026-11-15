@@ -7,6 +7,11 @@
       rounded="lg"
       border
       :style="{ '--mode-wheel-width': `${wheelWidth}px` }"
+      @pointerdown="onTouchPointerDown"
+      @pointermove="onTouchPointerMove"
+      @pointerup="onTouchPointerEnd"
+      @pointercancel="onTouchPointerEnd"
+      @lostpointercapture="onTouchPointerEnd"
     >
       <TransitionGroup
         name="mode-roll"
@@ -33,7 +38,7 @@
       </TransitionGroup>
     </v-sheet>
   </Transition>
-  <div class="mode-wheel-measurer" aria-hidden="true">
+  <div ref="wheelMeasurer" class="mode-wheel-measurer" aria-hidden="true">
     <span
       v-for="option in options"
       :key="option.label"
@@ -72,11 +77,18 @@ const WHEEL_PADDING_LEFT = 4;
 const WHEEL_PADDING_RIGHT = 7;
 const WHEEL_BORDER_WIDTH = 2;
 const WHEEL_WIDTH_SLACK = 0;
+const TOUCH_STEP_SIZE = 32;
 
 const rollDirection = ref<1 | -1>(1);
+const wheelMeasurer = ref<HTMLElement | null>(null);
 const measureLabels = ref<HTMLElement[]>([]);
 const measuredLabelWidths = ref<number[]>([]);
 let lastWheelAt = 0;
+let touchPointerId: number | null = null;
+let touchModelValue: number | null = null;
+let touchCaptureElement: HTMLElement | null = null;
+let touchLastY = 0;
+let touchOffsetY = 0;
 
 // 弹窗固定三行：上一项 / 当前项 / 下一项，循环取模
 const wheelRows = computed(() =>
@@ -128,14 +140,84 @@ const onWheel = (event: WheelEvent) => {
   );
 };
 
+const onTouchPointerDown = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch' || touchPointerId !== null) return;
+  const wheel = event.currentTarget;
+  if (!(wheel instanceof HTMLElement)) return;
+  touchPointerId = event.pointerId;
+  touchModelValue = props.modelValue;
+  touchCaptureElement = wheel;
+  touchLastY = event.clientY;
+  touchOffsetY = 0;
+  wheel.setPointerCapture(event.pointerId);
+  event.preventDefault();
+};
+
+const onTouchPointerMove = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch' || event.pointerId !== touchPointerId) return;
+  event.preventDefault();
+  touchOffsetY += touchLastY - event.clientY;
+  touchLastY = event.clientY;
+  const steps = Math.trunc(touchOffsetY / TOUCH_STEP_SIZE);
+  if (!steps) return;
+  touchOffsetY -= steps * TOUCH_STEP_SIZE;
+  rollDirection.value = steps > 0 ? 1 : -1;
+  touchModelValue = wrapWheelIndex(
+    (touchModelValue ?? props.modelValue) + steps,
+    props.options.length,
+  );
+  emit('update:modelValue', touchModelValue);
+};
+
+const clearTouchPointer = () => {
+  const pointerId = touchPointerId;
+  const wheel = touchCaptureElement;
+  touchPointerId = null;
+  touchModelValue = null;
+  touchCaptureElement = null;
+  touchOffsetY = 0;
+  if (pointerId !== null && wheel?.hasPointerCapture(pointerId)) {
+    wheel.releasePointerCapture(pointerId);
+  }
+};
+
+const onTouchPointerEnd = (event: PointerEvent) => {
+  if (event.pointerId !== touchPointerId) return;
+  clearTouchPointer();
+};
+
+const captureCollapsedPickerTouch = (event: PointerEvent) => {
+  if (props.expanded || event.pointerType !== 'touch') return;
+  const target = event.target instanceof Element ? event.target : null;
+  const picker = target?.closest<HTMLElement>('.add-block-picker');
+  if (
+    !target?.closest('.add-block-anchor') ||
+    !picker ||
+    wheelMeasurer.value?.closest('.add-block-picker') !== picker
+  )
+    return;
+  // 展开会卸载锚点图标，因此把触点捕获到稳定的选择器容器。
+  picker.setPointerCapture(event.pointerId);
+};
+
+watch(
+  () => props.expanded,
+  (expanded) => {
+    if (!expanded) clearTouchPointer();
+  },
+);
+
 onMounted(() => {
   void measureOptionLabels();
   void document.fonts.ready.then(measureOptionLabels);
+  window.addEventListener('pointerdown', captureCollapsedPickerTouch, true);
   // 捕获阶段：内容与滚动条的 wheel 会 stopPropagation，必须抢在它们前面
   window.addEventListener('wheel', onWheel, { passive: false, capture: true });
 });
 
 onUnmounted(() => {
+  clearTouchPointer();
+  window.removeEventListener('pointerdown', captureCollapsedPickerTouch, true);
   window.removeEventListener('wheel', onWheel, true);
 });
 </script>
@@ -146,6 +228,8 @@ onUnmounted(() => {
   position: absolute;
   top: 50%;
   right: 0;
+  /* 透明锚点与轮盘右侧重叠，轮盘必须在其上层才能接收触摸 */
+  z-index: 2;
   width: var(--mode-wheel-width);
   height: 116px;
   padding: 4px 0;
@@ -153,6 +237,7 @@ onUnmounted(() => {
   transform: translateY(-50%) translateZ(0);
   transform-origin: right center;
   overflow: hidden;
+  touch-action: none;
   /* 宽高动画只在弹窗内部生效，避免逐帧触发整页布局与重绘 */
   contain: layout paint;
 }
@@ -249,6 +334,11 @@ onUnmounted(() => {
     height 0.18s ease;
   /* 仅在动画期间提示浏览器提前准备布局，结束后随 class 一起移除 */
   will-change: width, height;
+}
+
+/* 收起时由锚点重新显示图标并接管右侧触摸 */
+.mode-wheel-leave-active {
+  z-index: 0;
 }
 
 /* 边框从锚点大小长到弹窗大小，内容随后淡入，避免整块缩放 */
