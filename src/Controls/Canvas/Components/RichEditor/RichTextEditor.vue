@@ -38,7 +38,7 @@
             />
           </div>
           <TextSelectionToolbar
-            :visible="isTextSelectionToolbarVisible"
+            :visible="isTextSelectionToolbarVisible && !pendingApply"
             :position="toolbarPosition"
             :is-below-selection="isToolbarBelowSelection"
             :is-bold-active="isBoldActive"
@@ -735,6 +735,10 @@ const scheduleToolbarHide = () => {
 };
 
 const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent) => {
+  if (pendingApply.value) {
+    hideTextSelectionToolbar();
+    return;
+  }
   if (editorMounted) selectionToolbarState.value = editor.state;
   if (event) {
     toolbarPointer.x = event.clientX;
@@ -1057,6 +1061,7 @@ const openApplyOverlay = async (rect: DOMRect) => {
   const wrapper = wrapperRef.value;
   if (!wrapper) return;
   const anchor = applyAnchorRectOf(rect, wrapper);
+  hideTextSelectionToolbar();
   applyPositionReady.value = false;
   pendingApply.value = true;
   await nextTick();
