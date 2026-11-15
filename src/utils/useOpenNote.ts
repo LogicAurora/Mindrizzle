@@ -3,7 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 import { fileOperations } from '../fileOperations';
-import type { NoteFileLocation } from '../fileOperations/types';
+import { noteFileContextOf, type NoteFileLocation } from '../fileOperations/types';
 import { loadEditorComponent, storePendingEditorBody, type EditorBodyResult } from './editorRoute';
 import {
   isDebugLoadingEnabled,
@@ -17,7 +17,8 @@ export function useOpenNote() {
   const noteLoadController = inject(noteLoadControllerKey)!;
 
   return async function openNote(note: NoteFileLocation): Promise<void> {
-    noteLoadController.setName(note.fileName);
+    const noteContext = noteFileContextOf(note);
+    noteLoadController.setName(noteContext.fileName);
     let unlisten: (() => void) | undefined;
     try {
       if (isTauri()) {
@@ -32,20 +33,20 @@ export function useOpenNote() {
           (body) => ({ content: body.content ?? '' }),
           (error: unknown) => ({ error }),
         );
-      storePendingEditorBody(note, bodyPromise);
+      storePendingEditorBody(noteContext, bodyPromise);
       await Promise.all([loadEditorComponent(), bodyPromise]);
       const didNavigate = await startEditorTransition(
         {
           name: 'editor',
-          params: { fileName: note.fileName },
+          params: { fileName: noteContext.fileName },
           query: {
-            ...(note.dir ? { dir: note.dir } : {}),
-            ...(note.filePath ? { path: note.filePath } : {}),
+            ...(noteContext.dir ? { dir: noteContext.dir } : {}),
+            ...(noteContext.filePath ? { path: noteContext.filePath } : {}),
           },
         },
         () => Promise.resolve(),
       );
-      if (didNavigate) recordRecentNote(note);
+      if (didNavigate) recordRecentNote(noteContext);
     } finally {
       unlisten?.();
     }

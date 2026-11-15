@@ -18,12 +18,9 @@ use tauri_plugin_log::{
 use tokio::fs;
 
 tauri_cmd! {
-    fn fetch_file_list(dir: Option<String>) -> anyhow::Result<Vec<String>> {
+    fn fetch_file_list(request: mdr_file_op::WorkspaceRequest) -> anyhow::Result<Vec<String>> {
         let mut file_list: Vec<String> = Vec::new();
-        let directory = match dir.as_deref() {
-            Some(raw_dir) => mdr_file_op::resolve_workspace_dir(raw_dir)?,
-            None => mdr_file_dir::get_mdr_file_save_dir(),
-        };
+        let directory = mdr_file_op::resolve_workspace_location(&request.workspace)?;
         for entry in std::fs::read_dir(&directory)
             .with_context(|| format!("读取笔记目录：{}", directory.display()))?
         {
@@ -50,8 +47,12 @@ tauri_cmd! {
 }
 
 #[tauri::command]
-async fn is_file_name_valid(file_name: String, dir: Option<String>) -> bool {
-    let Ok(location) = mdr_file_op::resolve_note_archive(&file_name, dir.as_deref(), None) else {
+async fn is_file_name_valid(request: mdr_file_op::IsFileNameAvailableRequest) -> bool {
+    let location = mdr_file_op::NoteFileLocation::Workspace {
+        file_name: request.file_name,
+        workspace: request.workspace,
+    };
+    let Ok(location) = mdr_file_op::resolve_note_archive(&location) else {
         return false;
     };
     !fs::try_exists(location.archive).await.unwrap_or(false)
@@ -173,7 +174,6 @@ pub fn run() {
             mdr_file_op::set_mdr_file_body,
             mdr_file_op::set_mdr_file_meta,
             mdr_file_op::create_mdr_file,
-            mdr_file_op::move_mdrf_file,
             mdr_file_op::move_mdr_file,
             mdr_file_op::delete_mdrf_file,
             mdr_file_op::copy_mdrf_file,

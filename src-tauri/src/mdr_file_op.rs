@@ -3,6 +3,7 @@ use chrono::Local;
 use log::info;
 use quick_xml::de::from_str;
 use quick_xml::se::to_string;
+use serde::Deserialize;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -47,13 +48,113 @@ pub(crate) fn lock_file_write() -> MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-tauri_cmd! {
-    pub fn get_mdr_file_meta(
+#[derive(Clone, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub(crate) enum WorkspaceLocation {
+    Default,
+    Custom { dir: String },
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub(crate) enum NoteFileLocation {
+    Workspace {
         file_name: String,
-        dir: Option<String>,
-        file_path: Option<String>
-    ) -> anyhow::Result<MindrizzleFileMetaView> {
-        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+        workspace: WorkspaceLocation,
+    },
+    ExternalFile {
+        file_name: String,
+        file_path: String,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceRequest {
+    pub workspace: WorkspaceLocation,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct IsFileNameAvailableRequest {
+    pub file_name: String,
+    pub workspace: WorkspaceLocation,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GetNoteMetaRequest {
+    location: NoteFileLocation,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GetNoteBodyRequest {
+    location: NoteFileLocation,
+    debug_progress: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SetNoteBodyRequest {
+    location: NoteFileLocation,
+    content: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SetNoteMetaRequest {
+    location: NoteFileLocation,
+    meta: MindrizzleFileMeta,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CreateNoteRequest {
+    file_name: String,
+    workspace: WorkspaceLocation,
+    meta: MindrizzleFileMeta,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MoveNoteRequest {
+    location: NoteFileLocation,
+    target: WorkspaceLocation,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DeleteNoteRequest {
+    location: NoteFileLocation,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CopyNoteRequest {
+    location: NoteFileLocation,
+    new_file_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RenameNoteRequest {
+    location: NoteFileLocation,
+    new_file_name: String,
+    meta: Option<MindrizzleFileMeta>,
+}
+
+tauri_cmd! {
+    pub fn get_mdr_file_meta(request: GetNoteMetaRequest) -> anyhow::Result<MindrizzleFileMetaView> {
+        let location = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
         let path = location.archive;
         if !path.is_file() {
@@ -68,19 +169,16 @@ tauri_cmd! {
         Ok(MindrizzleFileMetaView { meta, updated_at })
     }
 
-    pub fn set_mdr_file_body(
-        file_name: String,
-        content: String,
-        dir: Option<String>,
-        file_path: Option<String>
-    ) -> anyhow::Result<()> {
+    pub fn set_mdr_file_body(request: SetNoteBodyRequest) -> anyhow::Result<()> {
         let _guard = lock_file_write();
-        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+        let location = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
         require_archive_file(&location)?;
         let compressed = is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?;
         let (cache, _) = open_note_cache(&location.archive, compressed)?;
-        let body_xml = serialize_mdr_file_body_xml(MindrizzleFileBody { content })
+        let body_xml = serialize_mdr_file_body_xml(MindrizzleFileBody {
+            content: request.content,
+        })
             .context("编码笔记正文")?;
         cache.write_file("body.json", body_xml.as_bytes()).context("写入笔记正文缓存")?;
         // body 已更新，所以重新打包同步到 .mdrf
@@ -89,35 +187,29 @@ tauri_cmd! {
         Ok(())
     }
 
-    pub fn set_mdr_file_meta(
-        file_name: String,
-        mdr_file_info: MindrizzleFileMeta,
-        dir: Option<String>,
-        file_path: Option<String>
-    ) -> anyhow::Result<()> {
+    pub fn set_mdr_file_meta(request: SetNoteMetaRequest) -> anyhow::Result<()> {
         let _guard = lock_file_write();
-        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+        let location = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
         require_archive_file(&location)?;
         let compressed = is_mdrf_compressed(&location.archive).context("检测笔记压缩格式")?;
         let (cache, _) = open_note_cache(&location.archive, compressed)?;
-        let meta_xml = serialize_mdr_file_meta_xml(mdr_file_info).context("编码笔记元信息")?;
+        let meta_xml = serialize_mdr_file_meta_xml(request.meta).context("编码笔记元信息")?;
         cache.write_file("meta.json", meta_xml.as_bytes()).context("写入笔记元信息缓存")?;
         flush_note_cache(&location.archive, &cache, compressed).context("保存笔记文件")?;
         info!("保存笔记元信息成功：{}", location.note_name);
         Ok(())
     }
 
-    pub fn create_mdr_file(
-        mdr_file_info: MindrizzleFileMeta,
-        file_name: String,
-        dir: Option<String>
-    ) -> anyhow::Result<String> {
+    pub fn create_mdr_file(request: CreateNoteRequest) -> anyhow::Result<String> {
         let _guard = lock_file_write();
-        let location = resolve_note_archive(&file_name, dir.as_deref(), None)
+        let location = resolve_note_archive(&NoteFileLocation::Workspace {
+            file_name: request.file_name,
+            workspace: request.workspace,
+        })
             .context("校验笔记文件位置")?;
         let cache = MindrizzleFileCache::new().context("创建笔记缓存")?;
-        let meta_xml = serialize_mdr_file_meta_xml(mdr_file_info)
+        let meta_xml = serialize_mdr_file_meta_xml(request.meta)
             .context("编码笔记元信息")?;
         let body_xml = serialize_mdr_file_body_xml(MindrizzleFileBody {
             content: String::new(),
@@ -136,33 +228,11 @@ tauri_cmd! {
         Ok(location.note_name)
     }
 
-    pub fn move_mdrf_file(
-        file_path: String,
-        dir: Option<String>
-    ) -> anyhow::Result<String> {
+    pub fn move_mdr_file(request: MoveNoteRequest) -> anyhow::Result<String> {
         let _guard = lock_file_write();
-        let source = resolve_note_archive("", None, Some(file_path.as_str()))
-            .context("校验外部笔记文件")?;
-        let target_dir = resolve_target_workspace_dir(dir.as_deref())?;
-        let target = target_dir.join(format!("{}.mdrf", source.note_name));
-        if target.exists() {
-            return Err(anyhow::anyhow!("目标工作区已有同名笔记"));
-        }
-        move_archive_file(&source.archive, &target)?;
-        invalidate_named(&cache_key_of(&source.archive));
-        info!("笔记移入工作区：{} -> {}", source.note_name, target.display());
-        Ok(source.note_name)
-    }
-
-    pub fn move_mdr_file(
-        file_name: String,
-        dir: Option<String>,
-        target_dir: Option<String>
-    ) -> anyhow::Result<String> {
-        let _guard = lock_file_write();
-        let source = resolve_note_archive(&file_name, dir.as_deref(), None)
+        let source = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
-        let target_dir = resolve_target_workspace_dir(target_dir.as_deref())?;
+        let target_dir = resolve_workspace_location(&request.target)?;
         let target = target_dir.join(format!("{}.mdrf", source.note_name));
         // 目标就是当前目录，按成功处理，前端不必区分空移动
         if target == source.archive {
@@ -179,13 +249,9 @@ tauri_cmd! {
         Ok(source.note_name)
     }
 
-    pub fn delete_mdrf_file(
-        file_name: String,
-        dir: Option<String>,
-        file_path: Option<String>
-    ) -> anyhow::Result<()> {
+    pub fn delete_mdrf_file(request: DeleteNoteRequest) -> anyhow::Result<()> {
         let _guard = lock_file_write();
-        let location = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+        let location = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
         require_archive_file(&location)?;
         fs::remove_file(&location.archive)
@@ -196,17 +262,12 @@ tauri_cmd! {
         Ok(())
     }
 
-    pub fn copy_mdrf_file(
-        file_name: String,
-        new_file_name: String,
-        dir: Option<String>,
-        file_path: Option<String>
-    ) -> anyhow::Result<String> {
+    pub fn copy_mdrf_file(request: CopyNoteRequest) -> anyhow::Result<String> {
         let _guard = lock_file_write();
-        let source = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+        let source = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
         require_archive_file(&source)?;
-        let (target, note_name) = sibling_archive(&source, &new_file_name)?;
+        let (target, note_name) = sibling_archive(&source, &request.new_file_name)?;
         if target.exists() {
             return Err(anyhow::anyhow!("同名文件已存在"));
         }
@@ -215,18 +276,12 @@ tauri_cmd! {
         Ok(note_name)
     }
 
-    pub fn rename_mdrf_file(
-        file_name: String,
-        new_file_name: String,
-        mdr_file_info: Option<MindrizzleFileMeta>,
-        dir: Option<String>,
-        file_path: Option<String>
-    ) -> anyhow::Result<String> {
+    pub fn rename_mdrf_file(request: RenameNoteRequest) -> anyhow::Result<String> {
         let _guard = lock_file_write();
-        let source = resolve_note_archive(&file_name, dir.as_deref(), file_path.as_deref())
+        let source = resolve_note_archive(&request.location)
             .context("校验笔记文件位置")?;
         require_archive_file(&source)?;
-        let (target, note_name) = sibling_archive(&source, &new_file_name)?;
+        let (target, note_name) = sibling_archive(&source, &request.new_file_name)?;
         if target == source.archive {
             return Ok(note_name);
         }
@@ -237,7 +292,7 @@ tauri_cmd! {
         move_note_cache(&source.archive, &target)?;
         invalidate_named(&cache_key_of(&source.archive));
         // 标题要和文件名一起改时才由前端传入，避免纯改名也整包重写
-        if let Some(meta) = mdr_file_info {
+        if let Some(meta) = request.meta {
             rewrite_note_meta(&target, meta).context("同步笔记标题")?;
         }
         info!("重命名笔记成功：{} -> {}", source.note_name, note_name);
@@ -248,18 +303,13 @@ tauri_cmd! {
 #[tauri::command]
 pub async fn get_mdr_file_body(
     window: Window,
-    file_name: String,
-    dir: Option<String>,
-    file_path: Option<String>,
-    debug_progress: Option<bool>,
+    request: GetNoteBodyRequest,
 ) -> Result<MindrizzleFileBody, tauri::ipc::InvokeError> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         read_mdr_file_body(
             &window,
-            &file_name,
-            dir.as_deref(),
-            file_path.as_deref(),
-            debug_progress.unwrap_or(false),
+            &request.location,
+            request.debug_progress.unwrap_or(false),
         )
     })
     .await
@@ -278,15 +328,13 @@ pub async fn get_mdr_file_body(
 
 fn read_mdr_file_body(
     window: &Window,
-    file_name: &str,
-    dir: Option<&str>,
-    file_path: Option<&str>,
+    note_location: &NoteFileLocation,
     is_debug_progress: bool,
 ) -> anyhow::Result<MindrizzleFileBody> {
     // 组件数据写入会失效同名暂存区，读取期间必须挡住它，否则解包到一半目录被删
     let _guard = lock_file_write();
     emit_file_load_progress(window, PROGRESS_VALIDATE, is_debug_progress);
-    let location = resolve_note_archive(file_name, dir, file_path).context("校验笔记文件位置")?;
+    let location = resolve_note_archive(note_location).context("校验笔记文件位置")?;
     let path = location.archive;
     if !path.is_file() {
         return Err(anyhow::anyhow!("文件不存在或者是个目录"));
@@ -346,22 +394,22 @@ fn cache_key_of(archive: &Path) -> String {
 }
 
 pub(crate) fn resolve_note_archive(
-    file_name: &str,
-    dir: Option<&str>,
-    file_path: Option<&str>,
+    location: &NoteFileLocation,
 ) -> anyhow::Result<NoteArchiveLocation> {
-    if let Some(raw_path) = file_path {
-        return resolve_external_archive(raw_path);
+    match location {
+        NoteFileLocation::Workspace {
+            file_name,
+            workspace,
+        } => {
+            let note_name = resolve_mdrf_file_name(file_name)?;
+            let directory = resolve_workspace_location(workspace)?;
+            Ok(NoteArchiveLocation {
+                archive: directory.join(format!("{note_name}.mdrf")),
+                note_name,
+            })
+        }
+        NoteFileLocation::ExternalFile { file_path, .. } => resolve_external_archive(file_path),
     }
-    let note_name = resolve_mdrf_file_name(file_name)?;
-    let directory = match dir {
-        Some(raw_dir) => resolve_workspace_dir(raw_dir)?,
-        None => mdr_file_dir::get_mdr_file_save_dir(),
-    };
-    Ok(NoteArchiveLocation {
-        archive: directory.join(format!("{note_name}.mdrf")),
-        note_name,
-    })
 }
 
 // 外部路径来自文件对话框，仍须挡掉相对路径、目录与非 .mdrf 文件，避免命令被当成任意文件读写
@@ -401,6 +449,13 @@ pub(crate) fn resolve_workspace_dir(raw_dir: &str) -> anyhow::Result<PathBuf> {
     Ok(directory)
 }
 
+pub(crate) fn resolve_workspace_location(workspace: &WorkspaceLocation) -> anyhow::Result<PathBuf> {
+    match workspace {
+        WorkspaceLocation::Default => Ok(mdr_file_dir::get_mdr_file_save_dir()),
+        WorkspaceLocation::Custom { dir } => resolve_workspace_dir(dir),
+    }
+}
+
 /// IPC 入口的 file_name 会拼进磁盘路径，按前端同名规则校验，防路径穿越与任意文件覆盖
 pub(crate) fn resolve_mdrf_file_name(file_name: &str) -> anyhow::Result<String> {
     let resolved = if file_name.is_empty() {
@@ -432,14 +487,6 @@ fn require_archive_file(location: &NoteArchiveLocation) -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("文件不存在或者是个目录"));
     }
     Ok(())
-}
-
-fn resolve_target_workspace_dir(raw_dir: Option<&str>) -> anyhow::Result<PathBuf> {
-    let directory = match raw_dir {
-        Some(raw_dir) => resolve_workspace_dir(raw_dir)?,
-        None => mdr_file_dir::get_mdr_file_save_dir(),
-    };
-    fs::canonicalize(&directory).context("定位目标工作区")
 }
 
 // 跨分区时 rename 会失败，只能退回复制后删原文件
@@ -602,4 +649,36 @@ fn deserialize_mdr_file_body_xml(xml: &str) -> Result<MindrizzleFileBody, quick_
 
 fn serialize_mdr_file_body_xml(mdr_file: MindrizzleFileBody) -> Result<String, quick_xml::SeError> {
     to_string(&mdr_file)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NoteFileLocation, WorkspaceLocation};
+
+    #[test]
+    fn deserializes_workspace_variants() {
+        let default: WorkspaceLocation = serde_json::from_str(r#"{"kind":"default"}"#).unwrap();
+        let custom: WorkspaceLocation =
+            serde_json::from_str(r#"{"kind":"custom","dir":"/notes"}"#).unwrap();
+        assert!(matches!(default, WorkspaceLocation::Default));
+        assert!(matches!(custom, WorkspaceLocation::Custom { dir } if dir == "/notes"));
+    }
+
+    #[test]
+    fn deserializes_note_location_variants() {
+        let workspace: NoteFileLocation = serde_json::from_str(
+            r#"{"kind":"workspace","fileName":"note","workspace":{"kind":"default"}}"#,
+        )
+        .unwrap();
+        let external: NoteFileLocation = serde_json::from_str(
+            r#"{"kind":"externalFile","fileName":"note","filePath":"/notes/note.mdrf"}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(workspace, NoteFileLocation::Workspace { file_name, .. } if file_name == "note")
+        );
+        assert!(
+            matches!(external, NoteFileLocation::ExternalFile { file_path, .. } if file_path == "/notes/note.mdrf")
+        );
+    }
 }

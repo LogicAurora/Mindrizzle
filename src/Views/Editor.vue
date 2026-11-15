@@ -97,7 +97,7 @@ import {
 import { CANVAS_COMPONENTS } from '../Controls/Canvas/Registry/canvasComponents.ts';
 import { isDeveloperMode } from '../utils/developerMode';
 import { screenToContent } from '../utils/canvasCoords';
-import { fileOperations } from '../fileOperations';
+import { fileOperations, noteFileLocationOf } from '../fileOperations';
 import { getErrorMessage } from '../utils/getErrorMessage.ts';
 import { takePendingEditorBody } from '../utils/editorRoute';
 import { touchNoteSetUpdatedAt } from '../utils/noteSetStore';
@@ -230,6 +230,7 @@ const fileName = Array.isArray(route.params.fileName)
 const dir = typeof route.query.dir === 'string' ? route.query.dir : undefined;
 const filePath = typeof route.query.path === 'string' ? route.query.path : undefined;
 const noteRef = { fileName: String(fileName ?? ''), dir, filePath };
+const noteLocation = noteFileLocationOf(noteRef);
 // 组件数据 store 拿不到路由参数，进编辑页先把笔记位置写进上下文
 setCurrentNote(noteRef);
 const pendingEditorBody = takePendingEditorBody(noteRef);
@@ -248,7 +249,7 @@ const save = async () => {
   saveFailed.value = false;
   try {
     const content = MdrCRef.value?.save() ?? '';
-    await fileOperations.setNoteBody(noteRef, content);
+    await fileOperations.setNoteBody(noteLocation, content);
     lastSavedContent = content;
     touchNoteSetUpdatedAt(noteRef.fileName, dir);
     saved.value = true;
@@ -291,7 +292,7 @@ onBeforeRouteUpdate(confirmNavigation);
 const load = async () => {
   const raw = pendingEditorBody
     ? await pendingEditorBody
-    : await fileOperations.getNoteBody(noteRef, isDebugLoadingEnabled.value);
+    : await fileOperations.getNoteBody(noteLocation, isDebugLoadingEnabled.value);
   if ('error' in raw) throw raw.error;
   await MdrCRef.value?.load(raw.content ?? '');
   lastSavedContent = MdrCRef.value?.save() ?? '';

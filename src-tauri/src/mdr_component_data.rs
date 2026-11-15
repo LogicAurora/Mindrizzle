@@ -13,7 +13,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use tar::Archive;
 
-use crate::mdr_file_op;
+use crate::mdr_file_op::{self, NoteFileLocation};
 use crate::mdr_file_tar::is_mdrf_compressed;
 use crate::tauri_cmd;
 
@@ -24,53 +24,38 @@ const COMPONENT_PATH_MAX_LEN: usize = 512;
 const COMPONENT_FILE_MAX_BYTES: usize = 64 * 1024 * 1024;
 const COMPONENT_PATH_FORBIDDEN_CHARS: [char; 8] = ['\\', ':', '*', '?', '"', '<', '>', '|'];
 
-#[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
-pub struct NoteSource {
-    dir: Option<String>,
-    file_path: Option<String>,
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentFileRequest {
-    file_name: String,
+    location: NoteFileLocation,
     uuid: String,
     path: String,
-    #[serde(flatten)]
-    source: NoteSource,
 }
 
 // 列目录不需要具体文件路径，所以单独一个结构，避免前端被迫传空 path
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentScopeRequest {
-    file_name: String,
+    location: NoteFileLocation,
     uuid: String,
-    #[serde(flatten)]
-    source: NoteSource,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentFileWriteRequest {
-    file_name: String,
+    location: NoteFileLocation,
     uuid: String,
     path: String,
     content_base64: String,
-    #[serde(flatten)]
-    source: NoteSource,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentFileExportRequest {
-    file_name: String,
+    location: NoteFileLocation,
     uuid: String,
     path: String,
     target_path: String,
-    #[serde(flatten)]
-    source: NoteSource,
 }
 
 struct ComponentFileTarget {
@@ -116,10 +101,9 @@ tauri_cmd! {
             return Err(anyhow::anyhow!("组件数据内容超过 64 MiB 上限"));
         }
         let target = resolve_target(&ComponentFileRequest {
-            file_name: request.file_name,
+            location: request.location,
             uuid: request.uuid,
             path: request.path,
-            source: request.source,
         })?;
         write_archive_file(&target, &content)?;
         info!("写入组件数据成功");
@@ -141,10 +125,9 @@ tauri_cmd! {
 
     pub fn export_component_data_file(request: ComponentFileExportRequest) -> anyhow::Result<()> {
         let target = resolve_target(&ComponentFileRequest {
-            file_name: request.file_name,
+            location: request.location,
             uuid: request.uuid,
             path: request.path,
-            source: request.source,
         })?;
         let content = read_archive_bytes(&target)?
             .ok_or_else(|| anyhow::anyhow!("组件数据文件不存在"))?;
@@ -161,11 +144,7 @@ tauri_cmd! {
 }
 
 fn resolve_scope(request: &ComponentScopeRequest) -> Result<ComponentFileTarget> {
-    let location = mdr_file_op::resolve_note_archive(
-        &request.file_name,
-        request.source.dir.as_deref(),
-        request.source.file_path.as_deref(),
-    )?;
+    let location = mdr_file_op::resolve_note_archive(&request.location)?;
     if !location.archive.is_file() {
         return Err(anyhow::anyhow!("文件不存在或者是个目录"));
     }
@@ -182,12 +161,23 @@ fn resolve_target(request: &ComponentFileRequest) -> Result<ComponentFileTarget>
     validate_component_uuid(&request.uuid)?;
     let path = normalize_component_path(&request.path)?;
     let mut target = resolve_scope(&ComponentScopeRequest {
-        file_name: request.file_name.clone(),
-        uuid: request.uuid.clone(),
-        source: NoteSource {
-            dir: request.source.dir.clone(),
-            file_path: request.source.file_path.clone(),
+        location: match &request.location {
+            NoteFileLocation::Workspace {
+                file_name,
+                workspace,
+            } => NoteFileLocation::Workspace {
+                file_name: file_name.clone(),
+                workspace: workspace.clone(),
+            },
+            NoteFileLocation::ExternalFile {
+                file_name,
+                file_path,
+            } => NoteFileLocation::ExternalFile {
+                file_name: file_name.clone(),
+                file_path: file_path.clone(),
+            },
         },
+        uuid: request.uuid.clone(),
     })?;
     target.path = path;
     Ok(target)
@@ -349,12 +339,22 @@ fn prune_empty_dirs(mut dir: PathBuf, stop: &Path) {
 #[cfg(test)]
 mod tests {
     use super::{ComponentScopeRequest, normalize_component_path, validate_component_uuid};
+    use crate::mdr_file_op::{NoteFileLocation, WorkspaceLocation};
 
     #[test]
     fn scope_request_does_not_require_path() {
         let request: ComponentScopeRequest =
-            serde_json::from_str(r#"{"fileName":"note","uuid":"block-1"}"#).unwrap();
-        assert_eq!(request.file_name, "note");
+            serde_json::from_str(
+                r#"{"location":{"kind":"workspace","fileName":"note","workspace":{"kind":"default"}},"uuid":"block-1"}"#,
+            )
+            .unwrap();
+        assert!(matches!(
+            request.location,
+            NoteFileLocation::Workspace {
+                file_name,
+                workspace: WorkspaceLocation::Default,
+            } if file_name == "note"
+        ));
         assert_eq!(request.uuid, "block-1");
     }
 

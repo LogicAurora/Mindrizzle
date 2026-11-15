@@ -106,9 +106,9 @@ flowchart TD
 - 默认工作区：只传 `fileName`，后端拼到用户文档目录 `Mindrizzle/`。
 - 自定义工作区：额外传 `dir`（绝对目录），归档为 `dir/<fileName>.mdrf`。
 - 外部文件：传 `filePath`（绝对路径），后端直接读写该归档，保存写回原文件。
-- `fetch_file_list` / `is_file_name_valid` / `create_mdr_file` / `get|set_mdr_file_body` / 组件数据命令均接受同一组定位参数；缓存键改用归档绝对路径，避免不同工作区同名笔记互相覆盖。
+- 文件 IPC 统一收 `request` 结构体；`WorkspaceLocation` 用 `default` / `custom { dir }` 区分工作区，`NoteFileLocation` 用 `workspace { fileName, workspace }` / `externalFile { fileName, filePath }` 区分归档来源，互斥位置不再由多个可空字段表达。缓存键改用归档绝对路径，避免不同工作区同名笔记互相覆盖。
 - 网页端上传的 `.mdrf` 解包后只作为**外部文件副本**存进 IndexedDB（不写文件索引），打开与保存都按副本名读写。
-- 「移动到工作区」入口在便签卡片的更多操作菜单：工作区内的笔记走 `moveNote`（`move_mdr_file`），外部文件走 `moveExternalNote`（`move_mdrf_file`）并同时从外部列表移除；网页端副本由 `moveLocalNoteToWorkspace` 把副本名补进文件索引。
+- 「移动到工作区」入口在便签卡片的更多操作菜单：工作区内的笔记与外部文件共用 `move_mdr_file`，由 `NoteFileLocation` 区分来源；网页端副本由 `moveLocalNoteToWorkspace` 把副本名补进文件索引。
 
 ## 图 8.4 跨画布剪贴板
 
@@ -130,7 +130,7 @@ flowchart TD
 
 - 剪贴板是应用级共享数据（`src/utils/blockClipboard.ts`），跨便签保留历史；内容相同的复制只刷新时间并提到最前。
 - 块只看 `config` / `layout` / `arranged`，不依赖原块实例；粘贴后原块再改不会影响已复制内容。
-- 资产文件按 `source`（fileName + dir/filePath）定位：`ComponentDataStore` 支持显式传入来源笔记，`copyComponentFiles` 从源笔记读、写入当前笔记。
+- 资产文件按 `NoteFileLocation` 定位：`ComponentDataStore` 支持显式传入来源笔记，`copyComponentFiles` 从源笔记读、写入当前笔记。
 
 ## 兼容规则速查
 

@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: MIT
-import { fileOperations, type NoteFileLocation } from '../fileOperations';
+import {
+  fileOperations,
+  noteFileLocationOf,
+  type NoteFileContext,
+  type NoteFileLocation,
+} from '../fileOperations';
 import { getCurrentNote } from './noteContext';
 
 export type NoteLocation = NoteFileLocation;
 
-// 外部文件与自定义工作区靠 dir/filePath 定位，组件数据命令必须带上同一份上下文
-const noteSourceOf = (location?: NoteLocation): { dir?: string; filePath?: string } => {
-  const { dir, filePath } = location ?? getCurrentNote();
-  return { dir, filePath };
+const noteSourceOf = (fileName: string, location?: NoteLocation) => {
+  const source = location ?? noteFileLocationOf(getCurrentNote());
+  return {
+    location: source.kind === 'workspace' ? { ...source, fileName } : source,
+  };
 };
 
 // URL 自带笔记名：块组件拿不到路由参数，且 URL 可能存进 config 后再读回
@@ -107,8 +113,9 @@ export class ComponentDataStore {
     validateComponentPath(location.path);
     const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
     await fileOperations.writeComponentDataFile({
-      ...location,
-      ...noteSourceOf(this.location),
+      ...noteSourceOf(location.fileName, this.location),
+      uuid: location.uuid,
+      path: location.path,
       contentBase64: encodeBase64(bytes),
     });
   }
@@ -117,8 +124,9 @@ export class ComponentDataStore {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
     const encoded = await fileOperations.readComponentDataFile({
-      ...location,
-      ...noteSourceOf(this.location),
+      ...noteSourceOf(location.fileName, this.location),
+      uuid: location.uuid,
+      path: location.path,
     });
     return decodeBase64(encoded);
   }
@@ -132,8 +140,9 @@ export class ComponentDataStore {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
     await fileOperations.exportComponentDataFile({
-      ...location,
-      ...noteSourceOf(this.location),
+      ...noteSourceOf(location.fileName, this.location),
+      uuid: location.uuid,
+      path: location.path,
       targetPath,
     });
   }
@@ -142,8 +151,9 @@ export class ComponentDataStore {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
     await fileOperations.deleteComponentDataFile({
-      ...location,
-      ...noteSourceOf(this.location),
+      ...noteSourceOf(location.fileName, this.location),
+      uuid: location.uuid,
+      path: location.path,
     });
   }
 
@@ -151,8 +161,9 @@ export class ComponentDataStore {
     const location = parseMdrfcdUrl(url);
     validateComponentPath(location.path);
     return fileOperations.componentDataFileExists({
-      ...location,
-      ...noteSourceOf(this.location),
+      ...noteSourceOf(location.fileName, this.location),
+      uuid: location.uuid,
+      path: location.path,
     });
   }
 
@@ -165,9 +176,8 @@ export class ComponentDataStore {
       throw new Error('组件数据范围非法');
     }
     return fileOperations.listComponentDataFiles({
-      fileName: location.fileName,
+      ...noteSourceOf(location.fileName, this.location),
       uuid: location.uuid,
-      ...noteSourceOf(this.location),
     });
   }
 }
@@ -176,10 +186,15 @@ export class ComponentDataStore {
 export async function copyComponentFiles(
   sourceUuid: string,
   targetUuid: string,
-  source?: NoteLocation,
+  source?: NoteLocation | NoteFileContext,
 ): Promise<void> {
   if (!sourceUuid || !targetUuid || sourceUuid === targetUuid) return;
-  const sourceStore = new ComponentDataStore(source?.fileName, source);
+  const sourceLocation = source
+    ? 'kind' in source
+      ? source
+      : noteFileLocationOf(source)
+    : undefined;
+  const sourceStore = new ComponentDataStore(source?.fileName, sourceLocation);
   const targetStore = new ComponentDataStore();
   const files = await sourceStore.listFiles(sourceUuid);
   for (const path of files) {

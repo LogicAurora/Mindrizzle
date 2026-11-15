@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { fileOperations, isValidNoteFileName, NOTE_FILE_NAME_RULE_HINT } from '../fileOperations';
+import {
+  fileOperations,
+  isValidNoteFileName,
+  NOTE_FILE_NAME_RULE_HINT,
+  workspaceLocationOf,
+} from '../fileOperations';
 import { invalidateNoteSetEntries } from '../utils/noteSetStore';
 import { error as LogError } from '@tauri-apps/plugin-log';
 import { recordRecentNote } from '../utils/homeActivity';
@@ -51,7 +56,8 @@ const debouncedCheck = (name: string) => {
       return;
     }
     try {
-      const valid = await fileOperations.isFileNameAvailable(name, props.dir);
+      const workspace = workspaceLocationOf(props.dir);
+      const valid = await fileOperations.isFileNameAvailable(name, workspace);
       fileNameAsyncError.value = valid ? true : '文件名已被占用';
     } catch {
       fileNameAsyncError.value = '校验失败，请重试';
@@ -82,7 +88,7 @@ async function submit() {
         tag: ['新笔记'],
       },
       fileName: fileName.value,
-      dir: props.dir,
+      workspace: workspaceLocationOf(props.dir),
     });
     dialog.value = false;
     invalidateNoteSetEntries();

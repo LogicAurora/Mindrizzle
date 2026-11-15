@@ -267,7 +267,7 @@ interface ComponentScope {
 }
 
 const resolveComponentScope = (request: ComponentDataScope): ComponentScope => {
-  const fileName = resolveFileName(request.fileName);
+  const fileName = resolveFileName(request.location.fileName);
   const uuid = request.uuid;
   if (!COMPONENT_UUID_PATTERN.test(uuid)) throw new Error('组件 UUID 非法');
   return { key: `${COMPONENT_DATA_KEY_PREFIX}${fileName}:${uuid}`, uuid };

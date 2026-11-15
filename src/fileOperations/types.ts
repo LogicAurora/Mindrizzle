@@ -1,8 +1,36 @@
-export interface NoteFileLocation {
+export type WorkspaceLocation = { kind: 'default' } | { kind: 'custom'; dir: string };
+
+export type NoteFileLocation =
+  | { kind: 'workspace'; fileName: string; workspace: WorkspaceLocation }
+  | { kind: 'externalFile'; fileName: string; filePath: string };
+
+export interface NoteFileContext {
   fileName: string;
   dir?: string;
   filePath?: string;
 }
+
+export const workspaceLocationOf = (dir?: string): WorkspaceLocation =>
+  dir ? { kind: 'custom', dir } : { kind: 'default' };
+
+export const noteFileLocationOf = ({
+  fileName,
+  dir,
+  filePath,
+}: NoteFileContext): NoteFileLocation =>
+  filePath
+    ? { kind: 'externalFile', fileName, filePath }
+    : { kind: 'workspace', fileName, workspace: workspaceLocationOf(dir) };
+
+export const noteFileContextOf = (location: NoteFileLocation): NoteFileContext => {
+  if (location.kind === 'externalFile') {
+    return { fileName: location.fileName, filePath: location.filePath };
+  }
+  return {
+    fileName: location.fileName,
+    ...(location.workspace.kind === 'custom' ? { dir: location.workspace.dir } : {}),
+  };
+};
 
 export interface NoteMeta {
   title: string;
@@ -21,18 +49,17 @@ export interface NoteBody {
 export interface CreateNoteRequest {
   fileName: string;
   meta: NoteMeta;
-  dir?: string;
+  workspace: WorkspaceLocation;
 }
 
 export interface MoveNoteRequest {
-  fileName: string;
-  dir?: string;
-  targetDir?: string;
+  location: NoteFileLocation;
+  workspace: WorkspaceLocation;
 }
 
 export interface ExternalNoteMoveRequest {
-  filePath: string;
-  dir?: string;
+  location: NoteFileLocation;
+  workspace: WorkspaceLocation;
 }
 
 export interface RenameNoteRequest {
@@ -46,7 +73,8 @@ export interface CopyNoteRequest {
   newFileName: string;
 }
 
-export interface ComponentDataScope extends NoteFileLocation {
+export interface ComponentDataScope {
+  location: NoteFileLocation;
   uuid: string;
 }
 
@@ -63,8 +91,8 @@ export interface ComponentDataExportRequest extends ComponentDataFile {
 }
 
 export interface FileOperations {
-  fetchFileNames(dir?: string): Promise<string[]>;
-  isFileNameAvailable(fileName: string, dir?: string): Promise<boolean>;
+  fetchFileNames(workspace: WorkspaceLocation): Promise<string[]>;
+  isFileNameAvailable(fileName: string, workspace: WorkspaceLocation): Promise<boolean>;
   getNoteMeta(location: NoteFileLocation): Promise<NoteMetaView>;
   getNoteBody(location: NoteFileLocation, debugProgress?: boolean): Promise<NoteBody>;
   setNoteBody(location: NoteFileLocation, content: string): Promise<void>;

@@ -14,6 +14,7 @@ import { loadRecentNotes, type RecentNote } from '../utils/homeActivity';
 import { externalNotes, loadWorkspaceState, workspaceDirectories } from '../utils/workspaceStore';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { useOpenNote } from '../utils/useOpenNote';
+import { noteFileLocationOf } from '../fileOperations';
 
 const notes = ref<NoteSetEntry[]>([]);
 const recentNoteRefs = ref<RecentNote[]>([]);
@@ -73,11 +74,13 @@ async function loadNotes(): Promise<void> {
 async function openSelectedNote(note: NoteSetEntry): Promise<void> {
   isOpen.value = false;
   try {
-    await openNote({
-      fileName: note.fileName,
-      ...(note.dir ? { dir: note.dir } : {}),
-      ...(note.filePath ? { filePath: note.filePath } : {}),
-    });
+    await openNote(
+      noteFileLocationOf({
+        fileName: note.fileName,
+        ...(note.dir ? { dir: note.dir } : {}),
+        ...(note.filePath ? { filePath: note.filePath } : {}),
+      }),
+    );
     recentNoteRefs.value = loadRecentNotes();
   } catch (error) {
     errorMessage.value = `打开失败：${getErrorMessage(error)}`;

@@ -1,4 +1,4 @@
-import type { NoteFileLocation } from '../fileOperations/types';
+import type { NoteFileContext } from '../fileOperations/types';
 
 const ACTIVITY_KEY = 'mindrizzle:home-activity';
 const RECENT_NOTES_KEY = 'mindrizzle:recent-notes';
@@ -12,7 +12,7 @@ export interface FileActivityEvent {
   timestamp: number;
 }
 
-export interface RecentNote extends NoteFileLocation {
+export interface RecentNote extends NoteFileContext {
   openedAt: number;
 }
 
@@ -69,11 +69,11 @@ export function loadFileActivity(): FileActivityEvent[] {
   return readStorage(ACTIVITY_KEY, isActivityEvents, []);
 }
 
-function recentNoteKey(note: NoteFileLocation): string {
+function recentNoteKey(note: NoteFileContext): string {
   return `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
 }
 
-export function recordRecentNote(note: NoteFileLocation): void {
+export function recordRecentNote(note: NoteFileContext): void {
   const recent = readStorage(RECENT_NOTES_KEY, isRecentNotes, []);
   const next = [
     { ...note, openedAt: Date.now() },

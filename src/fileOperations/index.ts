@@ -21,40 +21,36 @@ const route = <T>(native: () => Promise<T>, browser: () => Promise<T>) =>
   isTauri() ? native() : browser();
 
 export const fileOperations: FileOperations = {
-  fetchFileNames: (dir) =>
+  fetchFileNames: (workspace) =>
     route(
-      () => invoke<string[]>('fetch_file_list', { dir }),
-      () => browserFileOperations.fetchFileNames(dir),
+      () => invoke<string[]>('fetch_file_list', { request: { workspace } }),
+      () => browserFileOperations.fetchFileNames(workspace),
     ),
-  isFileNameAvailable: (fileName, dir) =>
+  isFileNameAvailable: (fileName, workspace) =>
     route(
-      () => invoke<boolean>('is_file_name_valid', { fileName, dir }),
-      () => browserFileOperations.isFileNameAvailable(fileName, dir),
+      () => invoke<boolean>('is_file_name_valid', { request: { fileName, workspace } }),
+      () => browserFileOperations.isFileNameAvailable(fileName, workspace),
     ),
   getNoteMeta: (location) =>
     route(
-      () => invoke('get_mdr_file_meta', { ...location }),
+      () => invoke('get_mdr_file_meta', { request: { location } }),
       () => browserFileOperations.getNoteMeta(location),
     ),
   getNoteBody: (location, debugProgress) =>
     route(
-      () => invoke('get_mdr_file_body', { ...location, debugProgress }),
+      () => invoke('get_mdr_file_body', { request: { location, debugProgress } }),
       () => browserFileOperations.getNoteBody(location, debugProgress),
     ),
   setNoteBody: async (location, content) => {
     await route(
-      () => invoke('set_mdr_file_body', { ...location, content }),
+      () => invoke('set_mdr_file_body', { request: { location, content } }),
       () => browserFileOperations.setNoteBody(location, content),
     );
     recordFileActivity('modified');
   },
   setNoteMeta: async (location, meta) => {
     await route(
-      () =>
-        invoke('set_mdr_file_meta', {
-          ...location,
-          mdrFileInfo: meta,
-        }),
+      () => invoke('set_mdr_file_meta', { request: { location, meta } }),
       () => browserFileOperations.setNoteMeta(location, meta),
     );
     recordFileActivity('modified');
@@ -62,12 +58,7 @@ export const fileOperations: FileOperations = {
   createNote: (request: CreateNoteRequest) => {
     rememberTags(request.meta.tag ?? []);
     return route(
-      () =>
-        invoke<string>('create_mdr_file', {
-          fileName: request.fileName,
-          dir: request.dir,
-          mdrFileInfo: request.meta,
-        }),
+      () => invoke<string>('create_mdr_file', { request }),
       () => browserFileOperations.createNote(request),
     ).then((fileName) => {
       recordFileActivity('created');
@@ -76,28 +67,24 @@ export const fileOperations: FileOperations = {
   },
   moveNote: (request: MoveNoteRequest) =>
     route(
-      () => invoke<string>('move_mdr_file', { ...request }),
+      () => invoke<string>('move_mdr_file', { request }),
       () => browserFileOperations.moveNote(request),
     ),
   moveExternalNote: (request: ExternalNoteMoveRequest) =>
     route(
-      () => invoke<string>('move_mdrf_file', { ...request }),
+      () => invoke<string>('move_mdr_file', { request }),
       () => browserFileOperations.moveExternalNote(request),
     ),
   deleteNote: async (location: NoteFileLocation) => {
     await route(
-      () => invoke('delete_mdrf_file', { ...location }),
+      () => invoke('delete_mdrf_file', { request: { location } }),
       () => browserFileOperations.deleteNote(location),
     );
     recordFileActivity('deleted');
   },
   copyNote: (request: CopyNoteRequest) =>
     route(
-      () =>
-        invoke<string>('copy_mdrf_file', {
-          ...request.location,
-          newFileName: request.newFileName,
-        }),
+      () => invoke<string>('copy_mdrf_file', { request }),
       () => browserFileOperations.copyNote(request),
     ).then((fileName) => {
       recordFileActivity('created');
@@ -105,12 +92,7 @@ export const fileOperations: FileOperations = {
     }),
   renameNote: async (request: RenameNoteRequest) => {
     const fileName = await route(
-      () =>
-        invoke<string>('rename_mdrf_file', {
-          ...request.location,
-          newFileName: request.newFileName,
-          ...(request.meta ? { mdrFileInfo: request.meta } : {}),
-        }),
+      () => invoke<string>('rename_mdrf_file', { request }),
       () => browserFileOperations.renameNote(request),
     );
     recordFileActivity('modified');
@@ -163,6 +145,8 @@ export {
   NOTE_FILE_NAME_RULE_HINT,
 } from './noteFileName';
 
+export { noteFileContextOf, noteFileLocationOf, workspaceLocationOf } from './types';
+
 export type {
   ComponentDataExportRequest,
   ComponentDataFile,
@@ -173,7 +157,9 @@ export type {
   ExternalNoteMoveRequest,
   NoteBody,
   NoteFileLocation,
+  NoteFileContext,
   NoteMeta,
   NoteMetaView,
   RenameNoteRequest,
+  WorkspaceLocation,
 } from './types';

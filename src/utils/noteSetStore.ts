@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { isTauri } from '@tauri-apps/api/core';
 import { info } from '@tauri-apps/plugin-log';
 
-import { fileOperations } from '../fileOperations';
+import { fileOperations, noteFileLocationOf, workspaceLocationOf } from '../fileOperations';
 import { getErrorMessage } from './getErrorMessage';
 import { sanitizeTags } from './tagStore';
 import { workspaceDirectories } from './workspaceStore';
@@ -41,9 +41,7 @@ export async function fetchNoteSetEntry(
   filePath?: string,
 ): Promise<NoteSetEntry> {
   const meta = await fileOperations.getNoteMeta({
-    fileName,
-    dir,
-    filePath,
+    ...noteFileLocationOf({ fileName, dir, filePath }),
   });
   return {
     fileName,
@@ -57,7 +55,7 @@ export async function fetchNoteSetEntry(
 }
 
 async function fetchNoteSetEntries(dir?: string): Promise<NoteSetEntry[]> {
-  const fileNames = await fileOperations.fetchFileNames(dir);
+  const fileNames = await fileOperations.fetchFileNames(workspaceLocationOf(dir));
   return Promise.all(fileNames.map((fileName) => fetchNoteSetEntry(fileName, dir)));
 }
 
@@ -155,15 +153,15 @@ interface NoteTagPatch {
 async function patchNoteTags(patch: NoteTagPatch): Promise<boolean> {
   const { fileName, dir, resolveTags } = patch;
   const meta = await fileOperations.getNoteMeta({
-    fileName,
-    dir,
+    ...noteFileLocationOf({ fileName, dir }),
   });
   const tag = resolveTags(meta.tag ?? []);
   if (!tag) return false;
-  await fileOperations.setNoteMeta(
-    { fileName, dir },
-    { title: meta.title, description: meta.description, tag },
-  );
+  await fileOperations.setNoteMeta(noteFileLocationOf({ fileName, dir }), {
+    title: meta.title,
+    description: meta.description,
+    tag,
+  });
   return true;
 }
 
@@ -172,7 +170,7 @@ async function updateNoteTags(resolveTags: (tags: string[]) => string[] | null):
   const dirs = [undefined, ...workspaceDirectories.value.map((entry) => entry.dir)];
   let changedCount = 0;
   for (const dir of dirs) {
-    const fileNames = await fileOperations.fetchFileNames(dir);
+    const fileNames = await fileOperations.fetchFileNames(workspaceLocationOf(dir));
     for (const fileName of fileNames) {
       if (await patchNoteTags({ fileName, dir, resolveTags })) changedCount += 1;
     }

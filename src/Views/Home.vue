@@ -14,6 +14,7 @@ import appIconUrl from '../../app-icon.svg';
 import { useRouter } from 'vue-router';
 
 import NewFileDialog from '../Controls/NewFileDialog.vue';
+import { noteFileLocationOf } from '../fileOperations';
 import type { NoteSetEntry } from '../utils/noteSetStore';
 import { fetchNoteSetEntry, loadNoteSetEntries } from '../utils/noteSetStore';
 import {
@@ -192,7 +193,7 @@ async function loadHomeData() {
 
 async function openRecentNote(note: NoteSetEntry) {
   try {
-    await openNote(note);
+    await openNote(noteFileLocationOf(note));
     recentRefs.value = loadRecentNotes();
   } catch (error) {
     errorMessage.value = `打开失败：${getErrorMessage(error)}`;

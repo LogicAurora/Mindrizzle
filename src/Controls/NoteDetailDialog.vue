@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 
 import NoteTagEditor from './NoteTagEditor.vue';
 import { getErrorMessage } from '../utils/getErrorMessage';
-import { fileOperations } from '../fileOperations';
+import { fileOperations, noteFileLocationOf } from '../fileOperations';
 import { loadTagLibrary, rememberTags, sanitizeTags } from '../utils/tagStore';
 
 export interface NoteDetailTarget {
@@ -76,7 +76,7 @@ async function persistNote(note: NoteDetailTarget) {
     description: description.value.trim(),
     tag: sanitizeTags(tags.value),
   };
-  await fileOperations.setNoteMeta(note, meta);
+  await fileOperations.setNoteMeta(noteFileLocationOf(note), meta);
   await rememberTags(meta.tag);
   emit('saved', { note: { ...note, ...meta } });
   dialog.value = false;

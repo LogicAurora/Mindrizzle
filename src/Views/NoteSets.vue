@@ -48,6 +48,8 @@ import {
   NOTE_FILE_NAME_MAX_LEN,
   NOTE_FILE_NAME_RULE_HINT,
   moveLocalNoteToWorkspace,
+  noteFileLocationOf,
+  workspaceLocationOf,
 } from '../fileOperations';
 import {
   fetchNoteSetEntry,
@@ -120,7 +122,7 @@ async function prepareEditor(note: EditorNoteRef) {
     });
   }
   const bodyPromise: Promise<EditorBodyResult> = fileOperations
-    .getNoteBody(note, isDebugLoadingEnabled.value)
+    .getNoteBody(noteFileLocationOf(note), isDebugLoadingEnabled.value)
     .then(
       (body) => ({ content: body.content ?? '' }),
       (error: unknown) => ({ error }),
@@ -594,9 +596,7 @@ const selectedItems = computed(() =>
 );
 
 const noteSetArgsOf = (item: NoteSetItem) => ({
-  fileName: item.fileName,
-  ...(item.dir ? { dir: item.dir } : {}),
-  ...(item.filePath ? { filePath: item.filePath } : {}),
+  ...noteFileLocationOf(item),
 });
 
 // 外部文件改名后路径跟着变，否则卡片仍指向旧文件
@@ -665,12 +665,16 @@ function reportBatch(label: string, outcome: BatchOutcome) {
 }
 
 async function isNameAvailable(item: NoteSetItem, name: string): Promise<boolean> {
-  if (!item.filePath) return fileOperations.isFileNameAvailable(name, item.dir);
+  if (!item.filePath) {
+    return fileOperations.isFileNameAvailable(name, workspaceLocationOf(item.dir));
+  }
   try {
-    await fileOperations.getNoteMeta({
-      fileName: name,
-      filePath: renamePathFileName(item.filePath, name),
-    });
+    await fileOperations.getNoteMeta(
+      noteFileLocationOf({
+        fileName: name,
+        filePath: renamePathFileName(item.filePath, name),
+      }),
+    );
     return false;
   } catch {
     // 读不到元信息说明该路径没有归档；真冲突时复制命令还会再拦一次
@@ -850,9 +854,8 @@ const moveTargetsOf = (noteSet: NoteSetItem) =>
 async function moveNoteToWorkspace(noteSet: NoteSetItem, targetDir?: string) {
   try {
     await fileOperations.moveNote({
-      fileName: noteSet.fileName,
-      dir: noteSet.dir,
-      targetDir,
+      location: noteSetArgsOf(noteSet),
+      workspace: workspaceLocationOf(targetDir),
     });
     invalidateNoteSetEntries();
     await loadActiveSection();
@@ -942,8 +945,8 @@ async function moveExternalNote(noteSet: NoteSetItem, targetDir?: string) {
     if (noteSet.localName) await moveLocalNoteToWorkspace(noteSet.localName);
     else if (noteSet.filePath)
       await fileOperations.moveExternalNote({
-        filePath: noteSet.filePath,
-        dir: targetDir,
+        location: noteSetArgsOf(noteSet),
+        workspace: workspaceLocationOf(targetDir),
       });
     await forgetExternalNote(key);
     invalidateNoteSetEntries();
