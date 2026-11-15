@@ -11,14 +11,17 @@ import {
   mdiFormatHeader5,
   mdiFormatHeader6,
   mdiFormatItalic,
+  mdiFormatSize,
   mdiFormatTitle,
   mdiFormatUnderline,
   mdiPalette,
 } from '@mdi/js';
 
 import type { WheelOption } from '../../Core/wheelSwitch.ts';
+import { FONT_SIZE_OPTIONS, type FontSizeOption } from './extensions/font-size.ts';
 
-export type FormatModeId = 'heading' | 'bold' | 'italic' | 'underline' | 'textColor' | 'highlight';
+export type FormatModeId =
+  'heading' | 'bold' | 'italic' | 'underline' | 'fontSize' | 'textColor' | 'highlight';
 
 export interface FormatMode {
   id: FormatModeId;
@@ -51,6 +54,12 @@ export const FORMAT_MODES: readonly FormatMode[] = [
     icon: mdiFormatUnderline,
     label: '下划线',
     description: '给选区文字加下划线或取消',
+  },
+  {
+    id: 'fontSize',
+    icon: mdiFormatSize,
+    label: '字号',
+    description: '调整选区文字字号，具体尺寸在块下方选择',
   },
   {
     id: 'textColor',
@@ -99,6 +108,25 @@ export const HEADING_DETAILS: readonly WheelOption[] = [
     description: '应用六级标题样式',
   },
   { icon: mdiFormatClear, label: '取消标题', description: '恢复为正文段落' },
+];
+
+export interface FontSizeDetail extends WheelOption {
+  size: FontSizeOption | null;
+}
+
+export const FONT_SIZE_DETAILS: readonly FontSizeDetail[] = [
+  {
+    icon: mdiFormatClear,
+    label: '默认字号',
+    description: '移除选区的自定义字号',
+    size: null,
+  },
+  ...FONT_SIZE_OPTIONS.map((size) => ({
+    icon: mdiFormatSize,
+    label: size,
+    description: `将选区字号设为 ${size}`,
+    size,
+  })),
 ];
 
 // 取消标题与标题级别共用一份详情切片，调用处按索引猜容易错位，所以统一在这里判定

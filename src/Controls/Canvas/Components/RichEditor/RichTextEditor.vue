@@ -20,7 +20,7 @@
     >
       <ProseKit :editor="editor">
         <div class="editor-scroll-shell">
-          <div ref="scrollRef" class="editor-scroll" @scroll="updateScrollMetrics">
+          <div ref="scrollRef" class="editor-scroll" @scroll="onEditorScroll">
             <div ref="editorMount" class="editor-mount" />
           </div>
           <!-- 原生 ::selection 只能方角，所以按行铺圆角块自绘；节点在滚动容器外，不随内容滚动 -->
@@ -37,6 +37,29 @@
               }"
             />
           </div>
+          <TextSelectionToolbar
+            :visible="isTextSelectionToolbarVisible"
+            :position="toolbarPosition"
+            :is-below-selection="isToolbarBelowSelection"
+            :is-bold-active="isBoldActive"
+            :is-italic-active="isItalicActive"
+            :is-underline-active="isUnderlineActive"
+            :heading-level="selectionHeadingLevel"
+            :selected-font-size="selectionFontSize"
+            :text-color="selectionTextColor"
+            :highlight-color="selectionHighlightColor"
+            @menu-open="onToolbarMenuOpen"
+            @toggle-bold="toggleSelectionBold"
+            @toggle-italic="toggleSelectionItalic"
+            @toggle-underline="toggleSelectionUnderline"
+            @apply-heading="applySelectionHeading"
+            @apply-font-size="applySelectionFontSize"
+            @remove-font-size="removeSelectionFontSize"
+            @apply-text-color="applySelectionTextColor"
+            @apply-highlight="applySelectionHighlight"
+            @copy-text="copySelectedText"
+            @paste-text="pastePlainText"
+          />
           <div
             v-if="scrollMetrics.hasVertical"
             class="custom-scrollbar custom-scrollbar-vertical"
@@ -90,6 +113,9 @@
         @update:popup-open="isDetailPopupOpen = $event"
         @pick-custom-color="onPickCustomColor"
       />
+      <v-snackbar v-model="clipboardNoticeVisible" location="bottom" :timeout="2500">
+        {{ clipboardNotice }}
+      </v-snackbar>
       <v-overlay v-model="pendingApply" persistent scroll-strategy="none">
         <div
           class="apply-layer"
@@ -155,15 +181,19 @@ import './selectionStyles.css';
 
 import blockHandle from './extensions/block-handle.vue';
 import RowDropIndicator from './extensions/RowDropIndicator.vue';
-import { ref, onMounted, onUnmounted, computed, reactive, watch, nextTick } from 'vue';
+import { ref, shallowRef, onMounted, onUnmounted, computed, reactive, watch, nextTick } from 'vue';
 import { ProseKit, useDocChange } from '@prosekit/vue';
 import { mdiNoteText } from '@mdi/js';
+import { isTauri } from '@tauri-apps/api/core';
+import { error as logError } from '@tauri-apps/plugin-log';
 
 import { defineExtension } from './extension.ts';
 import { createEditor, NodeJSON } from '@prosekit/core';
 import { useTextSelectionHighlight } from './extensions/useTextSelectionHighlight.ts';
 import { TextSelection } from 'prosekit/pm/state';
+import { isFontSizeOption, type FontSizeOption } from './extensions/font-size.ts';
 import {
+  layoutToCanvasCss,
   layoutToViewportSize,
   layoutToViewportX,
   layoutToViewportY,
@@ -171,9 +201,12 @@ import {
 } from './extensions/blockHandleUtils.ts';
 import MdrCanvasComponentBase from '../../Core/MdrCanvasComponentBase.vue';
 import { Z_LAYER } from '../../Core/zIndex.ts';
+import { getErrorMessage } from '../../../../utils/getErrorMessage.ts';
 import FormatModePicker from './FormatModePicker.vue';
 import FormatDetailPicker from './FormatDetailPicker.vue';
+import TextSelectionToolbar from './TextSelectionToolbar.vue';
 import {
+  FONT_SIZE_DETAILS,
   FORMAT_MODES,
   HEADING_DETAILS,
   colorDetailsOf,
@@ -211,12 +244,24 @@ const onAutoHeightToggle = (value: unknown) => {
 
 const extension = defineExtension();
 const editor = createEditor({ extension });
+const selectionToolbarState = shallowRef(editor.state);
 const editorMount = ref<HTMLDivElement>();
 const wrapperRef = ref<HTMLDivElement>();
 const scrollRef = ref<HTMLDivElement>();
+const isTextSelectionToolbarVisible = ref(false);
+const isToolbarBelowSelection = ref(false);
+const isToolbarMenuOpen = ref(false);
+const isTextSelectionDragging = ref(false);
+const isPointerOverTextSelectionToolbar = ref(false);
+const toolbarPosition = ref({ left: 0, top: 0 });
+const toolbarPointer = { x: Number.NaN, y: Number.NaN };
+const clipboardNotice = ref('');
+const clipboardNoticeVisible = ref(false);
+let toolbarHideTimer = 0;
 const { rects: textSelectionRects, refresh: refreshTextSelection } = useTextSelectionHighlight({
   editor,
   scrollRef,
+  isToolbarInteractionActive: () => isToolbarMenuOpen.value,
 });
 const scrollMetrics = reactive({
   scrollTop: 0,
@@ -229,6 +274,7 @@ const scrollMetrics = reactive({
   hasHorizontal: false,
 });
 let editorMounted = false;
+let toolbarLayoutFrame = 0;
 
 const syncReadOnly = (readOnly: boolean) => {
   if (!editorMounted) return;
@@ -253,6 +299,11 @@ const updateScrollMetrics = () => {
     hasVertical: scroll.scrollHeight > scroll.clientHeight,
     hasHorizontal: scroll.scrollWidth > scroll.clientWidth,
   });
+};
+
+const onEditorScroll = () => {
+  updateScrollMetrics();
+  updateTextSelectionToolbar();
 };
 
 // thumb 有 24px 下限、轨道两端各留 2px，所以拖动量与 scroll 的换算必须与渲染公式严格互逆（否则越拖越偏）
@@ -425,6 +476,55 @@ const detailPickerZ = computed(() =>
 );
 const showFormatModes = computed(() => props.base.active === true && !readOnly.value);
 const currentModeId = computed(() => FORMAT_MODES[modeIndex.value]?.id);
+const isSelectionMarkActive = (markName: string): boolean => {
+  const { doc, schema, selection } = selectionToolbarState.value;
+  const mark = schema.marks[markName];
+  return !selection.empty && !!mark && doc.rangeHasMark(selection.from, selection.to, mark);
+};
+const isBoldActive = computed(() => isSelectionMarkActive('bold'));
+const isItalicActive = computed(() => isSelectionMarkActive('italic'));
+const isUnderlineActive = computed(() => isSelectionMarkActive('underline'));
+const selectionHeadingLevel = computed(() => {
+  const parent = selectionToolbarState.value.selection.$from.parent;
+  return parent.type.name === 'heading' && typeof parent.attrs.level === 'number'
+    ? parent.attrs.level
+    : null;
+});
+const selectionFontSize = computed<FontSizeOption | null>(() => {
+  const { doc, schema, selection } = selectionToolbarState.value;
+  const markType = schema.marks.fontSize;
+  if (selection.empty || !markType) return null;
+  let selectedSize: FontSizeOption | null | undefined;
+  let isMixed = false;
+  doc.nodesBetween(selection.from, selection.to, (node) => {
+    if (!node.isText) return;
+    const mark = node.marks.find((item) => item.type === markType);
+    const rawSize = mark?.attrs.size;
+    const size = isFontSizeOption(rawSize) ? rawSize : null;
+    if (selectedSize === undefined) selectedSize = size;
+    else if (selectedSize !== size) isMixed = true;
+  });
+  return isMixed || selectedSize == null ? null : selectedSize;
+});
+const selectionColorOf = (markName: string): string | null => {
+  const { doc, schema, selection } = selectionToolbarState.value;
+  const markType = schema.marks[markName];
+  if (selection.empty || !markType) return null;
+  let color: string | null | undefined;
+  let isMixed = false;
+  doc.nodesBetween(selection.from, selection.to, (node) => {
+    if (!node.isText) return;
+    const mark = node.marks.find((item) => item.type === markType);
+    const currentColor = typeof mark?.attrs.color === 'string' ? mark.attrs.color : null;
+    if (color === undefined) color = currentColor;
+    else if (color !== currentColor) isMixed = true;
+  });
+  return isMixed || color == null ? null : color;
+};
+const selectionTextColor = computed(() => selectionColorOf('textColor') ?? customColors.textColor);
+const selectionHighlightColor = computed(
+  () => selectionColorOf('backgroundColor') ?? customColors.highlight,
+);
 // 自定义颜色按模式各存一份，色板用当前值展示
 const customColors = reactive({ textColor: '#111827', highlight: '#fde68a' });
 const textColorDetails = computed(() => colorDetailsOf('text', customColors.textColor));
@@ -432,6 +532,7 @@ const highlightDetails = computed(() => colorDetailsOf('background', customColor
 
 const detailOptionsFor = (modeId: FormatModeId | undefined) => {
   if (modeId === 'heading') return HEADING_DETAILS;
+  if (modeId === 'fontSize') return FONT_SIZE_DETAILS;
   if (modeId === 'textColor') return textColorDetails.value;
   if (modeId === 'highlight') return highlightDetails.value;
   return [];
@@ -480,6 +581,7 @@ watch(
   (active) => {
     if (active) return;
     modeIndex.value = 0;
+    hideTextSelectionToolbar();
     formatArmed = false;
     isFormatPickerExpanded.value = false;
     isFormatPopupOpen.value = false;
@@ -504,6 +606,30 @@ const onSelectMode = (index: number | null) => {
   modeIndex.value = index;
 };
 
+const applySelectionHeading = (level: number | null) => {
+  if (level == null) editor.commands.setParagraph();
+  else editor.commands.toggleHeading({ level });
+  isPointerOverTextSelectionToolbar.value = true;
+  refreshTextSelectionToolbar();
+  void refreshToolbarAfterLayout();
+};
+
+const applySelectionTextColor = (color: string | null) => {
+  isPointerOverTextSelectionToolbar.value = true;
+  if (color) editor.commands.addTextColor({ color });
+  else editor.commands.removeTextColor();
+  if (color) customColors.textColor = color;
+  refreshTextSelectionToolbar();
+};
+
+const applySelectionHighlight = (color: string | null) => {
+  isPointerOverTextSelectionToolbar.value = true;
+  if (color) editor.commands.addBackgroundColor({ color });
+  else editor.commands.removeBackgroundColor();
+  if (color) customColors.highlight = color;
+  refreshTextSelectionToolbar();
+};
+
 const applyFormatMode = (index: number) => {
   const mode = FORMAT_MODES[index];
   if (!mode) return;
@@ -525,6 +651,12 @@ const applyFormatMode = (index: number) => {
     case 'underline':
       commands.toggleUnderline();
       break;
+    case 'fontSize': {
+      const size = FONT_SIZE_DETAILS[detailIdx]?.size;
+      if (size) commands.addFontSize({ size });
+      else commands.removeFontSize();
+      break;
+    }
     case 'textColor':
       if (detail?.swatch) commands.addTextColor({ color: detail.swatch });
       else commands.removeTextColor();
@@ -548,6 +680,281 @@ const isSelectionInsideEditor = (): boolean => {
     dom.contains(sel.anchorNode) &&
     dom.contains(sel.focusNode)
   );
+};
+
+const TEXT_SELECTION_TOOLBAR_HEIGHT = 108;
+const TEXT_SELECTION_TOOLBAR_GAP = 8;
+const TEXT_SELECTION_TOOLBAR_WIDTH = 520;
+const TEXT_SELECTION_TOOLBAR_VIEWPORT_MARGIN = 8;
+const TOOLBAR_HIDE_DELAY_MS = 180;
+
+const selectionRangeInsideEditor = (): Range | null => {
+  const view = editorMounted ? editor.view : null;
+  if (!view) return null;
+  const selection = window.getSelection();
+  const isToolbarInteraction = isToolbarMenuOpen.value || isPointerOverTextSelectionToolbar.value;
+  let range: Range | null = null;
+  if (isToolbarInteraction) {
+    const { selection: editorSelection } = view.state;
+    if (!(editorSelection instanceof TextSelection) || editorSelection.empty) return null;
+    const start = view.domAtPos(editorSelection.from);
+    const end = view.domAtPos(editorSelection.to);
+    range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+  } else if (isSelectionInsideEditor() && selection?.rangeCount) {
+    range = selection.getRangeAt(0);
+  }
+  if (!range || !view.dom.contains(range.commonAncestorContainer)) return null;
+  const ancestor =
+    range.commonAncestorContainer instanceof HTMLElement
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement;
+  return ancestor?.closest('[data-node-view-root]') ? null : range;
+};
+
+const cancelToolbarHide = () => {
+  if (toolbarHideTimer) clearTimeout(toolbarHideTimer);
+  toolbarHideTimer = 0;
+};
+
+const hideTextSelectionToolbar = () => {
+  cancelToolbarHide();
+  isTextSelectionToolbarVisible.value = false;
+  isToolbarMenuOpen.value = false;
+  isPointerOverTextSelectionToolbar.value = false;
+};
+
+const scheduleToolbarHide = () => {
+  cancelToolbarHide();
+  toolbarHideTimer = window.setTimeout(() => {
+    toolbarHideTimer = 0;
+    if (isToolbarMenuOpen.value || isPointerOverTextSelectionToolbar.value) return;
+    isTextSelectionToolbarVisible.value = false;
+  }, TOOLBAR_HIDE_DELAY_MS);
+};
+
+const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent) => {
+  if (editorMounted) selectionToolbarState.value = editor.state;
+  if (event) {
+    toolbarPointer.x = event.clientX;
+    toolbarPointer.y = event.clientY;
+    isPointerOverTextSelectionToolbar.value =
+      event.target instanceof Element &&
+      event.target.closest('.text-selection-toolbar, .text-selection-color-picker') !== null;
+  }
+  if (isTextSelectionDragging.value || readOnly.value) {
+    hideTextSelectionToolbar();
+    return;
+  }
+  const range = selectionRangeInsideEditor();
+  const canvas = editorMounted ? (editor.view.dom.closest('.canvas') as HTMLElement | null) : null;
+  if (!canvas || !Number.isFinite(toolbarPointer.x) || !Number.isFinite(toolbarPointer.y)) {
+    hideTextSelectionToolbar();
+    return;
+  }
+  if (!range) {
+    if (isToolbarMenuOpen.value) return;
+    hideTextSelectionToolbar();
+    return;
+  }
+  selectionToolbarState.value = editor.state;
+  const view = editor.view;
+  const selectionRects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 && rect.height > 0,
+  );
+  const canvasContainer = view.dom.closest('.canvas-container') as HTMLElement | null;
+  if (!selectionRects.length || !canvasContainer) {
+    hideTextSelectionToolbar();
+    return;
+  }
+  const firstRect = selectionRects[0];
+  const lastRect = selectionRects[selectionRects.length - 1];
+  const canvasRect = canvas.getBoundingClientRect();
+  const viewportRect = canvasContainer.getBoundingClientRect();
+  const toolbar = canvasContainer.querySelector('.text-selection-toolbar');
+  const toolbarRect = toolbar?.getBoundingClientRect();
+  const toolbarHeight = layoutToViewportSize(
+    view,
+    toolbarRect?.height || TEXT_SELECTION_TOOLBAR_HEIGHT,
+  );
+  const toolbarWidth = layoutToViewportSize(
+    view,
+    toolbarRect?.width || TEXT_SELECTION_TOOLBAR_WIDTH,
+  );
+  const firstTop = layoutToViewportY(view, firstRect.top);
+  const lastBottom = layoutToViewportY(view, lastRect.bottom);
+  const availableAbove = firstTop - viewportRect.top;
+  const availableBelow = viewportRect.bottom - lastBottom;
+  const belowSelection =
+    availableAbove < toolbarHeight + TEXT_SELECTION_TOOLBAR_GAP && availableBelow > availableAbove;
+  const anchorRect = belowSelection ? lastRect : firstRect;
+  const localTop = (belowSelection ? anchorRect.bottom : anchorRect.top) - canvasRect.top;
+  const anchorCenterX = anchorRect.left + anchorRect.width / 2;
+  const anchorCenterVisual = layoutToViewportX(view, anchorCenterX);
+  const maxHalfWidth = Math.max(
+    (viewportRect.width - TEXT_SELECTION_TOOLBAR_VIEWPORT_MARGIN * 2) / 2,
+    0,
+  );
+  const halfToolbarWidth = Math.min(toolbarWidth / 2, maxHalfWidth);
+  const minCenterX = viewportRect.left + halfToolbarWidth + TEXT_SELECTION_TOOLBAR_VIEWPORT_MARGIN;
+  const maxCenterX = viewportRect.right - halfToolbarWidth - TEXT_SELECTION_TOOLBAR_VIEWPORT_MARGIN;
+  const toolbarCenterX = Math.min(Math.max(anchorCenterVisual, minCenterX), maxCenterX);
+  const adjustedAnchorX =
+    anchorCenterX + viewportToLayout(view, toolbarCenterX - anchorCenterVisual);
+  toolbarPosition.value = {
+    left: layoutToCanvasCss(view, adjustedAnchorX - canvasRect.left),
+    top: layoutToCanvasCss(view, localTop),
+  };
+  isToolbarBelowSelection.value = belowSelection;
+  if (isToolbarMenuOpen.value || isPointerOverTextSelectionToolbar.value) {
+    cancelToolbarHide();
+    return;
+  }
+  const target = event?.target;
+  const isPointerTargetInSelection =
+    target instanceof Node && view.dom.contains(target) && range.intersectsNode(target);
+  const isPointerOverSelection =
+    isPointerTargetInSelection ||
+    selectionRects.some((rect) => {
+      const left = layoutToViewportX(view, rect.left);
+      const top = layoutToViewportY(view, rect.top);
+      const right = left + layoutToViewportSize(view, rect.width);
+      const bottom = top + layoutToViewportSize(view, rect.height);
+      return (
+        toolbarPointer.x >= left &&
+        toolbarPointer.x <= right &&
+        toolbarPointer.y >= top &&
+        toolbarPointer.y <= bottom
+      );
+    });
+  if (!isPointerOverSelection) {
+    scheduleToolbarHide();
+    return;
+  }
+  cancelToolbarHide();
+  isTextSelectionToolbarVisible.value = true;
+};
+
+const onTextSelectionMouseDown = (event: MouseEvent) => {
+  if (event.button !== 0 || !editorMounted) return;
+  isTextSelectionDragging.value = editor.view.dom.contains(event.target as Node);
+  if (isTextSelectionDragging.value) hideTextSelectionToolbar();
+};
+
+const onTextSelectionPointerMove = (event: PointerEvent) => {
+  if (!event.isTrusted) return;
+  if (event.buttons !== 0 && isTextSelectionToolbarVisible.value) return;
+  updateTextSelectionToolbar(event);
+};
+
+const refreshTextSelectionToolbar = () => {
+  if (editorMounted) selectionToolbarState.value = editor.state;
+  updateTextSelectionToolbar();
+};
+
+const refreshToolbarAfterLayout = async () => {
+  await nextTick();
+  if (!editorMounted) return;
+  if (toolbarLayoutFrame) cancelAnimationFrame(toolbarLayoutFrame);
+  toolbarLayoutFrame = requestAnimationFrame(() => {
+    toolbarLayoutFrame = 0;
+    refreshTextSelection();
+    refreshTextSelectionToolbar();
+  });
+};
+
+const onToolbarMenuOpen = (isOpen: boolean) => {
+  isToolbarMenuOpen.value = isOpen;
+  if (isOpen) cancelToolbarHide();
+};
+
+const toggleSelectionBold = () => {
+  editor.commands.toggleBold();
+  refreshTextSelectionToolbar();
+};
+
+const toggleSelectionItalic = () => {
+  editor.commands.toggleItalic();
+  refreshTextSelectionToolbar();
+};
+
+const toggleSelectionUnderline = () => {
+  editor.commands.toggleUnderline();
+  refreshTextSelectionToolbar();
+};
+
+const applySelectionFontSize = (size: FontSizeOption) => {
+  if (editor.state.selection.empty) return;
+  editor.commands.addFontSize({ size });
+  isPointerOverTextSelectionToolbar.value = true;
+  refreshTextSelection();
+  refreshTextSelectionToolbar();
+};
+
+const removeSelectionFontSize = () => {
+  editor.commands.removeFontSize();
+  refreshTextSelectionToolbar();
+};
+
+const showClipboardNotice = (message: string) => {
+  clipboardNotice.value = message;
+  clipboardNoticeVisible.value = true;
+};
+
+const reportClipboardFailure = async (operation: string, cause: unknown) => {
+  const message = getErrorMessage(cause);
+  showClipboardNotice(`${operation}失败：${message}`);
+  if (isTauri()) await logError(`富文本${operation}失败：${message}`);
+};
+
+const copySelectedText = async () => {
+  const { state } = editor;
+  const { from, to } = state.selection;
+  if (from === to) return;
+  const text = state.doc.textBetween(from, to, '\n');
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('当前环境不支持剪贴板写入');
+    await navigator.clipboard.writeText(text);
+    showClipboardNotice('已复制选中文字');
+  } catch (cause) {
+    await reportClipboardFailure('复制', cause);
+  }
+};
+
+const pastePlainText = async () => {
+  const { state } = editor;
+  const { from, to } = state.selection;
+  if (from === to) return;
+  try {
+    if (!navigator.clipboard?.readText) throw new Error('当前环境不支持读取剪贴板');
+    const text = await navigator.clipboard.readText();
+    const currentSelection = editor.state.selection;
+    if (
+      editor.state.doc !== state.doc ||
+      currentSelection.from !== from ||
+      currentSelection.to !== to
+    ) {
+      showClipboardNotice('选区已变化，请重新选择后粘贴');
+      return;
+    }
+    if (!text) {
+      showClipboardNotice('剪贴板中没有纯文本');
+      return;
+    }
+    editor.view.dispatch(editor.state.tr.insertText(text, from, to));
+    showClipboardNotice('已粘贴纯文本');
+  } catch (cause) {
+    await reportClipboardFailure('粘贴', cause);
+  }
+};
+
+const onRichTextContextFormat = (event: Event) => {
+  if (readOnly.value || !selectionRangeInsideEditor()) return;
+  event.preventDefault();
+  applyFormatMode(modeIndex.value);
+  formatArmed = false;
+  window.getSelection()?.removeAllRanges();
 };
 
 const APPLY_OVERLAY_MARGIN = 8;
@@ -660,6 +1067,8 @@ const openApplyOverlay = async (rect: DOMRect) => {
 };
 
 const onSelectionMouseUp = (event: MouseEvent) => {
+  isTextSelectionDragging.value = false;
+  updateTextSelectionToolbar(event);
   if (!showFormatModes.value || pendingApply.value) return;
   // 任何模式（含标题）都必须按住 Alt 完成选区才询问
   if (!event.altKey || !formatArmed) return;
@@ -747,6 +1156,8 @@ useDocChange(
   () => {
     syncAutoHeight();
     scheduleScrollMetrics();
+    refreshTextSelection();
+    refreshTextSelectionToolbar();
   },
   { editor },
 );
@@ -757,6 +1168,7 @@ const onContentResize = () => {
   updateScrollMetrics();
   // 重排后选区矩形会跟着变，但不会触发 selectionchange，所以这里主动同步一次
   refreshTextSelection();
+  updateTextSelectionToolbar();
   if (!autoHeight.value || contentResizeFrame) return;
   // RO 回调里同步改块高会触发循环告警，所以延后一帧
   contentResizeFrame = requestAnimationFrame(() => {
@@ -771,7 +1183,11 @@ const onCanvasTransform = (e: Event) => {
   const z = (e as CustomEvent<{ zoom?: number }>).detail?.zoom;
   if (z == null || z === lastTransformZoom) return;
   lastTransformZoom = z;
-  requestAnimationFrame(() => syncAutoHeight());
+  requestAnimationFrame(() => {
+    syncAutoHeight();
+    refreshTextSelection();
+    updateTextSelectionToolbar();
+  });
 };
 
 onMounted(() => {
@@ -795,13 +1211,21 @@ onMounted(() => {
   window.addEventListener('Mindrizzle:canvas-transform', onCanvasTransform);
   window.addEventListener('keydown', onAltKeyDown);
   window.addEventListener('keyup', onAltKeyUp);
+  window.addEventListener('mousedown', onTextSelectionMouseDown, true);
+  window.addEventListener('pointermove', onTextSelectionPointerMove, true);
   window.addEventListener('mouseup', onSelectionMouseUp);
+  window.addEventListener('Mindrizzle:rich-text-context-format', onRichTextContextFormat);
+  document.addEventListener('selectionchange', refreshTextSelectionToolbar);
   window.addEventListener('resize', keepApplyCardInViewport);
+  window.addEventListener('resize', refreshTextSelectionToolbar);
   onUnmounted(() => observer.disconnect());
 });
 
 onUnmounted(() => {
   editorMounted = false;
+  cancelToolbarHide();
+  if (toolbarLayoutFrame) cancelAnimationFrame(toolbarLayoutFrame);
+  toolbarLayoutFrame = 0;
   if (metricsFrame) cancelAnimationFrame(metricsFrame);
   metricsFrame = 0;
   if (contentResizeFrame) cancelAnimationFrame(contentResizeFrame);
@@ -811,8 +1235,13 @@ onUnmounted(() => {
   window.removeEventListener('Mindrizzle:canvas-transform', onCanvasTransform);
   window.removeEventListener('keydown', onAltKeyDown);
   window.removeEventListener('keyup', onAltKeyUp);
+  window.removeEventListener('mousedown', onTextSelectionMouseDown, true);
+  window.removeEventListener('pointermove', onTextSelectionPointerMove, true);
   window.removeEventListener('mouseup', onSelectionMouseUp);
+  window.removeEventListener('Mindrizzle:rich-text-context-format', onRichTextContextFormat);
+  document.removeEventListener('selectionchange', refreshTextSelectionToolbar);
   window.removeEventListener('resize', keepApplyCardInViewport);
+  window.removeEventListener('resize', refreshTextSelectionToolbar);
 });
 
 // 开启瞬间按当前内容测一次

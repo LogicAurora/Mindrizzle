@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import type { Ref } from 'vue';
 import type { Editor } from '@prosekit/core';
+import { TextSelection } from 'prosekit/pm/state';
 
 import { getView, layoutToCanvasCss } from './blockHandleUtils';
 import { uniqueClientRects } from './textSelectionRects';
@@ -11,25 +12,49 @@ export type TextSelectionRect = TextRect;
 interface TextSelectionHighlightOptions {
   editor: Editor;
   scrollRef: Ref<HTMLElement | null | undefined>;
+  isToolbarInteractionActive: () => boolean;
 }
 
 // 原生 ::selection 只能方角，所以按行取矩形、在编辑器外层自绘圆角高亮
 export function useTextSelectionHighlight(options: TextSelectionHighlightOptions) {
-  const { editor, scrollRef } = options;
+  const { editor, scrollRef, isToolbarInteractionActive } = options;
   const rects = ref<TextSelectionRect[]>([]);
 
   const elementOf = (node: Node): HTMLElement | null =>
     node instanceof HTMLElement ? node : node.parentElement;
 
+  const isEmbeddedSelection = (range: Range): boolean =>
+    !!elementOf(range.commonAncestorContainer)?.closest('[data-node-view-root]');
+
+  const rangeFromEditorSelection = (view: any): Range | null => {
+    const selection = view.state.selection;
+    if (!(selection instanceof TextSelection) || selection.empty) return null;
+    const start = view.domAtPos(selection.from);
+    const end = view.domAtPos(selection.to);
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    if (!view.dom.contains(range.commonAncestorContainer) || isEmbeddedSelection(range))
+      return null;
+    return range;
+  };
+
   const rangeOfSelection = (view: any): Range | null => {
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
-    const range = selection.getRangeAt(0);
-    if (!view.dom.contains(range.commonAncestorContainer)) return null;
-    // 嵌入块内部是原生控件，选区由浏览器自己画，再叠一层自绘会重影
-    return elementOf(range.commonAncestorContainer)?.closest('[data-node-view-root]')
-      ? null
-      : range;
+    const activeElement = document.activeElement;
+    const isToolbarFocused =
+      activeElement instanceof Element && !!activeElement.closest('.text-selection-toolbar');
+    const shouldPreserveSelection = isToolbarFocused || isToolbarInteractionActive();
+    if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (view.dom.contains(range.commonAncestorContainer)) {
+        // 嵌入块内部是原生控件，选区由浏览器自己画，再叠一层自绘会重影
+        return isEmbeddedSelection(range) ? null : range;
+      }
+      if (!shouldPreserveSelection) return null;
+    }
+    if (!shouldPreserveSelection) return null;
+    return rangeFromEditorSelection(view);
   };
 
   const update = () => {

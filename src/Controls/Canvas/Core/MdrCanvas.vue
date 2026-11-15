@@ -163,6 +163,7 @@
         <span class="add-preview-label">{{ componentLabelOf(addPreviewKey) }}</span>
       </div>
     </div>
+    <div class="canvas-floating-layer" :style="canvasFloatingLayerStyle" />
     <AnnotationToolbar
       :visible="isAnnotationMode"
       :tool="annotationTool"
@@ -529,6 +530,10 @@ const canvasStyle = computed<CSSProperties>(() => ({
   transform: `translate(${(pan.x + origin.x) / zoom.value}px, ${(pan.y + origin.y) / zoom.value}px)`,
   transformOrigin: '0 0',
 }));
+const canvasFloatingLayerStyle = computed<CSSProperties>(() => ({
+  ...canvasStyle.value,
+  zIndex: Z_LAYER.textSelectionToolbar,
+}));
 // #endregion 缩放与画布变换
 
 // 点阵需随 pan 平移且附着内容网格，所以周期取 tile*zoom，按 (pan+origin+extend) 对周期取余对齐原点
@@ -699,6 +704,14 @@ const stopAutoPan = () => {
 // #endregion 自动平移
 
 // #region 手动平移（右键拖拽）
+const RIGHT_CLICK_DRAG_THRESHOLD = 5;
+
+let rightClickTextSelectionGesture: {
+  startX: number;
+  startY: number;
+  isDragging: boolean;
+} | null = null;
+
 const startPan = (e: MouseEvent) => {
   // 任意位置右键都要能平移，所以不依赖 Vue 的 .right 修饰符
   if (e.button !== 2) return;
@@ -720,6 +733,27 @@ const trackLeftButtonUp = () => {
   leftButtonDown = false;
 };
 
+const hasRichTextSelection = (): boolean => {
+  const selection = window.getSelection();
+  const anchor = selection?.anchorNode;
+  const focus = selection?.focusNode;
+  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+  const focusElement = focus instanceof Element ? focus : focus?.parentElement;
+  return (
+    !!selection &&
+    !selection.isCollapsed &&
+    !!anchorElement?.closest('.editor-mount.ProseMirror') &&
+    !!focusElement?.closest('.editor-mount.ProseMirror')
+  );
+};
+
+const dispatchRichTextContextFormat = (): boolean =>
+  !window.dispatchEvent(
+    new Event('Mindrizzle:rich-text-context-format', {
+      cancelable: true,
+    }),
+  );
+
 // 容器监听会随重挂载失效且编辑器会拦截右键，所以在 window 捕获阶段统一处理
 const onGlobalMouseDownCapture = (e: MouseEvent) => {
   if (e.button !== 2) return;
@@ -729,6 +763,9 @@ const onGlobalMouseDownCapture = (e: MouseEvent) => {
     e.stopPropagation();
     return;
   }
+  rightClickTextSelectionGesture = hasRichTextSelection()
+    ? { startX: e.clientX, startY: e.clientY, isDragging: false }
+    : null;
   startPan(e);
   e.stopPropagation();
 };
@@ -748,6 +785,17 @@ let panTargetX = 0;
 let panTargetY = 0;
 const updatePan = (e: MouseEvent) => {
   if (!panSession.active) return;
+  if (rightClickTextSelectionGesture) {
+    const deltaX = e.clientX - rightClickTextSelectionGesture.startX;
+    const deltaY = e.clientY - rightClickTextSelectionGesture.startY;
+    if (
+      !rightClickTextSelectionGesture.isDragging &&
+      Math.hypot(deltaX, deltaY) <= RIGHT_CLICK_DRAG_THRESHOLD
+    ) {
+      return;
+    }
+    rightClickTextSelectionGesture.isDragging = true;
+  }
   // .canvas 的 translate 不受 scale 影响，所以 pan 按视口像素直接累加
   panTargetX = panSession.startPanX + (e.clientX - panSession.startClientX);
   panTargetY = panSession.startPanY + (e.clientY - panSession.startClientY);
@@ -771,6 +819,17 @@ const stopPan = () => {
   panSession.active = false;
   isPanning.value = false;
   maybeRebaseOrigin();
+};
+
+const onRightClickTextSelectionMouseUp = (event: MouseEvent) => {
+  const gesture = rightClickTextSelectionGesture;
+  if (event.button !== 2 || !gesture) return;
+  rightClickTextSelectionGesture = null;
+  const deltaX = event.clientX - gesture.startX;
+  const deltaY = event.clientY - gesture.startY;
+  if (Math.hypot(deltaX, deltaY) > RIGHT_CLICK_DRAG_THRESHOLD) gesture.isDragging = true;
+  if (gesture.isDragging) return;
+  if (dispatchRichTextContextFormat()) stopPan();
 };
 
 // 右键拖拽会弹原生菜单，所以窗口级禁用
@@ -3889,6 +3948,7 @@ const abortSessions = () => {
   if (selectionState.active) finishSelection();
   if (panSession.active) stopPan();
   leftButtonDown = false;
+  rightClickTextSelectionGesture = null;
 };
 
 onMounted(() => {
@@ -3899,6 +3959,7 @@ onMounted(() => {
   window.addEventListener('mousedown', onGlobalMouseDownCapture, true);
   window.addEventListener('mousedown', trackLeftButtonDown, true);
   window.addEventListener('mouseup', trackLeftButtonUp, true);
+  window.addEventListener('mouseup', onRightClickTextSelectionMouseUp, true);
   window.addEventListener('resize', onResize);
   // ProseMirror 会冒泡拦截 mousemove，所以监听用捕获阶段
   window.addEventListener('mousemove', updateSelection, true);
@@ -3924,6 +3985,7 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', onGlobalMouseDownCapture, true);
   window.removeEventListener('mousedown', trackLeftButtonDown, true);
   window.removeEventListener('mouseup', trackLeftButtonUp, true);
+  window.removeEventListener('mouseup', onRightClickTextSelectionMouseUp, true);
   window.removeEventListener('resize', onResize);
   window.removeEventListener('mousemove', updateSelection, true);
   window.removeEventListener('mouseup', finishSelection);
@@ -4011,6 +4073,16 @@ defineExpose({
   height: 100%;
   overflow: visible;
   cursor: grab;
+}
+
+.canvas-floating-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
 
 .connection-layer {

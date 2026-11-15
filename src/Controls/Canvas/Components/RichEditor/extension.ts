@@ -29,6 +29,7 @@ import {
   strikethroughKeymap,
   highlightKeymap,
 } from './extensions/formatting.ts';
+import { fontSize } from './extensions/font-size.ts';
 import {
   EMBED_DEFAULT_HEIGHT,
   EMBED_DEFAULT_WIDTH,
@@ -178,6 +179,7 @@ export function defineExtension() {
     backgroundColor,
     highlight,
     fontFamily,
+    fontSize,
     boldKeymap,
     italicKeymap,
     underlineKeymap,
