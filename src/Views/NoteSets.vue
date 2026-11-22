@@ -86,13 +86,7 @@ import {
   renameWorkspaceDirectory,
   workspaceDirectories,
 } from '../utils/workspaceStore';
-import {
-  isPinnedNote,
-  loadPinnedNotes,
-  pinKeyOf,
-  pinnedKeys,
-  togglePinnedNote,
-} from '../utils/homePinned';
+import { isPinnedNote, loadPinnedNotes, pinKeyOf, togglePinnedNote } from '../utils/homePinned';
 
 const startEditorTransition = inject(startEditorTransitionKey)!;
 const noteLoadController = inject(noteLoadControllerKey)!;
@@ -1728,6 +1722,7 @@ function formatUpdatedAt(timestamp: number): string {
 /* 描述固定两行，避免长文本把同行卡片全拉高 */
 .note-sets-card__desc {
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
