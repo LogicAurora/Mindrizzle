@@ -12,8 +12,10 @@ import {
   mdiDownload,
   mdiFilterVariant,
   mdiFileDocumentOutline,
+  mdiFilePdfBox,
   mdiFolderMove,
   mdiInformationOutline,
+  mdiLanguageHtml5,
   mdiMagnify,
   mdiNoteOffOutline,
   mdiPencil,
@@ -31,10 +33,12 @@ import { open as openNativeDialog } from '@tauri-apps/plugin-dialog';
 import { info } from '@tauri-apps/plugin-log';
 import { useRoute } from 'vue-router';
 
+import ExportNoteDialog from '../Controls/ExportNoteDialog.vue';
 import NewFileDialog from '../Controls/NewFileDialog.vue';
 import NoteDetailDialog, { type NoteDetailTarget } from '../Controls/NoteDetailDialog.vue';
 import TagLibraryMenu from '../Controls/TagLibraryMenu.vue';
 import WorkspaceSwitcher from '../Controls/WorkspaceSwitcher.vue';
+import type { ExportFormat } from '../utils/noteExport/types';
 import {
   loadEditorComponent,
   storePendingEditorBody,
@@ -181,6 +185,18 @@ async function exportNoteSet(noteSet: NoteSetItem) {
   } finally {
     exportingFileName.value = '';
   }
+}
+
+const isExportOpen = ref(false);
+const exportMode = ref<ExportFormat>('html');
+const exportNote = ref<EditorNoteRef | null>(null);
+const exportTitle = ref('');
+
+function openExport(noteSet: NoteSetItem, mode: ExportFormat) {
+  exportNote.value = noteRefOf(noteSet);
+  exportTitle.value = noteSet.name;
+  exportMode.value = mode;
+  isExportOpen.value = true;
 }
 
 // ---------- 工作区 / sections ----------
@@ -1548,6 +1564,18 @@ function formatUpdatedAt(timestamp: number): string {
                   </template>
                   <v-list-item-title>创建副本</v-list-item-title>
                 </v-list-item>
+                <v-list-item @click="openExport(noteSet, 'html')">
+                  <template #prepend>
+                    <v-icon :icon="mdiLanguageHtml5" size="small" />
+                  </template>
+                  <v-list-item-title>导出为 HTML</v-list-item-title>
+                </v-list-item>
+                <v-list-item @click="openExport(noteSet, 'pdf')">
+                  <template #prepend>
+                    <v-icon :icon="mdiFilePdfBox" size="small" />
+                  </template>
+                  <v-list-item-title>导出为 PDF</v-list-item-title>
+                </v-list-item>
                 <v-divider class="my-1" />
                 <v-list-item @click="askDelete([noteSet])">
                   <template #prepend>
@@ -1583,6 +1611,13 @@ function formatUpdatedAt(timestamp: number): string {
       :note="detailTarget"
       @update:close="isDetailOpen = $event.status"
       @saved="onDetailSaved"
+    />
+    <ExportNoteDialog
+      v-if="exportNote"
+      v-model="isExportOpen"
+      :mode="exportMode"
+      :note="exportNote"
+      :title="exportTitle"
     />
     <v-dialog v-model="isRenameDialogOpen" max-width="420">
       <v-card>

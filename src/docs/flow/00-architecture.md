@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-06 -->
+<!-- 最后验证: 2026-11-22 -->
 
 # 00 系统全景
 
@@ -43,6 +43,7 @@ flowchart TB
 
   subgraph Utils["工具层"]
     BHU["blockHandleUtils.ts"]
+    EXP["utils/noteExport/"]
   end
 
   MC --> RB
@@ -66,6 +67,7 @@ flowchart TB
   BH --> BHO
   MC --> CC
   MC --> ZI
+  MC -.->|"导出快照"| EXP
   MC --> AN
   AN --> AM
   BHU -.->|"读取 DOM 契约"| MC
@@ -123,7 +125,7 @@ flowchart LR
 - **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 basRichTextEditor / EditableCodeBlock 在自己的定义里使用 base，并自行处理 config、可变形、设置 UI 与自动高度；ResizeBox 提供缩放手柄。
 - **浮层几何**：blockFloatGeometry 是拖拽栏/设置栏/遮罩几何与 z 的唯一来源，画布命中测试与 base 渲染共用。
 - **控制器契约**：canvasComponentControllers 定义块内组件向画布申请移动/改尺寸/平移/缩放/读视图的接口（provide/inject），自动高度与光标跟随都由块组件自己调用
-- **工具层**：blockHandleUtils 是编辑器侧唯一坐标与几何入口。
+- **工具层**：blockHandleUtils 是编辑器侧唯一坐标与几何入口；noteExport 负责把画布克隆清洗成独立 HTML / 分页 PDF（见 13-export）。
 - **批注层**：AnnotationLayer 只负责绘制与指针会话，annotationModel 提供连接线端点/贝塞尔/命中几何；数据存于 MdrCanvas 并随 `body.json` 持久化（见 12-annotation）。
 
 ## 维护提示

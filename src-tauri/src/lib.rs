@@ -63,6 +63,28 @@ fn get_git_commit() -> &'static str {
     env!("GIT_COMMIT")
 }
 
+#[tauri::command]
+fn print_main_webview(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|error| error.to_string())
+}
+
+tauri_cmd! {
+    fn save_export_file(path: String, content: String) -> anyhow::Result<()> {
+        let target = std::path::PathBuf::from(&path);
+        if !target.is_absolute() || target.file_name().is_none() {
+            anyhow::bail!("导出路径必须带文件名的绝对路径");
+        }
+        let parent = target.parent().context("导出路径缺少父目录")?;
+        if !parent.is_dir() {
+            anyhow::bail!("导出目录不存在：{}", parent.display());
+        }
+        std::fs::write(&target, content.as_bytes())
+            .with_context(|| format!("写入导出文件：{}", target.display()))?;
+        info!("导出文件已保存：{}", target.display());
+        Ok(())
+    }
+}
+
 use tauri_plugin_updater::UpdaterExt;
 
 // 通道清单放 main 的 channel/ 下：固定 tag 的锚点 release 会一直占着 tag 与 release 列表
@@ -167,6 +189,8 @@ pub fn run() {
             fetch_file_list,
             is_file_name_valid,
             get_git_commit,
+            print_main_webview,
+            save_export_file,
             check_update,
             install_update,
             mdr_file_op::get_mdr_file_meta,

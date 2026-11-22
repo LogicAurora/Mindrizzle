@@ -29,8 +29,8 @@
 | 09-perf.md            | 节流与缓存         |
 | 10-utils.md           | 工具函数索引       |
 | 11-workarounds.md     | 非逻辑防御清单     |
-| 12-annotation.md      | 批注模式与工具条位 |
 | 12-annotation.md      | 批注模式与连接线   |
+| 13-export.md          | HTML / PDF 导出    |
 
 > 组件开发（定义、上下文、设置面板、私有文件）见 [../components/](../components/)：
 > 先读 [快速上手](../components/01-quick-start.md)。

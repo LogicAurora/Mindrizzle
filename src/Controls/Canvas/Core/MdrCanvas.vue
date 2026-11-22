@@ -278,6 +278,13 @@ import { copyComponentFiles } from '../../../utils/componentDataStore.ts';
 import { getErrorMessage } from '../../../utils/getErrorMessage.ts';
 import { getCurrentNote } from '../../../utils/noteContext.ts';
 import {
+  collectExportThemeVars,
+  inlineBlobAssets,
+  stripInteractiveLayers,
+  syncFormState,
+} from '../../../utils/noteExport/exportAssets.ts';
+import type { ExportBounds, ExportCanvasSnapshot } from '../../../utils/noteExport/types.ts';
+import {
   getVisibleBlockRect,
   isFullyVisibleInCanvas,
   invalidateCanvasScaleCache,
@@ -3937,7 +3944,11 @@ const sameBlockUuids = (
   return keys.every((key) => key in second);
 };
 
+// 导出期间必须保住全部活实例，补一次虚拟化就会把未渲染完的 Mermaid 换成源码快照
+let isCapturingExport = false;
+
 const reconcileVirtualBlocks = () => {
+  if (isCapturingExport) return;
   const focused = focusedUuid();
   const nextSnapshots: Record<string, string> = {};
   const touchedIds: string[] = [];
@@ -4325,11 +4336,102 @@ onUnmounted(() => {
   window.removeEventListener('pointercancel', abortSessions);
 });
 
+// #region 导出快照
+const EXPORT_SETTLE_MIN_MS = 260;
+const EXPORT_SETTLE_MAX_MS = 8000;
+// 图片走 IPC、Mermaid 异步出图，静默阈值从挂载起至少等这么久才不会抓到半成品
+const EXPORT_MIN_WAIT_MS = 600;
+const EXPORT_POLL_MS = 80;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const prepareMermaidPreview = (root: HTMLElement): void => {
+  root.querySelectorAll<HTMLElement>('.mermaid-block').forEach((block) => {
+    if (!block.querySelector('.mermaid-source')) return;
+    const toggle = Array.from(block.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('预览图表'),
+    );
+    toggle?.click();
+  });
+};
+
+const isMermaidReady = (root: HTMLElement): boolean =>
+  Array.from(root.querySelectorAll('.mermaid-block')).every(
+    (block) =>
+      !!block.querySelector('.mermaid-preview svg') || !!block.querySelector('.mermaid-error'),
+  );
+
+// 图片与 Mermaid 都是异步落 DOM，静默一小段时间再抓快照才不会是空白
+async function waitForExportStable(root: HTMLElement): Promise<void> {
+  const startedAt = performance.now();
+  const deadline = startedAt + EXPORT_SETTLE_MAX_MS;
+  let lastMutation = startedAt;
+  const observer = new MutationObserver(() => {
+    lastMutation = performance.now();
+  });
+  observer.observe(root, { subtree: true, childList: true, attributes: true });
+  while (performance.now() < deadline) {
+    await wait(EXPORT_POLL_MS);
+    const isImageReady = Array.from(root.querySelectorAll('img')).every((img) => img.complete);
+    const isLongEnough = performance.now() - startedAt >= EXPORT_MIN_WAIT_MS;
+    const isSettled = performance.now() - lastMutation >= EXPORT_SETTLE_MIN_MS;
+    if (isImageReady && isMermaidReady(root) && isLongEnough && isSettled) break;
+  }
+  observer.disconnect();
+}
+
+const exportBoundsOf = (): ExportBounds => {
+  if (!state.items.length) return { minX: 0, minY: 0, width: 800, height: 600 };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  state.items.forEach((item) => {
+    const rect = layoutOf(item);
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, rect.x + rect.w);
+    maxY = Math.max(maxY, rect.y + rect.h);
+  });
+  return { minX, minY, width: maxX - minX, height: maxY - minY };
+};
+
+// 导出前临时取消虚拟化，否则视口外的块只有快照、拿不到完整块壳
+async function buildExportSnapshot(): Promise<ExportCanvasSnapshot> {
+  const root = canvasRef.value;
+  if (!root) throw new Error('画布尚未挂载');
+  const previousSnapshots = virtualSnapshots.value;
+  const wasEditMode = isEditMode.value;
+  virtualSnapshots.value = {};
+  isEditMode.value = false;
+  isCapturingExport = true;
+  try {
+    await nextTick();
+    await nextTick();
+    if (document.fonts?.ready) await document.fonts.ready.catch(() => undefined);
+    prepareMermaidPreview(root);
+    await waitForExportStable(root);
+    const bounds = exportBoundsOf();
+    const themeVars = collectExportThemeVars();
+    const clone = root.cloneNode(true) as HTMLElement;
+    syncFormState(root, clone);
+    stripInteractiveLayers(clone);
+    await inlineBlobAssets(clone);
+    return { html: clone.outerHTML, bounds, themeVars };
+  } finally {
+    isCapturingExport = false;
+    virtualSnapshots.value = previousSnapshots;
+    isEditMode.value = wasEditMode;
+  }
+}
+// #endregion 导出快照
+
 defineExpose({
   state,
   pan,
   origin,
   zoom,
+  buildExportSnapshot,
   isPanning,
   canvasStyle,
   containerStyle,

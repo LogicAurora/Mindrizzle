@@ -13,6 +13,29 @@
     <Teleport to="#title-left-actions" defer>
       <v-btn :icon="mdiExitToApp" color="white" variant="text" @click="$router.push('/set')" />
     </Teleport>
+    <Teleport to="#toolbar-actions" defer>
+      <v-menu location="bottom end">
+        <template #activator="{ props: exportProps }">
+          <v-btn
+            v-bind="exportProps"
+            :icon="mdiExportVariant"
+            color="white"
+            variant="text"
+            title="导出笔记"
+          />
+        </template>
+        <v-list density="compact" min-width="180">
+          <v-list-item :prepend-icon="mdiLanguageHtml5" @click="openExport('html')">
+            <v-list-item-title>导出为 HTML</v-list-item-title>
+            <v-list-item-subtitle>只读画布，可平移缩放</v-list-item-subtitle>
+          </v-list-item>
+          <v-list-item :prepend-icon="mdiFilePdfBox" @click="openExport('pdf')">
+            <v-list-item-title>导出为 PDF</v-list-item-title>
+            <v-list-item-subtitle>带分页导出预览</v-list-item-subtitle>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+    </Teleport>
 
     <MdrCanvas class="editor-wrapper" ref="MdrCRef" />
     <CanvasSideToolbar
@@ -58,6 +81,14 @@
       保存失败：{{ saveError }}
     </v-snackbar>
 
+    <ExportNoteDialog
+      v-model="exportOpen"
+      :mode="exportMode"
+      :note="noteRef"
+      :title="noteRef.fileName"
+      :snapshot-provider="captureExportSnapshot"
+    />
+
     <v-dialog v-model="isLeaveDialogOpen" max-width="420" persistent>
       <v-card>
         <v-card-title>笔记尚未保存</v-card-title>
@@ -80,13 +111,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, inject } from 'vue';
-import { mdiContentSave, mdiExitToApp, mdiCheck } from '@mdi/js';
+import {
+  mdiCheck,
+  mdiContentSave,
+  mdiExitToApp,
+  mdiExportVariant,
+  mdiFilePdfBox,
+  mdiLanguageHtml5,
+} from '@mdi/js';
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { error as logError } from '@tauri-apps/plugin-log';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router';
 import MdrCanvas from '../Controls/Canvas/Core/MdrCanvas.vue';
 import AddBlockPicker from '../Controls/Canvas/AddBlockPicker.vue';
+import ExportNoteDialog from '../Controls/ExportNoteDialog.vue';
 import CanvasSideToolbar from '../Controls/Canvas/CanvasToolbar.vue';
 import {
   clipboardEntries,
@@ -103,6 +142,7 @@ import { takePendingEditorBody } from '../utils/editorRoute';
 import { touchNoteSetUpdatedAt } from '../utils/noteSetStore';
 import { setCurrentNote } from '../utils/noteContext';
 import { isDebugLoadingEnabled, noteLoadControllerKey } from '../utils/routeTransition';
+import type { ExportCanvasSnapshot, ExportFormat } from '../utils/noteExport/types';
 
 const noteLoadController = inject(noteLoadControllerKey);
 
@@ -234,6 +274,18 @@ const noteLocation = noteFileLocationOf(noteRef);
 // 组件数据 store 拿不到路由参数，进编辑页先把笔记位置写进上下文
 setCurrentNote(noteRef);
 const pendingEditorBody = takePendingEditorBody(noteRef);
+
+const exportOpen = ref(false);
+const exportMode = ref<ExportFormat>('html');
+const openExport = (mode: ExportFormat) => {
+  exportMode.value = mode;
+  exportOpen.value = true;
+};
+const captureExportSnapshot = async (): Promise<ExportCanvasSnapshot> => {
+  const canvas = MdrCRef.value;
+  if (!canvas) throw new Error('画布尚未就绪');
+  return canvas.buildExportSnapshot();
+};
 
 const isSaving = ref(false);
 const saved = ref(false);
