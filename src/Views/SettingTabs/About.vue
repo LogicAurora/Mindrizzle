@@ -138,7 +138,7 @@ onMounted(() => {
         <span class="about-hero-glow about-hero-glow--1" />
         <span class="about-hero-glow about-hero-glow--2" />
         <div class="about-hero-main">
-          <v-avatar class="about-hero-logo" size="80" rounded="lg" aria-hidden="true">
+          <v-avatar class="about-hero-logo" rounded="lg" aria-hidden="true">
             <v-img :src="appIconUrl" alt="" />
           </v-avatar>
           <div class="about-hero-copy">
@@ -373,6 +373,10 @@ onMounted(() => {
 
 .about-hero-logo {
   flex: 0 0 80px;
+  /* 尺寸必须写在这里覆盖 Vuetify 的 density 默认值；用 size prop 会注入内联样式，
+     小屏媒体查询改不动高度，logo 被拉成 60×80 */
+  width: 80px;
+  height: 80px;
   background: transparent;
 }
 

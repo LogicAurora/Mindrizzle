@@ -5,6 +5,7 @@ import {
   mdiCheckboxMarked,
   mdiCheckboxMultipleOutline,
   mdiClose,
+  mdiCheck,
   mdiContentCopy,
   mdiDeleteOutline,
   mdiDotsVertical,
@@ -20,12 +21,15 @@ import {
   mdiRenameBox,
   mdiSelectAll,
   mdiSort,
+  mdiStar,
+  mdiStarOutline,
   mdiUpload,
 } from '@mdi/js';
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open as openNativeDialog } from '@tauri-apps/plugin-dialog';
 import { info } from '@tauri-apps/plugin-log';
+import { useRoute } from 'vue-router';
 
 import NewFileDialog from '../Controls/NewFileDialog.vue';
 import NoteDetailDialog, { type NoteDetailTarget } from '../Controls/NoteDetailDialog.vue';
@@ -39,7 +43,7 @@ import {
 } from '../utils/editorRoute';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../utils/commandPaletteShortcut';
 import { getErrorMessage } from '../utils/getErrorMessage';
-import { recordRecentNote } from '../utils/homeActivity';
+import { loadRecentNotes, recordRecentNote } from '../utils/homeActivity';
 import {
   exportLocalNoteMdrf,
   fileOperations,
@@ -82,9 +86,17 @@ import {
   renameWorkspaceDirectory,
   workspaceDirectories,
 } from '../utils/workspaceStore';
+import {
+  isPinnedNote,
+  loadPinnedNotes,
+  pinKeyOf,
+  pinnedKeys,
+  togglePinnedNote,
+} from '../utils/homePinned';
 
 const startEditorTransition = inject(startEditorTransitionKey)!;
 const noteLoadController = inject(noteLoadControllerKey)!;
+const route = useRoute();
 let editorPreload: Promise<unknown> | undefined;
 
 const DEFAULT_SECTION_ID = 'default';
@@ -102,7 +114,6 @@ interface WorkspaceSection {
 
 function preloadEditor() {
   if (editorPreload) return editorPreload;
-  // 预加载失败不影响点击时由路由重新加载
   editorPreload = loadEditorComponent().catch(() => undefined);
   return editorPreload;
 }
@@ -136,6 +147,7 @@ async function prepareEditor(note: EditorNoteRef) {
 }
 
 async function openEditor(noteSet: NoteSetItem) {
+  if (noteSet.loading) return;
   noteSet.loading = true;
   const note = noteRefOf(noteSet);
   const query = {
@@ -177,6 +189,7 @@ async function exportNoteSet(noteSet: NoteSetItem) {
   }
 }
 
+// ---------- 工作区 / sections ----------
 const activeSectionId = ref(DEFAULT_SECTION_ID);
 const sections = computed<WorkspaceSection[]>(() => [
   { id: DEFAULT_SECTION_ID, name: '默认工作区', kind: 'workspace' },
@@ -194,11 +207,13 @@ const activeSection = computed(
 );
 const activeDir = computed(() => activeSection.value.dir);
 const isExternalSection = computed(() => activeSection.value.kind === 'external');
+
 const INITIAL_VISIBLE_COUNT = 12;
 const VISIBLE_BATCH_SIZE = 12;
 const SKELETON_COUNT = 6;
 const SENTINEL_MARGIN_PX = 240;
 const SORT_OPTIONS = [
+  { value: 'pinned-first', label: '置顶优先' },
   { value: 'updated-desc', label: '最近编辑' },
   { value: 'updated-asc', label: '最早编辑' },
   { value: 'name-asc', label: '名称 A-Z' },
@@ -229,7 +244,7 @@ const isLoading = ref(true);
 const isSectionLoading = ref(false);
 const noteSets = ref<NoteSetItem[]>([]);
 const visibleCount = ref(INITIAL_VISIBLE_COUNT);
-const sortBy = ref<NoteSetSort>('updated-desc');
+const sortBy = ref<NoteSetSort>('pinned-first');
 const selectedTags = ref<string[]>([]);
 const includeUntagged = ref(false);
 const tagMatchMode = ref<TagMatchMode>('all');
@@ -243,6 +258,93 @@ const draftUpdatedWithin = ref<UpdatedWithin>('all');
 const listSentinel = ref<HTMLElement | null>(null);
 let sectionLoadId = 0;
 let hasLoadedSection = false;
+
+// ---------- 工具栏折叠 ----------
+const COLLAPSE_BUFFER = 10;
+// teleport 尚未渲染时的兜底按钮宽度（Vuetify icon comfortable 约 40px）
+const FALLBACK_BUTTON_WIDTH = 40;
+
+const isCompactToolbar = ref(false);
+let titleResizeObserver: ResizeObserver | null = null;
+let titleMutationObserver: MutationObserver | null = null;
+let layoutRaf = 0;
+
+function findTitleEl(): HTMLElement | null {
+  const wrap = document.querySelector<HTMLElement>('.app-title-wrap');
+  if (!wrap) return null;
+  const titles = wrap.querySelectorAll<HTMLElement>('.app-title');
+  return titles[titles.length - 1] ?? null;
+}
+
+function findRightActionsEl(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('#title-right-actions');
+}
+
+// 折叠后标题变宽，文字放得下时 scrollWidth 会被 clamp 到 clientWidth，
+// 读不到真实文本宽度导致永远恢复不了；临时撑成 max-content 再同步读回
+function measureNaturalWidth(titleEl: HTMLElement): number {
+  const prevWidth = titleEl.style.width;
+  titleEl.style.width = 'max-content';
+  const natural = titleEl.scrollWidth;
+  titleEl.style.width = prevWidth;
+  return natural;
+}
+
+function evaluateCompact() {
+  const titleEl = findTitleEl();
+  if (!titleEl) return;
+  const available = titleEl.clientWidth;
+  const natural = measureNaturalWidth(titleEl);
+
+  if (!isCompactToolbar.value) {
+    // 展开态：标题装不下才折叠
+    if (natural > available + COLLAPSE_BUFFER) {
+      isCompactToolbar.value = true;
+    }
+    return;
+  }
+
+  const rightEl = findRightActionsEl();
+  const measured = rightEl?.getBoundingClientRect().width ?? 0;
+  const singleButtonWidth = measured > 0 ? measured : FALLBACK_BUTTON_WIDTH;
+  const delta = singleButtonWidth * 2;
+  const availableIfExpanded = available - delta;
+
+  // 展开后仍能完整放下标题才恢复
+  if (natural <= availableIfExpanded - COLLAPSE_BUFFER) {
+    isCompactToolbar.value = false;
+  }
+}
+
+function scheduleEvaluate() {
+  cancelAnimationFrame(layoutRaf);
+  layoutRaf = requestAnimationFrame(evaluateCompact);
+}
+
+function setupTitleObserver() {
+  const wrap = document.querySelector<HTMLElement>('.app-title-wrap');
+  if (!wrap) {
+    requestAnimationFrame(setupTitleObserver);
+    return;
+  }
+  titleResizeObserver = new ResizeObserver(scheduleEvaluate);
+  titleResizeObserver.observe(wrap);
+  titleMutationObserver = new MutationObserver(scheduleEvaluate);
+  titleMutationObserver.observe(wrap, { childList: true, subtree: true, characterData: true });
+  scheduleEvaluate();
+}
+
+const recentOpenedAt = ref<Map<string, number>>(new Map());
+function loadRecentTimes() {
+  recentOpenedAt.value = new Map(loadRecentNotes().map((r) => [pinKeyOf(r), r.openedAt]));
+}
+function lastOpenedAt(item: NoteSetItem): number | undefined {
+  return recentOpenedAt.value.get(pinKeyOf(item));
+}
+
+// 便签集主键与首页置顶主键格式一致（dir|filePath|fileName），彼此可直接互查
+const noteSetKeyOf = (item: NoteSetItem): string => pinKeyOf(item);
+
 const availableTags = computed(() =>
   [...new Set(noteSets.value.flatMap((noteSet) => noteSet.tag))].sort((left, right) =>
     left.localeCompare(right, 'zh-CN'),
@@ -291,6 +393,12 @@ function matchesFilters(noteSet: NoteSetItem, filters: NoteSetFilters): boolean 
 
 function sortNoteSets(items: NoteSetItem[]): NoteSetItem[] {
   return [...items].sort((left, right) => {
+    if (sortBy.value === 'pinned-first') {
+      const leftPinned = isPinnedNote(left);
+      const rightPinned = isPinnedNote(right);
+      if (leftPinned !== rightPinned) return leftPinned ? -1 : 1;
+      return right.updatedAt - left.updatedAt || left.name.localeCompare(right.name, 'zh-CN');
+    }
     if (sortBy.value === 'name-asc' || sortBy.value === 'name-desc') {
       const direction = sortBy.value === 'name-asc' ? 1 : -1;
       return direction * left.name.localeCompare(right.name, 'zh-CN');
@@ -327,14 +435,12 @@ const draftFilterCount = computed(
 );
 const visibleNoteSets = computed(() => filteredNoteSets.value.slice(0, visibleCount.value));
 
-// 一次性建几百张卡片会把首屏主线程占满，所以按需追加；不能按条数夹取，否则复制/导入后新增的卡片会被截在可见区外
 function growVisibleNoteSets() {
   visibleCount.value += VISIBLE_BATCH_SIZE;
 }
 
 let listObserver: IntersectionObserver | null = null;
 
-// 哨兵一直留在视口内时观察器不会再次回调，所以主动把视口填满
 async function fillListViewport(): Promise<void> {
   const sentinel = listSentinel.value;
   if (!sentinel || visibleCount.value >= filteredNoteSets.value.length) return;
@@ -401,6 +507,13 @@ watch([selectedTags, includeUntagged, tagMatchMode, updatedWithin], async () => 
   void fillListViewport();
 });
 
+watch(sortBy, async () => {
+  visibleCount.value = INITIAL_VISIBLE_COUNT;
+  await nextTick();
+  void fillListViewport();
+});
+
+// ---------- 数据加载 ----------
 async function loadExternalItems(): Promise<NoteSetItem[]> {
   const items = await Promise.all(
     externalNotes.value.map(async (record) => {
@@ -445,6 +558,7 @@ async function loadActiveSection() {
           }));
     if (loadId !== sectionLoadId) return;
     noteSets.value = items;
+    loadRecentTimes();
     // 网页端无 IPC，日志插件的 invoke 会抛错
     if (isTauri()) info(`读取笔记元信息成功，共 ${noteSets.value.length} 条`);
   } catch {
@@ -458,12 +572,38 @@ async function loadActiveSection() {
   }
 }
 
-watch(activeSectionId, () => {
+// 切换工作区：显式函数取代原 watch(activeSectionId)，避免首次挂载时重复加载或误清 query 带过来的筛选
+async function selectSection(id: string) {
+  if (id === activeSectionId.value) return;
+  activeSectionId.value = id;
   visibleCount.value = INITIAL_VISIBLE_COUNT;
   clearTagFilters();
   exitSelectMode();
-  void loadActiveSection();
-});
+  await loadActiveSection();
+}
+
+// ---------- Query 入口 ----------
+// 首页标签云 / 工作区卡片 / 统计卡会带 query 跳过来：workspace 映射到 section，tags/tag 映射到筛选，sort 映射到排序
+function applyQueryFromRoute() {
+  const q = route.query;
+  const nextTags: string[] = [];
+  if (typeof q.tag === 'string' && q.tag.trim()) nextTags.push(q.tag.trim());
+  if (typeof q.tags === 'string' && q.tags) {
+    for (const part of q.tags.split(',')) {
+      if (part.trim()) nextTags.push(part.trim());
+    }
+  }
+  if (nextTags.length) selectedTags.value = sanitizeTags(nextTags);
+  if (typeof q.sort === 'string' && SORT_OPTIONS.some((option) => option.value === q.sort)) {
+    sortBy.value = q.sort as NoteSetSort;
+  }
+  if (typeof q.workspace === 'string' && q.workspace) {
+    const matched = sections.value.find(
+      (section) => section.id === q.workspace || section.dir === q.workspace,
+    );
+    if (matched) activeSectionId.value = matched.id;
+  }
+}
 
 onMounted(async () => {
   listObserver = new IntersectionObserver(
@@ -476,7 +616,11 @@ onMounted(async () => {
   );
   await loadWorkspaceState();
   await loadTagLibrary();
+  await loadPinnedNotes();
+  applyQueryFromRoute();
   await loadActiveSection();
+  await nextTick();
+  setupTitleObserver();
 });
 
 watch(listSentinel, (sentinel) => {
@@ -487,8 +631,15 @@ watch(listSentinel, (sentinel) => {
 onBeforeUnmount(() => {
   listObserver?.disconnect();
   listObserver = null;
+  titleResizeObserver?.disconnect();
+  titleResizeObserver = null;
+  titleMutationObserver?.disconnect();
+  titleMutationObserver = null;
+  cancelAnimationFrame(layoutRaf);
+  toolbarSelection.clearSelection();
 });
 
+// ---------- 导入 / 打开外部文件 ----------
 const uploadInput = ref<HTMLInputElement | null>(null);
 const isImporting = ref(false);
 
@@ -511,8 +662,7 @@ async function onUploadSelected(event: Event) {
       name: entry.name,
       updatedAt: entry.updatedAt,
     });
-    activeSectionId.value = EXTERNAL_SECTION_ID;
-    await loadActiveSection();
+    await selectSection(EXTERNAL_SECTION_ID);
     showHint(`已导入 ${imported}`);
   } catch (error) {
     showHint(`导入失败：${getErrorMessage(error)}`);
@@ -545,8 +695,7 @@ async function openExternalFile() {
     name: entry.name,
     updatedAt: entry.updatedAt,
   });
-  activeSectionId.value = EXTERNAL_SECTION_ID;
-  await loadActiveSection();
+  await selectSection(EXTERNAL_SECTION_ID);
   await openEditor({ ...entry, loading: false });
 }
 
@@ -554,8 +703,7 @@ async function pickWorkspaceDirectory() {
   const selected = await openNativeDialog({ directory: true, multiple: false });
   if (typeof selected !== 'string') return;
   const entry = await addWorkspaceDirectory(selected);
-  activeSectionId.value = entry.id;
-  await loadActiveSection();
+  await selectSection(entry.id);
   showHint(`已添加工作区 ${entry.name}`);
 }
 
@@ -566,6 +714,7 @@ async function removeExternalNote(noteSet: NoteSetItem) {
   await loadActiveSection();
 }
 
+// ---------- 选中 / 批量 ----------
 const COPY_NAME_SUFFIX = '_副本';
 const COPY_NAME_MAX_ATTEMPTS = 100;
 const FILE_NAME_IN_PATH = /[^\\/]*$/;
@@ -576,7 +725,6 @@ const selectedCount = computed(() => selectedKeys.value.length);
 
 const toolbarSelection = useToolbarSelection();
 
-// 工具栏配色、标题与关闭按钮归全局渲染，这里只同步数量与退出回调
 watch(
   [isSelectMode, selectedCount],
   ([isSelecting, count]) => {
@@ -588,9 +736,6 @@ watch(
 
 onBeforeUnmount(() => toolbarSelection.clearSelection());
 
-const noteSetKeyOf = (item: NoteSetItem): string =>
-  `${item.dir ?? ''}|${item.filePath ?? ''}|${item.fileName}`;
-
 const selectedItems = computed(() =>
   noteSets.value.filter((item) => selectedKeys.value.includes(noteSetKeyOf(item))),
 );
@@ -599,7 +744,6 @@ const noteSetArgsOf = (item: NoteSetItem) => ({
   ...noteFileLocationOf(item),
 });
 
-// 外部文件改名后路径跟着变，否则卡片仍指向旧文件
 const renamePathFileName = (path: string, name: string): string =>
   path.replace(FILE_NAME_IN_PATH, `${name}.mdrf`);
 
@@ -618,7 +762,6 @@ function enterSelectMode() {
   isSelectMode.value = true;
 }
 
-// 退出时一律清空，避免切工作区或误触后残留的选中项被批量删除
 function exitSelectMode() {
   isSelectMode.value = false;
   selectedKeys.value = [];
@@ -629,8 +772,18 @@ function toggleSelectAll() {
     selectedKeys.value.length === noteSets.value.length ? [] : noteSets.value.map(noteSetKeyOf);
 }
 
+// 非多选时整卡点击打开编辑器；操作按钮所在的 card-actions 已统一 @click.stop 拦截
 function onCardClick(item: NoteSetItem) {
-  if (isSelectMode.value) toggleSelect(item);
+  if (isSelectMode.value) {
+    toggleSelect(item);
+    return;
+  }
+  void openEditor(item);
+}
+
+// ---------- 置顶 ----------
+async function togglePin(item: NoteSetItem) {
+  await togglePinnedNote(item);
 }
 
 interface BatchOutcome {
@@ -677,7 +830,6 @@ async function isNameAvailable(item: NoteSetItem, name: string): Promise<boolean
     );
     return false;
   } catch {
-    // 读不到元信息说明该路径没有归档；真冲突时复制命令还会再拦一次
     return true;
   }
 }
@@ -766,6 +918,7 @@ async function confirmDelete() {
   deleteTargets.value = [];
 }
 
+// ---------- 重命名 ----------
 const isRenameNoteOpen = ref(false);
 const renameNoteTarget = ref<NoteSetItem | null>(null);
 const renameNoteDraft = ref('');
@@ -799,7 +952,6 @@ async function submitRenameNote() {
   }
 }
 
-// 卡片标题取自归档 meta，只改文件名用户看不出差别，所以标题跟着文件名一起改
 async function renameNoteSet(item: NoteSetItem, newName: string): Promise<void> {
   const isTitleFollowing = item.name === item.fileName;
   const renamed = await fileOperations.renameNote({
@@ -832,6 +984,7 @@ async function applyRenamedNoteSet(item: NoteSetItem, fileName: string) {
   item.updatedAt = Date.now();
 }
 
+// ---------- 移动 ----------
 const workspaceTargets = computed(() => [
   { id: 'default', name: '默认工作区', dir: undefined },
   ...workspaceDirectories.value.map((item) => ({
@@ -870,7 +1023,6 @@ function openDetail(noteSet: NoteSetItem) {
   isDetailOpen.value = true;
 }
 
-// 就地更新卡片，避免整表重取把滚动位置和加载骨架一起翻出来
 async function onDetailSaved(payload: { note: NoteDetailTarget }) {
   invalidateNoteSetEntries();
   const entry = noteSets.value.find((item) => item.fileName === payload.note.fileName);
@@ -885,7 +1037,6 @@ async function onDetailSaved(payload: { note: NoteDetailTarget }) {
   showHint('详情已保存');
 }
 
-// 整页重取会用骨架替换列表，删/改标签只就地改卡片，不闪
 function onTagLibraryChanged(change: TagLibraryChange) {
   noteSets.value.forEach((noteSet) => {
     noteSet.tag = resolveChangedTags(noteSet.tag, change);
@@ -930,7 +1081,7 @@ async function moveWorkspace(id: string, offset: number) {
 async function removeWorkspace(id: string) {
   try {
     await removeWorkspaceDirectory(id);
-    if (activeSectionId.value === id) activeSectionId.value = DEFAULT_SECTION_ID;
+    if (activeSectionId.value === id) await selectSection(DEFAULT_SECTION_ID);
     showHint('已移出工作区列表');
   } catch (error) {
     showHint(`移出失败：${getErrorMessage(error)}`);
@@ -941,7 +1092,6 @@ async function moveExternalNote(noteSet: NoteSetItem, targetDir?: string) {
   const key = noteSet.filePath ?? noteSet.localName;
   if (!key) return;
   try {
-    // 网页端副本只能归入默认工作区；桌面端直接把归档文件挪进目标目录
     if (noteSet.localName) await moveLocalNoteToWorkspace(noteSet.localName);
     else if (noteSet.filePath)
       await fileOperations.moveExternalNote({
@@ -957,6 +1107,7 @@ async function moveExternalNote(noteSet: NoteSetItem, targetDir?: string) {
   }
 }
 
+// ---------- 时间格式化 ----------
 const MILLIS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
@@ -964,7 +1115,6 @@ const DAYS_PER_MONTH = 30;
 
 const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
 
-// Date 只有绝对时间，所以按分钟/小时/天折算，超过一月退回日期
 function formatUpdatedAt(timestamp: number): string {
   if (!timestamp) return '未知';
   const minutes = Math.round((timestamp - Date.now()) / MILLIS_PER_MINUTE);
@@ -976,27 +1126,74 @@ function formatUpdatedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN');
 }
 </script>
+
 <template>
   <v-sheet class="note-sets-page" elevation="0">
-    <Teleport to="#title-right-actions" defer>
-      <v-btn
-        color="white"
-        :icon="mdiMagnify"
-        title="搜索（打开命令面板）"
-        variant="text"
-        @click="openCommandPalette"
-      />
-      <v-menu location="bottom end">
+    <Teleport to="#title-right-actions" defer v-if="!isSelectMode">
+      <template v-if="!isCompactToolbar">
+        <v-btn
+          color="white"
+          :icon="mdiMagnify"
+          title="搜索（打开命令面板）"
+          variant="text"
+          @click="openCommandPalette"
+        />
+        <v-menu location="bottom end">
+          <template #activator="{ props: menuProps }">
+            <v-btn
+              color="white"
+              v-bind="menuProps"
+              :icon="mdiSort"
+              :title="`排序：${sortLabel}`"
+              variant="text"
+            />
+          </template>
+          <v-list density="compact" min-width="160">
+            <v-list-item
+              v-for="option in SORT_OPTIONS"
+              :key="option.value"
+              :active="sortBy === option.value"
+              @click="sortBy = option.value"
+            >
+              <v-list-item-title>{{ option.label }}</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+        <v-btn
+          color="white"
+          :icon="mdiFilterVariant"
+          :title="activeFilterCount ? `筛选（${activeFilterCount}）` : '筛选'"
+          variant="text"
+          @click="openFilterDialog"
+        />
+      </template>
+      <v-menu v-else location="bottom end" offset="4">
         <template #activator="{ props: menuProps }">
           <v-btn
             color="white"
             v-bind="menuProps"
-            :icon="mdiSort"
-            :title="`排序：${sortLabel}`"
+            :icon="mdiDotsVertical"
+            title="更多操作"
             variant="text"
           />
         </template>
-        <v-list density="compact" min-width="160">
+        <v-list density="compact" min-width="200">
+          <v-list-item @click="openCommandPalette">
+            <template #prepend>
+              <v-icon :icon="mdiMagnify" size="small" />
+            </template>
+            <v-list-item-title>搜索</v-list-item-title>
+          </v-list-item>
+          <v-list-item @click="openFilterDialog">
+            <template #prepend>
+              <v-icon :icon="mdiFilterVariant" size="small" />
+            </template>
+            <v-list-item-title>
+              筛选{{ activeFilterCount ? `（${activeFilterCount}）` : '' }}
+            </v-list-item-title>
+          </v-list-item>
+          <v-divider class="my-1" />
+          <v-list-subheader>排序</v-list-subheader>
           <v-list-item
             v-for="option in SORT_OPTIONS"
             :key="option.value"
@@ -1004,16 +1201,12 @@ function formatUpdatedAt(timestamp: number): string {
             @click="sortBy = option.value"
           >
             <v-list-item-title>{{ option.label }}</v-list-item-title>
+            <template v-if="sortBy === option.value" #append>
+              <v-icon :icon="mdiCheck" size="small" />
+            </template>
           </v-list-item>
         </v-list>
       </v-menu>
-      <v-btn
-        color="white"
-        :icon="mdiFilterVariant"
-        :title="activeFilterCount ? `筛选（${activeFilterCount}）` : '筛选'"
-        variant="text"
-        @click="openFilterDialog"
-      />
     </Teleport>
     <Teleport to="#toolbar-actions" defer>
       <template v-if="isSelectMode">
@@ -1043,7 +1236,7 @@ function formatUpdatedAt(timestamp: number): string {
           :model-value="activeSectionId"
           :options="sections"
           :can-add-workspace="!isWebEnv"
-          @update:model-value="activeSectionId = $event"
+          @update:model-value="selectSection"
           @add-workspace="pickWorkspaceDirectory"
           @rename-workspace="openRenameWorkspace"
           @move-workspace="moveWorkspace"
@@ -1177,58 +1370,96 @@ function formatUpdatedAt(timestamp: number): string {
       <v-empty-state
         v-else-if="noteSets.length === 0"
         :icon="activeSection.kind === 'external' ? mdiFileDocumentOutline : mdiNoteOffOutline"
-        :title="activeSection.kind === 'external' ? '还没有打开过外部文件' : '还没有便签……'"
+        :title="activeSection.kind === 'external' ? '还没有打开过外部文件' : '还没有便签'"
         :text="
           activeSection.kind === 'external'
-            ? '点击右下角按钮打开 .mdrf 文件'
-            : '点击右下角的按钮创建新的便签集'
+            ? '打开一个 .mdrf 文件后，会出现在这里'
+            : '新建一份便签，开始记录你的想法'
         "
-      />
+      >
+        <template #actions>
+          <v-btn
+            v-if="activeSection.kind !== 'external'"
+            :prepend-icon="mdiPlus"
+            color="primary"
+            @click="isCreateDialogOpen = true"
+          >
+            新建便签
+          </v-btn>
+          <v-btn
+            v-else
+            :prepend-icon="mdiFileDocumentOutline"
+            color="primary"
+            @click="isWebEnv ? triggerUpload() : openExternalFile()"
+          >
+            打开文件
+          </v-btn>
+        </template>
+      </v-empty-state>
       <v-empty-state
         v-else-if="filteredNoteSets.length === 0"
         :icon="mdiFilterVariant"
         title="没有符合条件的便签"
         text="请调整右上角的标签过滤条件"
-      />
+      >
+        <template #actions>
+          <v-btn variant="tonal" color="primary" @click="clearAllFilters"> 清除筛选条件 </v-btn>
+        </template>
+      </v-empty-state>
       <div v-else class="note-sets-grid" :class="{ 'note-sets-grid--loading': isSectionLoading }">
         <v-card
-          v-for="noteSet in visibleNoteSets"
+          v-for="(noteSet, index) in visibleNoteSets"
           :key="noteSetKeyOf(noteSet)"
-          class="note-sets-card"
+          class="note-sets-card fade-up"
           :class="{
             'note-sets-card--selecting': isSelectMode,
             'note-sets-card--selected': isSelected(noteSet),
           }"
+          :style="{ animationDelay: `${Math.min(index, 12) * 40}ms` }"
+          hover
           @click="onCardClick(noteSet)"
         >
-          <v-card-title class="d-flex align-center">
+          <v-card-title class="d-flex align-center ga-2">
             <v-icon
               v-if="isSelectMode"
               :icon="isSelected(noteSet) ? mdiCheckboxMarked : mdiCheckboxBlankOutline"
               :color="isSelected(noteSet) ? 'primary' : undefined"
-              class="me-2"
               size="small"
             />
-            {{ noteSet.name }}
+            <span class="text-truncate">{{ noteSet.name }}</span>
+            <v-spacer />
+            <v-btn
+              v-if="!isSelectMode"
+              :icon="isPinnedNote(noteSet) ? mdiStar : mdiStarOutline"
+              :color="isPinnedNote(noteSet) ? 'warning' : undefined"
+              :title="isPinnedNote(noteSet) ? '取消置顶' : '置顶'"
+              density="comfortable"
+              size="small"
+              variant="text"
+              @click.stop="togglePin(noteSet)"
+            />
           </v-card-title>
-          <v-card-subtitle>
-            上次编辑：{{ formatUpdatedAt(noteSet.updatedAt) }} 文件名：{{ noteSet.fileName }}.mdrf
+          <v-card-subtitle class="d-flex flex-wrap ga-x-3 ga-y-1 text-caption">
+            <span>编辑 {{ formatUpdatedAt(noteSet.updatedAt) }}</span>
+            <span class="text-medium-emphasis">{{ noteSet.fileName }}.mdrf</span>
+            <span v-if="lastOpenedAt(noteSet)" class="text-medium-emphasis">
+              打开 {{ formatUpdatedAt(lastOpenedAt(noteSet)!) }}
+            </span>
           </v-card-subtitle>
           <v-card-subtitle
             v-if="activeSection.kind === 'external'"
-            class="note-sets-card__location text-truncate"
+            class="note-sets-card__location text-truncate text-caption"
             :title="noteSet.filePath ?? '浏览器本地存储'"
           >
-            文件位置：{{ noteSet.filePath ?? '浏览器本地存储' }}
+            位置 {{ noteSet.filePath ?? '浏览器本地存储' }}
           </v-card-subtitle>
           <v-card-text>
-            {{ noteSet.description }}
-            <div v-if="noteSet.tag.length" class="mt-2">
+            <div class="note-sets-card__desc">{{ noteSet.description || '暂无描述' }}</div>
+            <div v-if="noteSet.tag.length" class="mt-2 d-flex flex-wrap ga-1">
               <v-chip
                 v-for="tag in noteSet.tag"
                 :key="tag"
                 :color="resolveTagColor(tag)"
-                class="mr-1"
                 size="x-small"
                 variant="tonal"
               >
@@ -1236,12 +1467,8 @@ function formatUpdatedAt(timestamp: number): string {
               </v-chip>
             </div>
           </v-card-text>
-          <v-card-actions v-if="!isSelectMode">
-            <v-btn
-              @click="openDetail(noteSet)"
-              :icon="mdiInformationOutline"
-              variant="text"
-            ></v-btn>
+          <v-card-actions v-if="!isSelectMode" @click.stop>
+            <v-btn @click="openDetail(noteSet)" :icon="mdiInformationOutline" variant="text" />
             <v-btn
               @click="openEditor(noteSet)"
               @pointerenter="preloadEditor"
@@ -1250,14 +1477,14 @@ function formatUpdatedAt(timestamp: number): string {
               :loading="noteSet.loading"
               class="ms-2"
               variant="text"
-            ></v-btn>
+            />
             <v-btn
               v-if="isWebEnv && activeSection.kind === 'workspace'"
               @click="exportNoteSet(noteSet)"
               :icon="mdiDownload"
               :loading="exportingFileName === noteSet.fileName"
               variant="text"
-            ></v-btn>
+            />
             <v-menu v-if="activeSection.kind === 'external'" location="bottom end">
               <template #activator="{ props: menuProps }">
                 <v-btn v-bind="menuProps" :icon="mdiFolderMove" variant="text" />
@@ -1277,7 +1504,7 @@ function formatUpdatedAt(timestamp: number): string {
               @click="removeExternalNote(noteSet)"
               :icon="mdiClose"
               variant="text"
-            ></v-btn>
+            />
             <v-menu v-if="canMoveNote" location="bottom end">
               <template #activator="{ props: menuProps }">
                 <v-btn
@@ -1303,6 +1530,18 @@ function formatUpdatedAt(timestamp: number): string {
                 <v-btn v-bind="menuProps" :icon="mdiDotsVertical" title="更多操作" variant="text" />
               </template>
               <v-list density="compact" min-width="160">
+                <v-list-item @click="togglePin(noteSet)">
+                  <template #prepend>
+                    <v-icon
+                      :icon="isPinnedNote(noteSet) ? mdiStar : mdiStarOutline"
+                      :color="isPinnedNote(noteSet) ? 'warning' : undefined"
+                      size="small"
+                    />
+                  </template>
+                  <v-list-item-title>
+                    {{ isPinnedNote(noteSet) ? '取消置顶' : '置顶' }}
+                  </v-list-item-title>
+                </v-list-item>
                 <v-list-item @click="openRenameNote(noteSet)">
                   <template #prepend>
                     <v-icon :icon="mdiRenameBox" size="small" />
@@ -1465,18 +1704,9 @@ function formatUpdatedAt(timestamp: number): string {
 /* 列宽随内容区自适应，窗口变窄时自然减少列数而不是把卡片挤瘦 */
 .note-sets-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
   align-items: stretch;
-}
-
-/* 同行卡片由 grid 拉齐，描述区吃满剩余高度，操作栏统一贴底 */
-.note-sets-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.note-sets-grid {
   transition: opacity 160ms ease;
 }
 
@@ -1484,13 +1714,30 @@ function formatUpdatedAt(timestamp: number): string {
   opacity: 0.72;
 }
 
+/* 同行卡片由 grid 拉齐，描述区吃满剩余高度，操作栏统一贴底 */
+.note-sets-card {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
 .note-sets-card__location {
   min-width: 0;
 }
 
+/* 描述固定两行，避免长文本把同行卡片全拉高 */
+.note-sets-card__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: 2.5em;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+}
+
 /* 多选时整卡是热区，要挡住文本选择让点击稳定落成切换 */
 .note-sets-card--selecting {
-  cursor: pointer;
   user-select: none;
 }
 
@@ -1514,7 +1761,6 @@ function formatUpdatedAt(timestamp: number): string {
   height: 100%;
   overflow-y: auto;
   scrollbar-width: thin;
-  /* 跟随 Vuetify 主题：深色下是白、浅色下是黑 */
   scrollbar-color: rgba(var(--v-border-color), 0.3) transparent;
 }
 
@@ -1531,6 +1777,24 @@ function formatUpdatedAt(timestamp: number): string {
   background: transparent;
 }
 
+/* 入场淡入：与首页同一节奏，reduced-motion 下关闭 */
+.fade-up {
+  opacity: 0;
+  animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 599px) {
   .note-sets-grid {
     gap: 12px;
@@ -1540,6 +1804,12 @@ function formatUpdatedAt(timestamp: number): string {
 @media (prefers-reduced-motion: reduce) {
   .note-sets-grid {
     transition-duration: 1ms;
+  }
+
+  .fade-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 </style>

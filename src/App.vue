@@ -543,12 +543,11 @@ body,
   user-select: none !important;
 }
 
-/* 文件名可能很长，截断而不是把右侧按钮挤出工具栏 */
 .app-title-wrap {
   position: relative;
   display: block;
   flex: 1;
-  /* 两个标题叠在同一个位置滚动，所以高度得钉住 */
+  min-width: 0;
   height: 1.5em;
   margin-left: 5px;
   font-size: 1.25rem;
@@ -670,6 +669,7 @@ textarea {
 .toolbar-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .toolbar-extension {

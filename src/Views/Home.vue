@@ -1,27 +1,42 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   mdiArrowRight,
+  mdiCalendarBlankOutline,
   mdiCalendarMonthOutline,
   mdiChartTimelineVariant,
-  mdiCircle,
+  mdiClockOutline,
+  mdiCogOutline,
   mdiFileDocumentOutline,
   mdiFilePlusOutline,
   mdiFire,
   mdiFolderMultipleOutline,
+  mdiFolderOutline,
+  mdiFormatListBulleted,
   mdiHelpCircleOutline,
   mdiHistory,
   mdiMagnify,
+  mdiShuffleVariant,
+  mdiStar,
+  mdiStarOutline,
   mdiWeatherNight,
   mdiWeatherPartlyCloudy,
   mdiWeatherSunny,
   mdiWeatherSunsetDown,
   mdiWeatherSunsetUp,
-  mdiFolderOutline,
 } from '@mdi/js';
-import appIconUrl from '../../app-icon.svg';
 import { useRouter } from 'vue-router';
 import { isTauri } from '@tauri-apps/api/core';
+import { useTheme } from 'vuetify';
+import { use } from 'echarts/core';
+import { BarChart } from 'echarts/charts';
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import VChart from 'vue-echarts';
+
+use([BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+
+import appIconUrl from '../../app-icon.svg';
 
 import NewFileDialog from '../Controls/NewFileDialog.vue';
 import { noteFileLocationOf } from '../fileOperations';
@@ -41,13 +56,28 @@ import {
 } from '../utils/commandPaletteShortcut';
 import { externalNotes, loadWorkspaceState, workspaceDirectories } from '../utils/workspaceStore';
 import { getErrorMessage } from '../utils/getErrorMessage';
+import { BRAND_CHINESE_TAGLINE, BRAND_ENGLISH_TAGLINE } from '../utils/brandCopy';
+import { tagLibrary, loadTagLibrary, resolveTagColor } from '../utils/tagStore';
+import {
+  isPinnedNote,
+  loadPinnedNotes,
+  pinKeyOf,
+  pinnedKeys,
+  prunePinnedKeys,
+  togglePinnedNote,
+} from '../utils/homePinned';
 
 const RECENT_LIMIT = 5;
 const HEATMAP_DAYS = 90;
 const DAYS_PER_WEEK = 7;
+const MONTHS_TREND = 6;
+const HOURS_PER_DAY = 24;
+const TOP_TAG_LIMIT = 12;
 
 const router = useRouter();
 const openNote = useOpenNote();
+const theme = useTheme();
+
 const notes = ref<NoteSetEntry[]>([]);
 const recentRefs = ref<RecentNote[]>([]);
 const activity = ref<FileActivityEvent[]>([]);
@@ -55,17 +85,14 @@ const isCreateDialogOpen = ref(false);
 const isErrorOpen = ref(false);
 const errorMessage = ref('');
 
-const noteKeyOf = (note: RecentNote): string =>
-  `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
+const today = ref(new Date());
+let todayTimer: number | undefined;
 
-const noteKeyOfEntry = (note: NoteSetEntry): string =>
-  `${note.filePath ?? ''}\u0000${note.dir ?? ''}\u0000${note.fileName}`;
-
-const noteByKey = computed(() => new Map(notes.value.map((note) => [noteKeyOfEntry(note), note])));
+const noteByKey = computed(() => new Map(notes.value.map((note) => [pinKeyOf(note), note])));
 
 const recentNotes = computed(() => {
   const opened = recentRefs.value
-    .map((item) => noteByKey.value.get(noteKeyOf(item)))
+    .map((item) => noteByKey.value.get(pinKeyOf(item)))
     .filter((item): item is NoteSetEntry => Boolean(item));
   if (opened.length) return opened.slice(0, RECENT_LIMIT);
   return [...notes.value]
@@ -73,12 +100,60 @@ const recentNotes = computed(() => {
     .slice(0, RECENT_LIMIT);
 });
 
-const today = new Date();
-const dateLabel = today.toLocaleDateString('zh-CN', {
-  month: 'long',
-  day: 'numeric',
-  weekday: 'long',
+const recentlyUpdated = computed(() =>
+  [...notes.value].sort((left, right) => right.updatedAt - left.updatedAt).slice(0, RECENT_LIMIT),
+);
+
+const pinnedNotes = computed(() =>
+  pinnedKeys.value
+    .map((key) => noteByKey.value.get(key))
+    .filter((note): note is NoteSetEntry => Boolean(note))
+    .slice(0, 5),
+);
+
+const tagCloud = computed(() => {
+  const counts = new Map<string, number>();
+  for (const note of notes.value) {
+    for (const tag of note.tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+  return [...tagLibrary.value]
+    .map((entry) => ({ ...entry, count: counts.get(entry.name) ?? 0 }))
+    .filter((entry) => entry.count > 0)
+    .sort((left, right) => right.count - left.count)
+    .slice(0, TOP_TAG_LIMIT);
 });
+
+const workspaceStats = computed(() => {
+  const byDir = new Map<string, number>();
+  let defaultCount = 0;
+  for (const note of notes.value) {
+    if (note.dir) byDir.set(note.dir, (byDir.get(note.dir) ?? 0) + 1);
+    else if (!note.filePath) defaultCount += 1;
+  }
+  return {
+    defaultCount,
+    directories: workspaceDirectories.value.map((dir) => ({
+      ...dir,
+      count: byDir.get(dir.dir) ?? 0,
+    })),
+    externalCount: externalNotes.value.length,
+  };
+});
+
+const dateLabel = computed(() =>
+  today.value.toLocaleDateString('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  }),
+);
+
+function dateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const activityByDay = computed(() => {
   const counts = new Map<string, Record<FileActivityKind, number>>();
@@ -91,8 +166,13 @@ const activityByDay = computed(() => {
   return counts;
 });
 
+const totalOf = (key: string): number => {
+  const day = activityByDay.value.get(key);
+  return day ? day.created + day.modified + day.deleted : 0;
+};
+
 const heatmapDays = computed(() => {
-  const start = new Date(today);
+  const start = new Date(today.value);
   const daysBeforeMonday = (start.getDay() + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK;
   start.setDate(start.getDate() - HEATMAP_DAYS - daysBeforeMonday);
   const dayCount = HEATMAP_DAYS + 1 + daysBeforeMonday;
@@ -114,96 +194,25 @@ const heatmapDays = computed(() => {
   });
 });
 
-const activitySeries = computed(() => {
-  const dates = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - 6 + index);
-    return date;
-  });
-  const values = dates.map((date) => {
-    const counts = activityByDay.value.get(dateKey(date));
-    return {
-      date,
-      created: counts?.created ?? 0,
-      modified: counts?.modified ?? 0,
-      deleted: counts?.deleted ?? 0,
-    };
-  });
-  const series: { kind: FileActivityKind; label: string; color: string }[] = [
-    { kind: 'created', label: '新建', color: 'success' },
-    { kind: 'modified', label: '修改', color: 'primary' },
-    { kind: 'deleted', label: '删除', color: 'error' },
-  ];
-  return {
-    values,
-    series,
-    total: (kind: FileActivityKind) => values.reduce((sum, item) => sum + item[kind], 0),
-  };
-});
-
-const activityChart = computed(() => {
-  const { values, series } = activitySeries.value;
-  const max = Math.max(1, ...values.flatMap((v) => [v.created, v.modified, v.deleted]));
-  const width = 640;
-  const height = 220;
-  const padLeft = 36;
-  const padRight = 12;
-  const padTop = 16;
-  const padBottom = 32;
-  const plotWidth = width - padLeft - padRight;
-  const plotHeight = height - padTop - padBottom;
-  const groupWidth = plotWidth / values.length;
-  const barWidth = 14;
-  const barGap = 4;
-  const innerWidth = barWidth * series.length + barGap * (series.length - 1);
-
-  const bars = values.flatMap((value, dayIndex) => {
-    const groupLeft = padLeft + dayIndex * groupWidth + (groupWidth - innerWidth) / 2;
-    return series.map((s, seriesIndex) => {
-      const h = value[s.kind] > 0 ? Math.max((value[s.kind] / max) * plotHeight, 3) : 0;
-      return {
-        key: `${dayIndex}-${s.kind}`,
-        kind: s.kind,
-        x: groupLeft + seriesIndex * (barWidth + barGap),
-        y: padTop + plotHeight - h,
-        width: barWidth,
-        height: h,
-        value: value[s.kind],
-        delay: dayIndex * 55 + seriesIndex * 25,
-      };
-    });
-  });
-
-  const gridLines = Array.from({ length: 5 }, (_, i) => ({
-    y: padTop + (plotHeight / 4) * i,
-    label: Math.round(max - (max / 4) * i),
-  }));
-
-  const labels = values.map((v, i) => ({
-    x: padLeft + i * groupWidth + groupWidth / 2,
-    text: v.date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }),
-  }));
-
-  return { width, height, padLeft, bars, gridLines, labels };
-});
-
 const activeDays = computed(() => heatmapDays.value.filter((day) => day.level > 0).length);
 
-const weekActivityCount = computed(() =>
-  activitySeries.value.values.reduce((sum, v) => sum + v.created + v.modified + v.deleted, 0),
-);
+const weekActivityCount = computed(() => {
+  let sum = 0;
+  const cursor = new Date(today.value);
+  for (let i = 0; i < DAYS_PER_WEEK; i += 1) {
+    sum += totalOf(dateKey(cursor));
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return sum;
+});
 
 const streak = computed(() => {
   let count = 0;
-  const cursor = new Date(today);
+  const cursor = new Date(today.value);
   for (let i = 0; i < 366; i += 1) {
-    const day = activityByDay.value.get(dateKey(cursor));
-    const total = day ? day.created + day.modified + day.deleted : 0;
-    if (total > 0) {
-      count += 1;
-    } else if (i > 0) {
-      break;
-    }
+    const total = totalOf(dateKey(cursor));
+    if (total > 0) count += 1;
+    else if (i > 0) break;
     cursor.setDate(cursor.getDate() - 1);
   }
   return count;
@@ -215,6 +224,7 @@ const stats = computed(() => [
     value: `${notes.value.length}`,
     icon: mdiFileDocumentOutline,
     color: 'primary',
+    to: '/set',
   },
   {
     label: '近 7 天操作',
@@ -231,13 +241,20 @@ const stats = computed(() => [
   },
 ]);
 
-const workspaceSummary = computed(() => ({
-  directories: workspaceDirectories.value.length,
-  external: externalNotes.value.length,
-}));
+const quickActions = [
+  {
+    label: '新建文件',
+    icon: mdiFilePlusOutline,
+    color: 'primary',
+  },
+  { label: '便签集', icon: mdiFormatListBulleted, color: 'secondary', to: '/set' },
+  { label: '记事板', icon: mdiCalendarBlankOutline, color: 'info', to: '/board' },
+  { label: '设置', icon: mdiCogOutline, color: 'warning', to: '/settings/about' },
+  { label: '快速打开', icon: mdiMagnify, color: 'success' },
+];
 
 const greeting = computed(() => {
-  const hour = new Date().getHours();
+  const hour = today.value.getHours();
   if (hour < 6) return { text: '夜深了', icon: mdiWeatherNight, theme: 'night' };
   if (hour < 12) return { text: '早上好', icon: mdiWeatherSunsetUp, theme: 'morning' };
   if (hour < 18) return { text: '下午好', icon: mdiWeatherSunny, theme: 'afternoon' };
@@ -245,27 +262,243 @@ const greeting = computed(() => {
   return { text: '夜深了', icon: mdiWeatherPartlyCloudy, theme: 'night' };
 });
 
-function dateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+// ---------- 图表 ----------
+interface ChartColors {
+  primary: string;
+  success: string;
+  error: string;
+  info: string;
+  onSurface: string;
 }
 
-function directoryName(path: string): string {
-  const normalized = path.replace(/[/\\]+$/, '');
-  const parts = normalized.split(/[/\\]/);
-  return parts[parts.length - 1] || normalized;
-}
+// Vuetify 的 theme.global.current 在 computed 里追踪不稳，改成 ref + watch 显式刷新
+const readChartColors = (): ChartColors => {
+  const c = theme.current.value.colors;
+  return {
+    primary: String(c.primary ?? '#1867C0'),
+    success: String(c.success ?? '#2E7D32'),
+    error: String(c.error ?? '#D32F2F'),
+    info: String(c.info ?? '#0288D1'),
+    onSurface: String(c['on-surface'] ?? c['on-background'] ?? '#212121'),
+  };
+};
 
+const chartColors = ref<ChartColors>(readChartColors());
+
+watch(
+  () => theme.global.name.value,
+  () => {
+    chartColors.value = readChartColors();
+  },
+);
+
+// ECharts 各版本对 8 位 hex 支持不一致，统一输出 rgba()
+const withAlpha = (hex: string, alpha: number): string => {
+  if (!hex.startsWith('#')) return hex;
+  const raw = hex.slice(1);
+  const full =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((ch) => ch + ch)
+          .join('')
+      : raw;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const weeklyCompare = computed(() => {
+  const labels: string[] = [];
+  const thisWeek: number[] = [];
+  const lastWeek: number[] = [];
+  for (let i = 0; i < DAYS_PER_WEEK; i += 1) {
+    const d = new Date(today.value);
+    d.setDate(d.getDate() - (DAYS_PER_WEEK - 1 - i));
+    labels.push(d.toLocaleDateString('zh-CN', { weekday: 'short' }));
+    thisWeek.push(totalOf(dateKey(d)));
+    const last = new Date(d);
+    last.setDate(last.getDate() - DAYS_PER_WEEK);
+    lastWeek.push(totalOf(dateKey(last)));
+  }
+  return { labels, thisWeek, lastWeek };
+});
+
+const weeklyOption = computed(() => {
+  const c = chartColors.value;
+  const data = weeklyCompare.value;
+  const axisText = withAlpha(c.onSurface, 0.6);
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: {
+      data: ['本周', '上周'],
+      top: 4,
+      right: 8,
+      icon: 'roundRect',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: axisText, fontSize: 11 },
+    },
+    grid: { left: 36, right: 12, top: 36, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: data.labels,
+      axisLine: { lineStyle: { color: withAlpha(c.onSurface, 0.18) } },
+      axisLabel: { color: axisText, fontSize: 11 },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: axisText, fontSize: 11 },
+      splitLine: { lineStyle: { color: withAlpha(c.onSurface, 0.08) } },
+    },
+    series: [
+      {
+        name: '本周',
+        type: 'bar',
+        data: data.thisWeek,
+        barWidth: 10,
+        itemStyle: { color: c.primary, borderRadius: [3, 3, 0, 0] },
+      },
+      {
+        name: '上周',
+        type: 'bar',
+        data: data.lastWeek,
+        barWidth: 10,
+        itemStyle: { color: withAlpha(c.primary, 0.3), borderRadius: [3, 3, 0, 0] },
+      },
+    ],
+  };
+});
+
+const hourlyActivity = computed(() => {
+  const counts = new Array<number>(HOURS_PER_DAY).fill(0);
+  for (const event of activity.value) {
+    counts[new Date(event.timestamp).getHours()] += 1;
+  }
+  return counts;
+});
+
+const hourlyOption = computed(() => {
+  const c = chartColors.value;
+  const axisText = withAlpha(c.onSurface, 0.6);
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { left: 36, right: 12, top: 16, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: Array.from({ length: HOURS_PER_DAY }, (_, i) => `${i}`),
+      axisLine: { lineStyle: { color: withAlpha(c.onSurface, 0.18) } },
+      axisLabel: { color: axisText, fontSize: 10, interval: 3 },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: axisText, fontSize: 11 },
+      splitLine: { lineStyle: { color: withAlpha(c.onSurface, 0.08) } },
+    },
+    series: [
+      {
+        type: 'bar',
+        data: hourlyActivity.value,
+        barWidth: '60%',
+        itemStyle: { color: c.info, borderRadius: [2, 2, 0, 0] },
+      },
+    ],
+  };
+});
+
+const monthlyTrend = computed(() => {
+  const months = Array.from({ length: MONTHS_TREND }, (_, i) => {
+    const d = new Date(
+      today.value.getFullYear(),
+      today.value.getMonth() - (MONTHS_TREND - 1 - i),
+      1,
+    );
+    return {
+      label: d.toLocaleDateString('zh-CN', { month: 'short' }),
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      created: 0,
+      modified: 0,
+      deleted: 0,
+    };
+  });
+  for (const event of activity.value) {
+    const d = new Date(event.timestamp);
+    const monthDiff =
+      (today.value.getFullYear() - d.getFullYear()) * 12 + today.value.getMonth() - d.getMonth();
+    if (monthDiff < 0 || monthDiff >= MONTHS_TREND) continue;
+    months[MONTHS_TREND - 1 - monthDiff][event.kind] += 1;
+  }
+  return months;
+});
+
+const monthlyOption = computed(() => {
+  const c = chartColors.value;
+  const data = monthlyTrend.value;
+  const axisText = withAlpha(c.onSurface, 0.6);
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: {
+      data: ['新建', '修改', '删除'],
+      top: 4,
+      right: 8,
+      icon: 'roundRect',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: axisText, fontSize: 11 },
+    },
+    grid: { left: 36, right: 12, top: 36, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: data.map((m) => m.label),
+      axisLine: { lineStyle: { color: withAlpha(c.onSurface, 0.18) } },
+      axisLabel: { color: axisText, fontSize: 11 },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: axisText, fontSize: 11 },
+      splitLine: { lineStyle: { color: withAlpha(c.onSurface, 0.08) } },
+    },
+    series: [
+      {
+        name: '新建',
+        type: 'bar',
+        stack: 'total',
+        data: data.map((m) => m.created),
+        barWidth: 16,
+        itemStyle: { color: c.success },
+      },
+      {
+        name: '修改',
+        type: 'bar',
+        stack: 'total',
+        data: data.map((m) => m.modified),
+        itemStyle: { color: c.primary },
+      },
+      {
+        name: '删除',
+        type: 'bar',
+        stack: 'total',
+        data: data.map((m) => m.deleted),
+        itemStyle: { color: c.error, borderRadius: [3, 3, 0, 0] },
+      },
+    ],
+  };
+});
+
+// ---------- 交互 ----------
 async function loadHomeData() {
   errorMessage.value = '';
   try {
-    await loadWorkspaceState();
-    const directories = [
-      undefined,
-      ...workspaceDirectories.value.map((directory) => directory.dir),
-    ];
+    await Promise.all([loadWorkspaceState(), loadTagLibrary(), loadPinnedNotes()]);
+    const directories = [undefined, ...workspaceDirectories.value.map((dir) => dir.dir)];
     const workspaceEntries = await Promise.all(
       directories.map((directory) => loadNoteSetEntries(directory)),
     );
@@ -283,9 +516,10 @@ async function loadHomeData() {
     const merged = [...workspaceEntries.flat(), ...externalEntries].filter(
       (item): item is NoteSetEntry => item !== null,
     );
-    notes.value = [...new Map(merged.map((note) => [noteKeyOfEntry(note), note])).values()];
+    notes.value = [...new Map(merged.map((note) => [pinKeyOf(note), note])).values()];
     recentRefs.value = loadRecentNotes();
     activity.value = loadFileActivity();
+    await prunePinnedKeys(new Set(notes.value.map((note) => pinKeyOf(note))));
   } catch (error) {
     errorMessage.value = `首页内容加载失败：${getErrorMessage(error)}`;
     isErrorOpen.value = true;
@@ -302,6 +536,10 @@ async function openNoteEntry(note: NoteSetEntry) {
   }
 }
 
+async function togglePinned(note: NoteSetEntry) {
+  await togglePinnedNote(note);
+}
+
 function showCommandPalette() {
   window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
 }
@@ -310,16 +548,42 @@ function openAbout() {
   void router.push('/settings/about');
 }
 
-function formatDate(timestamp: number): string {
+function openTag(tag: string) {
+  void router.push({ path: '/set', query: { tags: tag } });
+}
+
+function openWorkspace(dir?: string) {
+  void router.push(dir ? { path: '/set', query: { workspace: dir } } : '/set');
+}
+
+function openRandom() {
+  const list = notes.value;
+  if (!list.length) return;
+  void openNoteEntry(list[Math.floor(Math.random() * list.length)]);
+}
+
+function formatRelative(timestamp: number): string {
   if (!timestamp) return '未知';
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-  }).format(timestamp);
+  const minutes = Math.round((Date.now() - timestamp) / 60_000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return new Date(timestamp).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
 onMounted(() => {
   void loadHomeData();
+  todayTimer = window.setInterval(() => {
+    const now = new Date();
+    if (dateKey(now) !== dateKey(today.value)) today.value = now;
+  }, 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (todayTimer !== undefined) window.clearInterval(todayTimer);
 });
 </script>
 
@@ -329,7 +593,7 @@ onMounted(() => {
       {{ errorMessage }}
     </v-snackbar>
 
-    <v-container fluid class="pa-4 pa-md-6">
+    <v-container fluid class="pa-4 pa-md-6" style="max-width: 1680px; margin: 0 auto">
       <!-- 品牌条 -->
       <header class="d-flex align-center justify-space-between mb-4 fade-up">
         <div class="d-flex align-center ga-3">
@@ -347,39 +611,43 @@ onMounted(() => {
         />
       </header>
 
-      <!-- 欢迎横幅：随时间切换氛围，光斑缓慢漂浮 -->
+      <!-- Hero -->
       <v-card
-        class="hero-banner fade-up"
+        class="hero-banner fade-up mb-4"
         :class="`hero-banner--${greeting.theme}`"
         rounded="xl"
         :elevation="0"
       >
         <span class="hero-glow hero-glow--a" />
         <span class="hero-glow hero-glow--b" />
-        <div class="hero-content d-flex flex-wrap align-center justify-space-between ga-4">
+        <div
+          class="hero-content d-flex flex-wrap align-center justify-space-between ga-4 pa-4 pa-md-6"
+        >
           <div>
             <div class="hero-eyebrow">
               <v-icon :icon="greeting.icon" size="14" />
               <span>{{ dateLabel }}</span>
             </div>
             <h1 class="hero-title">{{ greeting.text }}，欢迎回来</h1>
-            <p class="hero-subtitle">今天想记下些什么？</p>
+            <p class="hero-subtitle">{{ BRAND_CHINESE_TAGLINE }}</p>
+            <p class="hero-tagline">{{ BRAND_ENGLISH_TAGLINE }}</p>
           </div>
           <div class="d-flex flex-wrap ga-2">
             <v-btn
-              variant="flat"
-              color="surface"
+              variant="outlined"
+              color="white"
               :prepend-icon="mdiMagnify"
               :title="`快速打开（${commandPaletteShortcut}）`"
-              class="hero-btn"
+              class="text-none"
               @click="showCommandPalette"
             >
               快速打开
             </v-btn>
             <v-btn
               variant="flat"
+              color="white"
               :prepend-icon="mdiFilePlusOutline"
-              class="hero-btn hero-btn--primary"
+              class="text-none font-weight-bold"
               @click="isCreateDialogOpen = true"
             >
               新建文件
@@ -388,39 +656,60 @@ onMounted(() => {
         </div>
       </v-card>
 
-      <!-- 统计条：逐个淡入 -->
-      <v-row class="mb-1">
-        <v-col
-          v-for="(stat, i) in stats"
-          :key="stat.label"
-          cols="6"
-          md="3"
-          class="fade-up"
-          :style="{ animationDelay: `${120 + i * 70}ms` }"
-        >
-          <v-card variant="flat" border rounded="lg" class="stat-card pa-4 h-100">
-            <div class="d-flex align-center ga-3">
+      <!-- 统计条 -->
+      <v-row dense class="mb-2">
+        <v-col v-for="(stat, i) in stats" :key="stat.label" cols="6" md="3">
+          <v-card
+            variant="flat"
+            border
+            rounded="lg"
+            hover
+            :to="stat.to"
+            :link="!!stat.to"
+            class="fade-up"
+            :style="{ animationDelay: `${120 + i * 60}ms` }"
+          >
+            <div class="d-flex align-center ga-3 pa-3">
               <v-avatar :color="stat.color" variant="tonal" rounded="lg" size="36">
                 <v-icon :icon="stat.icon" size="20" />
               </v-avatar>
-              <div>
+              <div class="min-w-0">
                 <div class="text-h6 font-weight-bold stat-value">{{ stat.value }}</div>
-                <div class="text-caption text-medium-emphasis">{{ stat.label }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ stat.label }}</div>
               </div>
             </div>
           </v-card>
         </v-col>
       </v-row>
 
-      <v-row>
-        <v-col cols="12" lg="8">
+      <!-- 快捷入口 -->
+      <v-row dense class="mb-2">
+        <v-col v-for="action in quickActions" :key="action.label" cols="auto">
+          <v-btn
+            :to="action.to"
+            :prepend-icon="action.icon"
+            :color="action.color"
+            variant="tonal"
+            class="text-none"
+            @click="!action.to && action.label === '新建文件' && (isCreateDialogOpen = true)"
+            @click.prevent="action.label === '快速打开' && showCommandPalette()"
+          >
+            {{ action.label }}
+          </v-btn>
+        </v-col>
+      </v-row>
+
+      <!-- 主体三列 -->
+      <v-row dense>
+        <v-col cols="12" md="8" xl="4">
           <!-- 最近打开 -->
           <v-card
             variant="flat"
             border
             rounded="lg"
-            class="lift fade-up"
-            style="animation-delay: 320ms"
+            hover
+            class="fade-up"
+            style="animation-delay: 260ms"
           >
             <v-card-item>
               <template #prepend>
@@ -440,11 +729,8 @@ onMounted(() => {
               <v-list v-if="recentNotes.length" lines="two" class="pa-0">
                 <v-list-item
                   v-for="note in recentNotes"
-                  :key="noteKeyOfEntry(note)"
-                  :title="note.name"
-                  :subtitle="`${note.fileName}.mdrf · 最近编辑 ${formatDate(note.updatedAt)}`"
+                  :key="pinKeyOf(note)"
                   rounded="lg"
-                  class="list-item-hover"
                   @click="openNoteEntry(note)"
                 >
                   <template #prepend>
@@ -452,31 +738,157 @@ onMounted(() => {
                       <v-icon :icon="mdiFileDocumentOutline" />
                     </v-avatar>
                   </template>
+                  <v-list-item-title>{{ note.name }}</v-list-item-title>
+                  <v-list-item-subtitle v-if="note.description">
+                    {{ note.description }}
+                  </v-list-item-subtitle>
+                  <v-list-item-subtitle v-else>
+                    {{ note.fileName }}.mdrf · {{ formatRelative(note.updatedAt) }}
+                  </v-list-item-subtitle>
                   <template #append>
-                    <v-icon
-                      :icon="mdiArrowRight"
-                      size="small"
-                      color="medium-emphasis"
-                      class="list-arrow"
-                    />
+                    <div class="d-flex align-center ga-1">
+                      <v-chip
+                        v-for="tag in note.tag.slice(0, 2)"
+                        :key="tag"
+                        :color="resolveTagColor(tag)"
+                        size="x-small"
+                        variant="tonal"
+                      >
+                        {{ tag }}
+                      </v-chip>
+                      <v-btn
+                        :icon="isPinnedNote(note) ? mdiStar : mdiStarOutline"
+                        :color="isPinnedNote(note) ? 'warning' : undefined"
+                        :title="isPinnedNote(note) ? '取消置顶' : '置顶'"
+                        size="small"
+                        variant="text"
+                        @click.stop="togglePinned(note)"
+                      />
+                    </div>
                   </template>
                 </v-list-item>
               </v-list>
-              <div v-else class="text-center py-8 text-medium-emphasis">
-                <v-icon :icon="mdiHistory" size="32" />
-                <p class="text-body-2 font-weight-medium mt-2 mb-1">还没有最近打开的文件</p>
-                <p class="text-caption mb-0">打开一份笔记后，会显示在这里。</p>
-              </div>
+              <v-empty-state
+                v-else
+                :icon="mdiHistory"
+                title="还没有最近打开的文件"
+                text="打开一份笔记后，会显示在这里"
+              />
             </v-card-text>
           </v-card>
 
-          <!-- 文件活动 -->
+          <!-- 最近更新 -->
           <v-card
             variant="flat"
             border
             rounded="lg"
-            class="lift fade-up mt-4"
-            style="animation-delay: 400ms"
+            hover
+            class="fade-up mt-4"
+            style="animation-delay: 320ms"
+          >
+            <v-card-item>
+              <template #prepend>
+                <v-avatar color="primary" variant="tonal" rounded="lg">
+                  <v-icon :icon="mdiClockOutline" />
+                </v-avatar>
+              </template>
+              <v-card-title>最近更新</v-card-title>
+              <v-card-subtitle>按最后编辑时间排序</v-card-subtitle>
+              <template #append>
+                <v-btn variant="text" size="small" to="/set" :append-icon="mdiArrowRight">
+                  全部
+                </v-btn>
+              </template>
+            </v-card-item>
+            <v-card-text class="pt-0">
+              <v-list v-if="recentlyUpdated.length" lines="two" class="pa-0">
+                <v-list-item
+                  v-for="note in recentlyUpdated"
+                  :key="pinKeyOf(note)"
+                  rounded="lg"
+                  @click="openNoteEntry(note)"
+                >
+                  <template #prepend>
+                    <v-avatar color="primary" variant="tonal" rounded="lg">
+                      <v-icon :icon="mdiFileDocumentOutline" />
+                    </v-avatar>
+                  </template>
+                  <v-list-item-title>{{ note.name }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ note.fileName }}.mdrf · {{ formatRelative(note.updatedAt) }}
+                  </v-list-item-subtitle>
+                  <template #append>
+                    <v-btn
+                      :icon="isPinnedNote(note) ? mdiStar : mdiStarOutline"
+                      :color="isPinnedNote(note) ? 'warning' : undefined"
+                      :title="isPinnedNote(note) ? '取消置顶' : '置顶'"
+                      size="small"
+                      variant="text"
+                      @click.stop="togglePinned(note)"
+                    />
+                  </template>
+                </v-list-item>
+              </v-list>
+              <v-empty-state
+                v-else
+                :icon="mdiClockOutline"
+                title="还没有笔记"
+                text="点击上方新建文件开始记录"
+              />
+            </v-card-text>
+          </v-card>
+
+          <!-- 标签云 -->
+          <v-card
+            variant="flat"
+            border
+            rounded="lg"
+            hover
+            class="fade-up mt-4"
+            style="animation-delay: 380ms"
+          >
+            <v-card-item>
+              <template #prepend>
+                <v-avatar color="info" variant="tonal" rounded="lg">
+                  <v-icon :icon="mdiFormatListBulleted" />
+                </v-avatar>
+              </template>
+              <v-card-title>标签云</v-card-title>
+              <v-card-subtitle>点击标签筛选便签</v-card-subtitle>
+            </v-card-item>
+            <v-card-text class="pt-0">
+              <div v-if="tagCloud.length" class="d-flex flex-wrap ga-2">
+                <v-chip
+                  v-for="tag in tagCloud"
+                  :key="tag.name"
+                  :color="tag.color"
+                  variant="tonal"
+                  class="text-none"
+                  @click="openTag(tag.name)"
+                >
+                  {{ tag.name }}
+                  <span class="text-caption ms-1">({{ tag.count }}个)</span>
+                </v-chip>
+              </div>
+              <v-empty-state
+                v-else
+                :icon="mdiFormatListBulleted"
+                title="还没有标签"
+                text="给笔记打上标签后会显示在这里"
+              />
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <v-col cols="12" md="4" xl="5">
+          <!-- 文件活动：三图合一 -->
+          <v-card
+            variant="flat"
+            border
+            rounded="lg"
+            hover
+            class="fade-up"
+            style="animation-delay: 280ms"
           >
             <v-card-item>
               <template #prepend>
@@ -485,180 +897,211 @@ onMounted(() => {
                 </v-avatar>
               </template>
               <v-card-title>文件活动</v-card-title>
-              <v-card-subtitle>最近 7 天新建、修改与删除</v-card-subtitle>
+              <v-card-subtitle>本周对比 · 活跃时段 · 月度趋势</v-card-subtitle>
             </v-card-item>
             <v-card-text class="pt-0">
-              <div class="d-flex flex-wrap align-center ga-4 mb-2">
-                <div
-                  v-for="item in activitySeries.series"
-                  :key="item.kind"
-                  class="d-flex align-center ga-2 text-caption"
-                >
-                  <v-icon :icon="mdiCircle" :color="item.color" size="10" />
-                  <span class="text-medium-emphasis">{{ item.label }}</span>
-                  <strong>{{ activitySeries.total(item.kind) }}</strong>
-                </div>
-              </div>
-              <svg
-                class="activity-chart"
-                :viewBox="`0 0 ${activityChart.width} ${activityChart.height}`"
-                role="img"
-                aria-label="最近七天新建、修改、删除文件数量柱状图"
+              <div class="text-caption text-medium-emphasis mb-1">本周 vs 上周</div>
+              <VChart :option="weeklyOption" autoresize class="chart chart--tall" />
+              <v-divider class="my-3" />
+              <div class="text-caption text-medium-emphasis mb-1">24 小时活跃时段</div>
+              <VChart :option="hourlyOption" autoresize class="chart" />
+              <v-divider class="my-3" />
+              <div class="text-caption text-medium-emphasis mb-1">近 6 月操作趋势</div>
+              <VChart :option="monthlyOption" autoresize class="chart chart--tall" />
+              <div
+                class="d-flex align-center justify-end ga-1 text-caption text-medium-emphasis mt-2"
               >
-                <g v-for="line in activityChart.gridLines" :key="line.y">
-                  <line
-                    :x1="activityChart.padLeft"
-                    :y1="line.y"
-                    :x2="activityChart.width - 12"
-                    :y2="line.y"
-                    class="chart-grid-line"
-                  />
-                  <text
-                    :x="activityChart.padLeft - 8"
-                    :y="line.y + 4"
-                    text-anchor="end"
-                    class="chart-axis"
-                  >
-                    {{ line.label }}
-                  </text>
-                </g>
-                <rect
-                  v-for="bar in activityChart.bars"
-                  :key="bar.key"
-                  :x="bar.x"
-                  :y="bar.y"
-                  :width="bar.width"
-                  :height="bar.height"
-                  rx="3"
-                  :data-kind="bar.kind"
-                  :style="{ animationDelay: `${bar.delay}ms` }"
-                >
-                  <title>{{ bar.value }}</title>
-                </rect>
-                <text
-                  v-for="(label, i) in activityChart.labels"
-                  :key="i"
-                  :x="label.x"
-                  :y="activityChart.height - 10"
-                  text-anchor="middle"
-                  class="chart-axis"
-                >
-                  {{ label.text }}
-                </text>
-              </svg>
-              <div class="d-flex align-center justify-end ga-1 text-caption text-medium-emphasis">
                 <v-icon :icon="mdiChartTimelineVariant" size="small" />
                 仅统计本设备记录的文件操作
               </div>
             </v-card-text>
           </v-card>
-        </v-col>
 
-        <v-col cols="12" lg="4">
-          <!-- 热力图 -->
+          <!-- 收藏 / 置顶 -->
           <v-card
             variant="flat"
             border
             rounded="lg"
-            class="lift fade-up"
-            style="animation-delay: 360ms"
+            hover
+            class="fade-up mt-4"
+            style="animation-delay: 340ms"
           >
             <v-card-item>
               <template #prepend>
-                <v-avatar color="success" variant="tonal" rounded="lg">
-                  <v-icon :icon="mdiCalendarMonthOutline" />
+                <v-avatar color="warning" variant="tonal" rounded="lg">
+                  <v-icon :icon="mdiStar" />
                 </v-avatar>
               </template>
-              <v-card-title>创作热力图</v-card-title>
-              <v-card-subtitle>过去 90 天的文件活动</v-card-subtitle>
+              <v-card-title>收藏</v-card-title>
+              <v-card-subtitle>置顶的笔记会出现在这里</v-card-subtitle>
             </v-card-item>
             <v-card-text class="pt-0">
-              <div class="text-caption text-medium-emphasis mb-2">过去 90 天 — 今天</div>
-              <div
-                class="d-flex ga-2 overflow-x-auto"
-                role="img"
-                aria-label="过去 90 天文件活动热力图"
-              >
-                <div class="heatmap-weekdays"><span>一</span><span>三</span><span>五</span></div>
-                <div class="heatmap-grid">
-                  <span
-                    v-for="day in heatmapDays"
-                    :key="day.key"
-                    class="heatmap-cell rounded-sm"
-                    :class="`heatmap-level-${day.level}`"
-                    :title="day.title"
-                  />
-                </div>
-              </div>
-              <div
-                class="d-flex align-center justify-end ga-1 mt-3 text-caption text-medium-emphasis"
-              >
-                <span>少</span>
-                <span
-                  v-for="level in 5"
-                  :key="level"
-                  class="heatmap-legend-cell rounded-sm"
-                  :class="`heatmap-level-${level - 1}`"
-                />
-                <span>多</span>
-              </div>
-            </v-card-text>
-          </v-card>
-
-          <!-- 工作区 -->
-          <v-card
-            v-if="isTauri()"
-            variant="flat"
-            border
-            rounded="lg"
-            class="lift fade-up mt-4"
-            style="animation-delay: 520ms"
-          >
-            <v-card-item>
-              <template #prepend>
-                <v-avatar color="primary" variant="tonal" rounded="lg">
-                  <v-icon :icon="mdiFolderMultipleOutline" />
-                </v-avatar>
-              </template>
-              <v-card-title>工作区</v-card-title>
-              <v-card-subtitle>
-                {{ workspaceSummary.directories }} 个目录 ·
-                {{ workspaceSummary.external }} 个外部文件
-              </v-card-subtitle>
-            </v-card-item>
-            <v-card-text class="pt-0">
-              <v-list v-if="workspaceDirectories.length" density="compact" class="pa-0">
+              <v-list v-if="pinnedNotes.length" lines="two" class="pa-0">
                 <v-list-item
-                  v-for="dir in workspaceDirectories.slice(0, 3)"
-                  :key="dir.dir"
+                  v-for="note in pinnedNotes"
+                  :key="pinKeyOf(note)"
                   rounded="lg"
+                  @click="openNoteEntry(note)"
                 >
                   <template #prepend>
-                    <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
+                    <v-icon :icon="mdiStar" color="warning" />
                   </template>
-                  <v-list-item-title class="text-body-2">
-                    {{ directoryName(dir.dir) }}
-                  </v-list-item-title>
-                  <v-list-item-subtitle class="text-caption" style="overflow-wrap: anywhere">
-                    {{ dir.dir }}
-                  </v-list-item-subtitle>
+                  <v-list-item-title>{{ note.name }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ note.fileName }}.mdrf</v-list-item-subtitle>
+                  <template #append>
+                    <v-btn
+                      :icon="mdiStar"
+                      color="warning"
+                      title="取消置顶"
+                      size="small"
+                      variant="text"
+                      @click.stop="togglePinned(note)"
+                    />
+                  </template>
                 </v-list-item>
               </v-list>
-              <div v-else class="text-caption text-medium-emphasis text-center py-3">
-                还没有挂载任何目录
-              </div>
+              <v-empty-state
+                v-else
+                :icon="mdiStarOutline"
+                title="还没有收藏"
+                text="点击笔记右侧的星星置顶"
+              />
               <v-btn
-                v-if="workspaceDirectories.length > 3"
-                variant="text"
+                variant="tonal"
+                color="warning"
                 size="small"
-                to="/set"
                 block
-                class="mt-2"
+                :prepend-icon="mdiShuffleVariant"
+                class="mt-3"
+                :disabled="!notes.length"
+                @click="openRandom"
               >
-                查看全部 {{ workspaceDirectories.length }} 个目录
+                随机回顾一篇
               </v-btn>
             </v-card-text>
           </v-card>
+        </v-col>
+
+        <v-col cols="12" xl="3">
+          <v-row dense>
+            <v-col cols="12" sm="6" xl="12">
+              <!-- 热力图 -->
+              <v-card
+                variant="flat"
+                border
+                rounded="lg"
+                hover
+                class="fade-up h-100"
+                style="animation-delay: 300ms"
+              >
+                <v-card-item>
+                  <template #prepend>
+                    <v-avatar color="success" variant="tonal" rounded="lg">
+                      <v-icon :icon="mdiCalendarMonthOutline" />
+                    </v-avatar>
+                  </template>
+                  <v-card-title>创作热力图</v-card-title>
+                  <v-card-subtitle>过去 90 天的文件活动</v-card-subtitle>
+                </v-card-item>
+                <v-card-text class="pt-0">
+                  <div class="text-caption text-medium-emphasis mb-2">过去 90 天 — 今天</div>
+                  <div
+                    class="d-flex ga-2 overflow-x-auto"
+                    role="img"
+                    aria-label="过去 90 天文件活动热力图"
+                  >
+                    <div class="heatmap-weekdays">
+                      <span>一</span><span>三</span><span>五</span>
+                    </div>
+                    <div class="heatmap-grid">
+                      <span
+                        v-for="day in heatmapDays"
+                        :key="day.key"
+                        class="heatmap-cell rounded-sm"
+                        :class="`heatmap-level-${day.level}`"
+                        :title="day.title"
+                      />
+                    </div>
+                  </div>
+                  <div
+                    class="d-flex align-center justify-end ga-1 mt-3 text-caption text-medium-emphasis"
+                  >
+                    <span>少</span>
+                    <span
+                      v-for="level in 5"
+                      :key="level"
+                      class="heatmap-legend-cell rounded-sm"
+                      :class="`heatmap-level-${level - 1}`"
+                    />
+                    <span>多</span>
+                  </div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+
+            <v-col v-if="isTauri()" cols="12" sm="6" xl="12">
+              <!-- 工作区 -->
+              <v-card
+                variant="flat"
+                border
+                rounded="lg"
+                hover
+                class="fade-up h-100"
+                style="animation-delay: 360ms"
+              >
+                <v-card-item>
+                  <template #prepend>
+                    <v-avatar color="primary" variant="tonal" rounded="lg">
+                      <v-icon :icon="mdiFolderMultipleOutline" />
+                    </v-avatar>
+                  </template>
+                  <v-card-title>工作区</v-card-title>
+                  <v-card-subtitle>
+                    {{ workspaceStats.directories.length }} 个目录 · 默认
+                    {{ workspaceStats.defaultCount }} 篇 · 外部
+                    {{ workspaceStats.externalCount }} 个
+                  </v-card-subtitle>
+                </v-card-item>
+                <v-card-text class="pt-0">
+                  <v-list density="compact" class="pa-0">
+                    <v-list-item rounded="lg" @click="openWorkspace()">
+                      <template #prepend>
+                        <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
+                      </template>
+                      <v-list-item-title class="text-body-2">默认工作区</v-list-item-title>
+                      <v-list-item-subtitle class="text-caption">
+                        {{ workspaceStats.defaultCount }} 篇笔记
+                      </v-list-item-subtitle>
+                    </v-list-item>
+                    <v-list-item
+                      v-for="dir in workspaceStats.directories.slice(0, 3)"
+                      :key="dir.id"
+                      rounded="lg"
+                      @click="openWorkspace(dir.dir)"
+                    >
+                      <template #prepend>
+                        <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
+                      </template>
+                      <v-list-item-title class="text-body-2">{{ dir.name }}</v-list-item-title>
+                      <v-list-item-subtitle class="text-caption" style="overflow-wrap: anywhere">
+                        {{ dir.count }} 篇 · {{ dir.dir }}
+                      </v-list-item-subtitle>
+                    </v-list-item>
+                  </v-list>
+                  <v-btn
+                    v-if="workspaceStats.directories.length > 3"
+                    variant="text"
+                    size="small"
+                    to="/set"
+                    block
+                    class="mt-2"
+                  >
+                    查看全部 {{ workspaceStats.directories.length }} 个目录
+                  </v-btn>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
         </v-col>
       </v-row>
     </v-container>
@@ -677,6 +1120,10 @@ onMounted(() => {
   background: rgb(var(--v-theme-background));
 }
 
+.min-w-0 {
+  min-width: 0;
+}
+
 /* ---------- 入场 ---------- */
 .fade-up {
   opacity: 0;
@@ -688,23 +1135,20 @@ onMounted(() => {
     opacity: 0;
     transform: translateY(14px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-/* ---------- 欢迎横幅 ---------- */
+/* ---------- Hero ---------- */
 .hero-banner {
   position: relative;
   overflow: hidden;
   color: rgb(var(--v-theme-on-primary));
   background: rgb(var(--v-theme-primary));
-  margin-bottom: 16px;
 }
 
-/* 每个时段一层柔和的角向渐变，制造氛围 */
 .hero-banner--morning {
   background:
     radial-gradient(120% 140% at 0% 0%, rgba(255, 200, 150, 0.35), transparent 55%),
@@ -733,11 +1177,10 @@ onMounted(() => {
     rgb(var(--v-theme-primary));
 }
 
-/* 漂浮光斑 */
 .hero-glow {
   position: absolute;
   border-radius: 50%;
-  background: rgba(var(--v-theme-on-primary), 0.1);
+  background: rgba(255, 255, 255, 0.12);
   pointer-events: none;
   will-change: transform;
 }
@@ -755,7 +1198,7 @@ onMounted(() => {
   left: 30%;
   width: 260px;
   height: 260px;
-  background: rgba(var(--v-theme-on-primary), 0.06);
+  background: rgba(255, 255, 255, 0.07);
   animation: float-b 18s ease-in-out infinite;
 }
 
@@ -764,7 +1207,6 @@ onMounted(() => {
   100% {
     transform: translate(0, 0) scale(1);
   }
-
   50% {
     transform: translate(-24px, 20px) scale(1.08);
   }
@@ -775,7 +1217,6 @@ onMounted(() => {
   100% {
     transform: translate(0, 0) scale(1);
   }
-
   50% {
     transform: translate(30px, -18px) scale(1.05);
   }
@@ -784,13 +1225,6 @@ onMounted(() => {
 .hero-content {
   position: relative;
   z-index: 1;
-  padding: 24px;
-}
-
-@media (min-width: 960px) {
-  .hero-content {
-    padding: 32px;
-  }
 }
 
 .hero-eyebrow {
@@ -820,56 +1254,29 @@ onMounted(() => {
 .hero-subtitle {
   margin: 6px 0 0;
   font-size: 0.95rem;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
-.hero-btn {
-  text-transform: none;
-}
-
-.hero-btn--primary {
-  color: rgb(var(--v-theme-primary));
-  background: rgb(var(--v-theme-on-primary));
-}
-
-/* ---------- 卡片悬停 ---------- */
-.lift {
-  transition:
-    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.22s ease;
-}
-
-.lift:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(var(--v-theme-on-surface), 0.08);
-}
-
-.stat-card {
-  transition:
-    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.22s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(var(--v-theme-on-surface), 0.08);
+.hero-tagline {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  font-style: italic;
+  opacity: 0.6;
+  letter-spacing: 0.02em;
 }
 
 .stat-value {
   font-variant-numeric: tabular-nums;
 }
 
-/* 列表项 hover 时箭头右移 */
-.list-item-hover {
-  transition: background 0.15s ease;
+/* ---------- 图表 ---------- */
+.chart {
+  width: 100%;
+  height: 160px;
 }
 
-.list-arrow {
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.list-item-hover:hover .list-arrow {
-  transform: translateX(3px);
+.chart--tall {
+  height: 200px;
 }
 
 /* ---------- 热力图 ---------- */
@@ -886,7 +1293,6 @@ onMounted(() => {
   from {
     opacity: 0;
   }
-
   to {
     opacity: 1;
   }
@@ -921,87 +1327,29 @@ onMounted(() => {
 .heatmap-level-0 {
   background: rgba(var(--v-theme-on-surface), 0.07);
 }
-
 .heatmap-level-1 {
   background: rgba(var(--v-theme-primary), 0.18);
 }
-
 .heatmap-level-2 {
   background: rgba(var(--v-theme-primary), 0.38);
 }
-
 .heatmap-level-3 {
   background: rgba(var(--v-theme-primary), 0.62);
 }
-
 .heatmap-level-4 {
   background: rgb(var(--v-theme-primary));
-}
-
-/* ---------- 柱状图 ---------- */
-.activity-chart {
-  display: block;
-  width: 100%;
-}
-
-.chart-grid-line {
-  stroke: rgba(var(--v-theme-on-surface), 0.07);
-  stroke-width: 1;
-}
-
-.chart-axis {
-  fill: rgba(var(--v-theme-on-surface), 0.5);
-  font-size: 11px;
-}
-
-/* 柱子从底部生长 */
-.activity-chart rect {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation: grow-bar 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  transition: opacity 0.15s ease;
-}
-
-.activity-chart rect:hover {
-  opacity: 0.75;
-}
-
-@keyframes grow-bar {
-  from {
-    transform: scaleY(0);
-  }
-
-  to {
-    transform: scaleY(1);
-  }
-}
-
-.activity-chart rect[data-kind='created'] {
-  fill: rgb(var(--v-theme-success));
-}
-
-.activity-chart rect[data-kind='modified'] {
-  fill: rgb(var(--v-theme-primary));
-}
-
-.activity-chart rect[data-kind='deleted'] {
-  fill: rgb(var(--v-theme-error));
 }
 
 /* ---------- 减少动效 ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fade-up,
   .hero-glow,
-  .heatmap-grid,
-  .activity-chart rect {
+  .heatmap-grid {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
 
-  .lift,
-  .stat-card,
-  .list-arrow,
   .heatmap-cell {
     transition: none !important;
   }

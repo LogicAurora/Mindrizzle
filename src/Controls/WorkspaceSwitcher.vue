@@ -133,8 +133,8 @@ const selectOption = (id: string) => emit('update:modelValue', id);
 
 <style scoped>
 .workspace-switcher__trigger {
-  /* teleport 进工具栏后拿不到 VBtn 默认值，宽度得自己收住 */
   max-width: 260px;
+  flex-shrink: 0;
 }
 
 .workspace-switcher__label {
