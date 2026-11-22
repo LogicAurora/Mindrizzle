@@ -11,7 +11,7 @@
       ref="wrapperRef"
       class="editor-wrapper inner-component"
       :data-read-only="readOnly ? 'true' : 'false'"
-      :class="{ 'auto-height': autoHeight, 'touch-selecting': isTouchPointerOnEditor }"
+      :class="{ 'auto-height': autoHeight }"
       :style="{
         color: 'var(--v-theme-on-surface)',
         background: 'var(--v-theme-surface)',
@@ -21,7 +21,11 @@
       <ProseKit :editor="editor">
         <div class="editor-scroll-shell">
           <div ref="scrollRef" class="editor-scroll" @scroll="onEditorScroll">
-            <div ref="editorMount" class="editor-mount" />
+            <div
+              ref="editorMount"
+              class="editor-mount"
+              :style="isTouchPointerOnEditor ? TOUCH_SELECTING_STYLE : undefined"
+            />
           </div>
           <!-- 原生 ::selection 只能方角，所以按行铺圆角块自绘；节点在滚动容器外，不随内容滚动 -->
           <div class="text-selection-highlight" aria-hidden="true">
@@ -285,8 +289,9 @@ const isTextSelectionDragging = ref(false);
 const isTouchTextSelectionActive = ref(false);
 const isTouchSelectionRangePreferred = ref(false);
 const isTouchSelectionHandlesVisible = ref(false);
-// 手指按下即挂 user-select:none，避免浏览器自己起一套原生选区与自绘手柄打架
+// 手指按下即关原生选区，避免浏览器自己起一套原生选区与自绘手柄打架；直接改目标元素内联样式，避免类选择器重算整棵编辑器子树
 const isTouchPointerOnEditor = ref(false);
+const TOUCH_SELECTING_STYLE = { userSelect: 'none', webkitUserSelect: 'none' } as const;
 type TouchSelectionHandlePoint = { left: number; top: number };
 const touchSelectionHandles = ref<{
   from: TouchSelectionHandlePoint;
@@ -306,6 +311,8 @@ let touchSelectionHandleDrag: TouchSelectionHandleDrag | null = null;
 // 长按选词后继续拖动的手势（没有 pointerId，活动端跟随手指）
 let touchSelectionFingerDrag: TouchSelectionFingerDrag | null = null;
 let touchSelectionAutoScrollFrame = 0;
+let fingerDragFrame = 0;
+let handleDragFrame = 0;
 const isPointerOverTextSelectionToolbar = ref(false);
 const toolbarPosition = ref({ left: 0, top: 0 });
 const toolbarPointer = { x: Number.NaN, y: Number.NaN };
@@ -317,7 +324,7 @@ const { rects: textSelectionRects, refresh: refreshSelectionHighlight } = useTex
     editor,
     scrollRef,
     isToolbarInteractionActive: () =>
-      isToolbarMenuOpen.value || isTouchSelectionRangePreferred.value,
+      isToolbarMenuOpen.value || isTouchSelectionRangePreferred.value || isColorPickerMounted(),
   },
 );
 const scrollMetrics = reactive({
@@ -362,9 +369,28 @@ const refreshTouchSelectionHandles = () => {
   };
 };
 
+// 非手势入口（滚动、重排）合并到一帧，手势路径仍走上方立即版以当帧跟手
+let handlesRefreshFrame = 0;
+const scheduleRefreshTouchSelectionHandles = () => {
+  if (handlesRefreshFrame) return;
+  handlesRefreshFrame = requestAnimationFrame(() => {
+    handlesRefreshFrame = 0;
+    refreshTouchSelectionHandles();
+  });
+};
+
 const refreshTextSelection = () => {
   refreshSelectionHighlight();
   refreshTouchSelectionHandles();
+};
+
+let selectionRefreshFrame = 0;
+const scheduleRefreshTextSelection = () => {
+  if (selectionRefreshFrame) return;
+  selectionRefreshFrame = requestAnimationFrame(() => {
+    selectionRefreshFrame = 0;
+    refreshTextSelection();
+  });
 };
 
 const syncReadOnly = (readOnly: boolean) => {
@@ -394,8 +420,8 @@ const updateScrollMetrics = () => {
 
 const onEditorScroll = () => {
   updateScrollMetrics();
-  refreshTouchSelectionHandles();
-  updateTextSelectionToolbar();
+  scheduleRefreshTouchSelectionHandles();
+  scheduleRefreshTextSelectionToolbar();
 };
 
 // thumb 有 24px 下限、轨道两端各留 2px，所以拖动量与 scroll 的换算必须与渲染公式严格互逆（否则越拖越偏）
@@ -625,6 +651,10 @@ const textPositionAtPoint = (
   const right = layoutToViewportX(view, rect.right) - TEXT_CARET_EDGE_INSET;
   const top = layoutToViewportY(view, rect.top) + TEXT_CARET_EDGE_INSET;
   const bottom = layoutToViewportY(view, rect.bottom) - TEXT_CARET_EDGE_INSET;
+  // 起手命中（长按/点按）必须落在块内；拖动中手指会滑出块外，仍需依赖下方夹取吸附到边缘
+  if (!allowHandleHit && (clientX < left || clientX > right || clientY < top || clientY > bottom)) {
+    return null;
+  }
   const x = Math.min(Math.max(clientX, left), right);
   const y = Math.min(Math.max(clientY, top), bottom);
   const selectionHandle = allowHandleHit
@@ -654,6 +684,7 @@ const textPositionAtPoint = (
 };
 
 const beginTouchTextSelection = (clientX: number, clientY: number): boolean => {
+  cachedScrollRect = null;
   const position = textPositionAtPoint(clientX, clientY);
   const word = position == null ? null : wordRangeAtPosition(position);
   if (!word) {
@@ -740,15 +771,27 @@ const applyFingerSelectionHead = (drag: TouchSelectionFingerDrag) => {
   refreshTextSelection();
 };
 
+// 手指微抖也会触发整条选文链路，合并到 rAF 并滤掉亚像素位移
+const scheduleFingerSelectionHead = () => {
+  if (fingerDragFrame) return;
+  fingerDragFrame = requestAnimationFrame(() => {
+    fingerDragFrame = 0;
+    const drag = touchSelectionFingerDrag;
+    if (!drag) return;
+    applyFingerSelectionHead(drag);
+    if (!touchSelectionAutoScrollFrame) {
+      touchSelectionAutoScrollFrame = requestAnimationFrame(updateTouchSelectionAutoScroll);
+    }
+  });
+};
+
 const extendTouchTextSelection = (clientX: number, clientY: number) => {
   const drag = touchSelectionFingerDrag;
   if (!drag) return;
+  if (Math.abs(clientX - drag.clientX) < 1 && Math.abs(clientY - drag.clientY) < 1) return;
   drag.clientX = clientX;
   drag.clientY = clientY;
-  applyFingerSelectionHead(drag);
-  if (!touchSelectionAutoScrollFrame) {
-    touchSelectionAutoScrollFrame = requestAnimationFrame(updateTouchSelectionAutoScroll);
-  }
+  scheduleFingerSelectionHead();
 };
 
 const touchSelectionHandleStyle = (point: TouchSelectionHandlePoint): Record<string, string> => {
@@ -780,6 +823,7 @@ const startTouchSelectionHandleDrag = (edge: 'from' | 'to', event: PointerEvent)
   if (event.pointerType !== 'touch' || !editorMounted) return;
   const selection = editor.view.state.selection;
   if (!(selection instanceof TextSelection) || selection.empty) return;
+  cachedScrollRect = null;
   touchSelectionFingerDrag = null;
   touchSelectionHandleDrag = {
     pointerId: event.pointerId,
@@ -803,12 +847,14 @@ const textSelectionScrollEdge = (pointerY: number, top: number, bottom: number) 
   return null;
 };
 
+// 手势期间滚动容器与画布都不动，矩形只需量一次，避免自动滚动每帧强制布局
+let cachedScrollRect: DOMRect | null = null;
 const scrollTouchSelectionAtEdge = (pointerY: number): boolean => {
   const scroll = scrollRef.value;
   if (!scroll || !editorMounted) return false;
-  const rect = scroll.getBoundingClientRect();
-  const top = layoutToViewportY(editor.view, rect.top);
-  const bottom = layoutToViewportY(editor.view, rect.bottom);
+  cachedScrollRect ??= scroll.getBoundingClientRect();
+  const top = layoutToViewportY(editor.view, cachedScrollRect.top);
+  const bottom = layoutToViewportY(editor.view, cachedScrollRect.bottom);
   const edge = textSelectionScrollEdge(pointerY, top, bottom);
   if (!edge) return false;
   const canScroll =
@@ -843,15 +889,25 @@ const updateTouchSelectionAutoScroll = () => {
   touchSelectionAutoScrollFrame = requestAnimationFrame(updateTouchSelectionAutoScroll);
 };
 
+const scheduleHandleSelectionHead = () => {
+  if (handleDragFrame) return;
+  handleDragFrame = requestAnimationFrame(() => {
+    handleDragFrame = 0;
+    const drag = touchSelectionHandleDrag;
+    if (!drag) return;
+    updateTouchSelectionHead(drag.fixedPosition, drag.clientX, drag.clientY);
+    if (!touchSelectionAutoScrollFrame) {
+      touchSelectionAutoScrollFrame = requestAnimationFrame(updateTouchSelectionAutoScroll);
+    }
+  });
+};
+
 const moveTouchSelectionHandleDrag = (event: PointerEvent) => {
   const drag = touchSelectionHandleDrag;
   if (!drag || drag.pointerId !== event.pointerId) return;
   drag.clientX = event.clientX;
   drag.clientY = event.clientY;
-  updateTouchSelectionHead(drag.fixedPosition, event.clientX, event.clientY);
-  if (!touchSelectionAutoScrollFrame) {
-    touchSelectionAutoScrollFrame = requestAnimationFrame(updateTouchSelectionAutoScroll);
-  }
+  scheduleHandleSelectionHead();
 };
 
 const stopTouchSelectionAutoScroll = () => {
@@ -860,10 +916,26 @@ const stopTouchSelectionAutoScroll = () => {
   touchSelectionAutoScrollFrame = 0;
 };
 
+const cancelTouchSelectionDragFrames = () => {
+  if (fingerDragFrame) cancelAnimationFrame(fingerDragFrame);
+  fingerDragFrame = 0;
+  if (handleDragFrame) cancelAnimationFrame(handleDragFrame);
+  handleDragFrame = 0;
+};
+
 const endTouchTextSelection = (clientX: number, clientY: number, showToolbar = true) => {
   isTouchTextSelectionActive.value = false;
   isTextSelectionDragging.value = false;
+  // 拖动已合并到 rAF，收尾必须用最终坐标补一帧，否则最后一次位移会丢
+  const pendingDrag = fingerDragFrame ? touchSelectionFingerDrag : null;
+  cancelTouchSelectionDragFrames();
+  if (pendingDrag) {
+    pendingDrag.clientX = clientX;
+    pendingDrag.clientY = clientY;
+    applyFingerSelectionHead(pendingDrag);
+  }
   touchSelectionFingerDrag = null;
+  cachedScrollRect = null;
   if (!editorMounted) return;
   refreshTextSelection();
   if (showToolbar) {
@@ -877,6 +949,7 @@ const endTouchTextSelection = (clientX: number, clientY: number, showToolbar = t
 
 const endTouchSelectionHandleDrag = (event: PointerEvent) => {
   if (touchSelectionHandleDrag?.pointerId !== event.pointerId) return;
+  cancelTouchSelectionDragFrames();
   updateTouchSelectionHead(touchSelectionHandleDrag.fixedPosition, event.clientX, event.clientY);
   touchSelectionHandleDrag = null;
   stopTouchSelectionAutoScroll();
@@ -1133,7 +1206,7 @@ const selectionRangeInsideEditor = (): Range | null => {
     return ancestor?.closest('[data-node-view-root]') ? null : range;
   }
   const selection = window.getSelection();
-  const isToolbarInteraction = isToolbarMenuOpen.value || isPointerOverTextSelectionToolbar.value;
+  const isToolbarInteraction = isToolbarEngaged();
   let range: Range | null = null;
   if (isToolbarInteraction) {
     const { selection: editorSelection } = view.state;
@@ -1159,8 +1232,19 @@ const cancelToolbarHide = () => {
   toolbarHideTimer = 0;
 };
 
+// 菜单/取色弹层展开、或指针停在工具栏/蒙层上时，工具栏一律不能收起，否则弹层会跟着卸载
+const isToolbarEngaged = () =>
+  isToolbarMenuOpen.value || isPointerOverTextSelectionToolbar.value || isColorPickerMounted();
+
 const hideTextSelectionToolbar = () => {
   cancelToolbarHide();
+  // 拖动中每条指针事件都会走到这里，已收起时不再写 reactive 触发渲染
+  if (
+    !isTextSelectionToolbarVisible.value &&
+    !isToolbarMenuOpen.value &&
+    !isPointerOverTextSelectionToolbar.value
+  )
+    return;
   isTextSelectionToolbarVisible.value = false;
   isToolbarMenuOpen.value = false;
   isPointerOverTextSelectionToolbar.value = false;
@@ -1188,7 +1272,11 @@ const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent, forceShow
       event.target instanceof Element &&
       event.target.closest('.text-selection-toolbar, .text-selection-color-picker') !== null;
   }
-  if (isTextSelectionDragging.value || isTouchTextSelectionActive.value || readOnly.value) {
+  // 菜单/取色器等弹层展开时整条工具栏不能消失，否则弹层会跟着被卸载
+  if (
+    !isToolbarEngaged() &&
+    (isTextSelectionDragging.value || isTouchTextSelectionActive.value || readOnly.value)
+  ) {
     hideTextSelectionToolbar();
     return;
   }
@@ -1199,7 +1287,7 @@ const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent, forceShow
     return;
   }
   if (!range) {
-    if (isToolbarMenuOpen.value) return;
+    if (isToolbarEngaged()) return;
     hideTextSelectionToolbar();
     return;
   }
@@ -1210,6 +1298,7 @@ const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent, forceShow
   );
   const canvasContainer = view.dom.closest('.canvas-container') as HTMLElement | null;
   if (!selectionRects.length || !canvasContainer) {
+    if (isToolbarEngaged()) return;
     hideTextSelectionToolbar();
     return;
   }
@@ -1254,7 +1343,7 @@ const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent, forceShow
     top: layoutToCanvasCss(view, localTop),
   };
   isToolbarBelowSelection.value = belowSelection;
-  if (isToolbarMenuOpen.value || isPointerOverTextSelectionToolbar.value) {
+  if (isToolbarEngaged()) {
     cancelToolbarHide();
     return;
   }
@@ -1276,22 +1365,30 @@ const updateTextSelectionToolbar = (event?: MouseEvent | PointerEvent, forceShow
       );
     });
   if (!isPointerOverSelection && !forceShow) {
-    scheduleToolbarHide();
+    // 松手点常在选区外一像素，且选区/内容刷新时指针也可能落在矩形外，只有悬停移开才收起
+    if (event && event.type !== 'mouseup') scheduleToolbarHide();
     return;
   }
   cancelToolbarHide();
   isTextSelectionToolbarVisible.value = true;
 };
 
+// 工具栏、选区手柄以及取色弹层（Vuetify 会把菜单 Teleport 到 .v-overlay-container）都属于工具栏交互，点它们不算点外部
+const isTextSelectionOverlayTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element &&
+  !!target.closest('.text-selection-toolbar, .text-selection-color-picker, .text-selection-handle');
+
+// 取色弹层挂载期间工具栏必须常驻：它随工具栏一起卸载，且触摸端没有 hover 用来重算交互态
+const isColorPickerMounted = () => document.querySelector('.text-selection-color-picker') !== null;
+
 const onTextSelectionMouseDown = (event: MouseEvent) => {
   if (event.button !== 0 || !editorMounted) return;
   // 触摸按下产生的兼容 mousedown 不能当作鼠标点击，否则会立刻抹掉刚建立的自绘选区
   if (isTouchPointerOnEditor.value) return;
-  if (
-    event.target instanceof Element &&
-    event.target.closest('.text-selection-toolbar, .text-selection-handle')
-  )
+  if (isTextSelectionOverlayTarget(event.target)) {
+    isPointerOverTextSelectionToolbar.value = true;
     return;
+  }
   isTouchSelectionRangePreferred.value = false;
   isTouchSelectionHandlesVisible.value = false;
   isTextSelectionDragging.value = editor.view.dom.contains(event.target as Node);
@@ -1318,24 +1415,46 @@ const onTouchSelectionPointerDown = (event: PointerEvent) => {
   const insideEditor =
     event.target instanceof Node && editorMounted && editor.view.dom.contains(event.target);
   isTouchPointerOnEditor.value = insideEditor;
+  // 触摸没有 hover，工具栏交互态只能靠 pointerdown 维护；否则点开取色器后选区折叠触发的刷新会把整条工具栏收掉
+  const isOverlayTarget = isTextSelectionOverlayTarget(event.target) || isColorPickerMounted();
+  isPointerOverTextSelectionToolbar.value = isOverlayTarget;
+  if (isOverlayTarget) return;
   // 点编辑器内由 tapTouchTextSelection 判断保留还是折叠选区；只有点外部才在这里清理
   if (insideEditor || !isTouchSelectionHandlesVisible.value) return;
-  const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest('.text-selection-handle, .text-selection-toolbar')) return;
   isTouchSelectionHandlesVisible.value = false;
   isTouchSelectionRangePreferred.value = false;
   touchSelectionFingerDrag = null;
   hideTextSelectionToolbar();
 };
 
-const onTouchPointerEnd = () => {
+const onPointerEnd = () => {
   isTouchPointerOnEditor.value = false;
+  // 编辑器内 DOM 可能在 mouseup 冒泡到 window 前被选区更新替换掉，拖拽标记若永久为 true 工具栏就再也弹不出来
+  isTextSelectionDragging.value = false;
 };
 
 const refreshTextSelectionToolbar = () => {
+  // 取色器/菜单展开时，焦点移进控件会让 DOM 选区折叠，此时不能拿"在拖动/触摸中"去收工具栏
+  if (
+    !isToolbarEngaged() &&
+    (isTextSelectionDragging.value || isTouchTextSelectionActive.value || readOnly.value)
+  ) {
+    hideTextSelectionToolbar();
+    return;
+  }
   refreshTouchSelectionHandles();
   if (editorMounted) selectionToolbarState.value = editor.state;
   updateTextSelectionToolbar();
+};
+
+// selectionchange / scroll / resize 常同帧连发，合并到一帧只做一次选区与工具栏布局查询
+let toolbarRefreshFrame = 0;
+const scheduleRefreshTextSelectionToolbar = () => {
+  if (toolbarRefreshFrame) return;
+  toolbarRefreshFrame = requestAnimationFrame(() => {
+    toolbarRefreshFrame = 0;
+    refreshTextSelectionToolbar();
+  });
 };
 
 const refreshToolbarAfterLayout = async () => {
@@ -1642,8 +1761,8 @@ useDocChange(
   () => {
     syncAutoHeight();
     scheduleScrollMetrics();
-    refreshTextSelection();
-    refreshTextSelectionToolbar();
+    scheduleRefreshTextSelection();
+    scheduleRefreshTextSelectionToolbar();
   },
   { editor },
 );
@@ -1653,8 +1772,8 @@ let contentResizeFrame = 0;
 const onContentResize = () => {
   updateScrollMetrics();
   // 重排后选区矩形会跟着变，但不会触发 selectionchange，所以这里主动同步一次
-  refreshTextSelection();
-  updateTextSelectionToolbar();
+  scheduleRefreshTextSelection();
+  scheduleRefreshTextSelectionToolbar();
   if (!autoHeight.value || contentResizeFrame) return;
   // RO 回调里同步改块高会触发循环告警，所以延后一帧
   contentResizeFrame = requestAnimationFrame(() => {
@@ -1671,8 +1790,8 @@ const onCanvasTransform = (e: Event) => {
   lastTransformZoom = z;
   requestAnimationFrame(() => {
     syncAutoHeight();
-    refreshTextSelection();
-    updateTextSelectionToolbar();
+    scheduleRefreshTextSelection();
+    scheduleRefreshTextSelectionToolbar();
   });
 };
 
@@ -1699,17 +1818,19 @@ onMounted(() => {
   window.addEventListener('keyup', onAltKeyUp);
   window.addEventListener('mousedown', onTextSelectionMouseDown, true);
   window.addEventListener('pointerdown', onTouchSelectionPointerDown, true);
-  window.addEventListener('pointerup', onTouchPointerEnd, true);
-  window.addEventListener('pointercancel', onTouchPointerEnd, true);
+  window.addEventListener('pointerup', onPointerEnd, true);
+  window.addEventListener('pointercancel', onPointerEnd, true);
   window.addEventListener('pointermove', onTextSelectionPointerMove, true);
   window.addEventListener('contextmenu', onTouchTextSelectionContextMenu, true);
   window.addEventListener('mouseup', onSelectionMouseUp);
   window.addEventListener('Mindrizzle:rich-text-context-format', onRichTextContextFormat);
-  document.addEventListener('selectionchange', refreshTextSelectionToolbar);
+  document.addEventListener('selectionchange', scheduleRefreshTextSelectionToolbar);
   // 移动端键盘弹出改的是 visualViewport，window.resize 不一定触发，工具栏与手柄要跟着重排
-  window.visualViewport?.addEventListener('resize', refreshTextSelectionToolbar);
+  window.visualViewport?.addEventListener('resize', scheduleRefreshTextSelectionToolbar, {
+    passive: true,
+  });
   window.addEventListener('resize', keepApplyCardInViewport);
-  window.addEventListener('resize', refreshTextSelectionToolbar);
+  window.addEventListener('resize', scheduleRefreshTextSelectionToolbar, { passive: true });
   onUnmounted(() => observer.disconnect());
 });
 
@@ -1719,6 +1840,14 @@ onUnmounted(() => {
   if (toolbarLayoutFrame) cancelAnimationFrame(toolbarLayoutFrame);
   toolbarLayoutFrame = 0;
   stopTouchSelectionAutoScroll();
+  cancelTouchSelectionDragFrames();
+  if (toolbarRefreshFrame) cancelAnimationFrame(toolbarRefreshFrame);
+  toolbarRefreshFrame = 0;
+  if (selectionRefreshFrame) cancelAnimationFrame(selectionRefreshFrame);
+  selectionRefreshFrame = 0;
+  if (handlesRefreshFrame) cancelAnimationFrame(handlesRefreshFrame);
+  handlesRefreshFrame = 0;
+  cachedScrollRect = null;
   touchSelectionHandleDrag = null;
   touchSelectionFingerDrag = null;
   isTouchPointerOnEditor.value = false;
@@ -1733,16 +1862,16 @@ onUnmounted(() => {
   window.removeEventListener('keyup', onAltKeyUp);
   window.removeEventListener('mousedown', onTextSelectionMouseDown, true);
   window.removeEventListener('pointerdown', onTouchSelectionPointerDown, true);
-  window.removeEventListener('pointerup', onTouchPointerEnd, true);
-  window.removeEventListener('pointercancel', onTouchPointerEnd, true);
+  window.removeEventListener('pointerup', onPointerEnd, true);
+  window.removeEventListener('pointercancel', onPointerEnd, true);
   window.removeEventListener('pointermove', onTextSelectionPointerMove, true);
   window.removeEventListener('contextmenu', onTouchTextSelectionContextMenu, true);
   window.removeEventListener('mouseup', onSelectionMouseUp);
   window.removeEventListener('Mindrizzle:rich-text-context-format', onRichTextContextFormat);
-  document.removeEventListener('selectionchange', refreshTextSelectionToolbar);
-  window.visualViewport?.removeEventListener('resize', refreshTextSelectionToolbar);
+  document.removeEventListener('selectionchange', scheduleRefreshTextSelectionToolbar);
+  window.visualViewport?.removeEventListener('resize', scheduleRefreshTextSelectionToolbar);
   window.removeEventListener('resize', keepApplyCardInViewport);
-  window.removeEventListener('resize', refreshTextSelectionToolbar);
+  window.removeEventListener('resize', scheduleRefreshTextSelectionToolbar);
 });
 
 // 开启瞬间按当前内容测一次
@@ -1975,12 +2104,6 @@ defineExpose({
   user-select: text;
   /* 自绘选区 + 选区工具栏取代了原生长按菜单，避免移动端两套 UI 同时出现 */
   -webkit-touch-callout: none;
-}
-
-/* 手指按下到抬起期间关掉原生选区，否则浏览器会抢在自绘手柄之前选中同一段文字 */
-.touch-selecting .editor-mount.ProseMirror {
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .editor-wrapper :deep(.block-handle-positioner.placement-top .block-handle-popup),

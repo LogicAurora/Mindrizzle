@@ -142,7 +142,7 @@ const computeRect = (s: ResizeSession, dx: number, dy: number): Rect => {
   return { x, y, w, h };
 };
 
-const onMove = (e: MouseEvent) => {
+const onMove = (e: PointerEvent) => {
   if (!session) return;
   // .canvas 用 zoom，所以鼠标位移需除以 zoom
   const rect = computeRect(
@@ -162,9 +162,9 @@ const onUp = () => {
   session = null;
 };
 
-// 会话以按下瞬间矩形 + 鼠标位移为基准，所以 autoPan 补偿改动 prop 不会进入反馈环
-const onHandleDown = (handle: string, e: MouseEvent) => {
-  if (props.disabled || e.button !== 0) return;
+// 触屏不会补发可用的 mousemove，所以拖拽全程走 pointer 事件（鼠标同样派发 pointer）
+const onHandleDown = (handle: string, e: PointerEvent) => {
+  if (props.disabled || e.button !== 0 || !e.isPrimary) return;
   session = {
     handle,
     startClientX: e.clientX,
@@ -173,15 +173,17 @@ const onHandleDown = (handle: string, e: MouseEvent) => {
     lastRect: { x: props.x, y: props.y, w: props.w, h: props.h },
   };
   // hover 自解析会 stopPropagation，所以用捕获阶段
-  window.addEventListener('mousemove', onMove, true);
-  window.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove, true);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
   emit('resizestart', handle);
   e.preventDefault();
 };
 
 const cleanup = () => {
-  window.removeEventListener('mousemove', onMove, true);
-  window.removeEventListener('mouseup', onUp);
+  window.removeEventListener('pointermove', onMove, true);
+  window.removeEventListener('pointerup', onUp);
+  window.removeEventListener('pointercancel', onUp);
 };
 onUnmounted(cleanup);
 
@@ -203,7 +205,8 @@ defineExpose({ rootEl });
           :class="`handle-${h}`"
           :data-uuid="uuid"
           :style="handleStyle(h)"
-          @mousedown.prevent.stop="onHandleDown(h, $event)"
+          @pointerdown.prevent.stop="onHandleDown(h, $event)"
+          @mousedown.prevent.stop
         />
       </template>
     </Teleport>
@@ -233,5 +236,15 @@ defineExpose({ rootEl });
   box-shadow: 0 0 2px rgba(var(--v-theme-on-surface), 0.4);
   /* 与 Z_LAYER.resizeHandle 一致 */
   z-index: 1003;
+  touch-action: none;
+}
+
+/* 8px 手柄远小于手指接触面，仅在粗指针（触屏）下外扩命中区 */
+@media (pointer: coarse) {
+  .handle::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
 }
 </style>

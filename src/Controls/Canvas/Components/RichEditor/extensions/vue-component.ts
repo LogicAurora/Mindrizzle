@@ -130,7 +130,7 @@ interface ToolButtonOptions {
   active: boolean;
   cursor: string;
   title: string;
-  onMousedown: (event: MouseEvent) => void;
+  onPointerDown: (event: PointerEvent) => void;
   onHover: (hovering: boolean) => void;
 }
 
@@ -154,11 +154,13 @@ const toolButtonStyle = (active: boolean, cursor: string) => ({
   color: active ? `rgba(${toolTone}, 0.95)` : `rgba(${toolTone}, 0.6)`,
   cursor,
   userSelect: 'none' as const,
+  // 拖动改变大小/拖出时手指不能顺带滚动块内内容
+  touchAction: 'none' as const,
   transition: 'background 0.15s, color 0.15s',
 });
 
 function renderToolButton(options: ToolButtonOptions) {
-  const { icon, active, cursor, title, onMousedown, onHover } = options;
+  const { icon, active, cursor, title, onPointerDown, onHover } = options;
   return h(
     'div',
     {
@@ -166,7 +168,7 @@ function renderToolButton(options: ToolButtonOptions) {
       style: toolButtonStyle(active, cursor),
       onMouseenter: () => onHover(true),
       onMouseleave: () => onHover(false),
-      onMousedown,
+      onPointerdown: onPointerDown,
     },
     [
       h('svg', { viewBox: '0 0 24 24', width: 14, height: 14 }, [
@@ -224,7 +226,7 @@ const ResizableContainer = defineComponent({
     provide(EMBED_SETTINGS_HOST_KEY, settingsHostRef);
 
     // 弹层挂在 body，点外面就收起；下拉菜单也 teleport 到 overlay 容器，点它不能算「外面」
-    const closeSettingsOnOutside = (event: MouseEvent) => {
+    const closeSettingsOnOutside = (event: PointerEvent) => {
       if (!settingsOpen.value) return;
       const target = event.target as Node | null;
       if (!target) return;
@@ -259,7 +261,7 @@ const ResizableContainer = defineComponent({
       };
     };
 
-    const toggleSettings = (event: MouseEvent) => {
+    const toggleSettings = (event: PointerEvent) => {
       event.preventDefault();
       event.stopPropagation();
       if (settingsOpen.value) {
@@ -285,13 +287,14 @@ const ResizableContainer = defineComponent({
       },
     );
 
-    const startResize = (e: MouseEvent) => {
-      if (props.readOnly) return;
+    // 触屏拖动不会补发可用的 mousemove，所以整条拖拽链路走 pointer 事件并挂 window 捕获
+    const startResize = (e: PointerEvent) => {
+      if (props.readOnly || e.button !== 0 || !e.isPrimary) return;
       e.preventDefault();
       e.stopPropagation();
       isResizing.value = true;
 
-      // 画布 zoom 下鼠标位移是视觉像素、而组件宽高是编辑器布局像素，所以位移须折回布局空间（否则缩放后手柄跟不上鼠标）
+      // 画布 zoom 下指针位移是视觉像素、而组件宽高是编辑器布局像素，所以位移须折回布局空间（否则缩放后手柄跟不上鼠标）
       const scaleEl = e.currentTarget as HTMLElement | null;
       const startX = e.clientX;
       const startY = e.clientY;
@@ -303,7 +306,8 @@ const ResizableContainer = defineComponent({
       const maxH = props.maxHeight !== null ? props.maxHeight : Infinity;
       const minH = props.minHeight !== null ? props.minHeight : -Infinity;
 
-      const onMouseMove = (ev: MouseEvent) => {
+      const onPointerMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== e.pointerId) return;
         ev.preventDefault();
         let newWidth = startWidth + viewportToLayout(scaleEl, ev.clientX - startX);
         let newHeight = startHeight + viewportToLayout(scaleEl, ev.clientY - startY);
@@ -324,49 +328,58 @@ const ResizableContainer = defineComponent({
         emit('resize', newWidth, newHeight);
       };
 
-      const onMouseUp = () => {
+      const finish = () => {
         isResizing.value = false;
-        document.removeEventListener('mousemove', onMouseMove, true);
-        document.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('pointermove', onPointerMove, true);
+        window.removeEventListener('pointerup', finish);
+        window.removeEventListener('pointercancel', finish);
       };
 
       // hover 自解析会 stopPropagation，所以用捕获阶段
-      document.addEventListener('mousemove', onMouseMove, true);
-      document.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('pointermove', onPointerMove, true);
+      window.addEventListener('pointerup', finish);
+      window.addEventListener('pointercancel', finish);
     };
 
     // 左下按钮把插入组件拖出成画布块，是否落位由画布判定
-    const startExtract = (event: MouseEvent) => {
-      if (props.readOnly) return;
+    const startExtract = (event: PointerEvent) => {
+      if (props.readOnly || event.button !== 0 || !event.isPrimary) return;
       event.preventDefault();
       event.stopPropagation();
       isExtracting.value = true;
       const ghost = createExtractGhost();
       document.body.appendChild(ghost);
-      const placeGhost = (ev: MouseEvent) => {
+      const placeGhost = (ev: PointerEvent) => {
         ghost.style.left = `${ev.clientX + 12}px`;
         ghost.style.top = `${ev.clientY + 12}px`;
       };
-      const onMouseMove = (ev: MouseEvent) => placeGhost(ev);
-      const onMouseUp = (ev: MouseEvent) => {
-        document.removeEventListener('mousemove', onMouseMove, true);
-        document.removeEventListener('mouseup', onMouseUp);
+      const onPointerMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== event.pointerId) return;
+        placeGhost(ev);
+      };
+      const finish = (ev: PointerEvent) => {
+        if (ev.pointerId !== event.pointerId) return;
+        window.removeEventListener('pointermove', onPointerMove, true);
+        window.removeEventListener('pointerup', finish);
+        window.removeEventListener('pointercancel', finish);
         ghost.remove();
         isExtracting.value = false;
+        if (ev.type === 'pointercancel') return;
         emit('extract', { clientX: ev.clientX, clientY: ev.clientY });
       };
       placeGhost(event);
       // hover 自解析会 stopPropagation，所以用捕获阶段
-      document.addEventListener('mousemove', onMouseMove, true);
-      document.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('pointermove', onPointerMove, true);
+      window.addEventListener('pointerup', finish);
+      window.addEventListener('pointercancel', finish);
     };
 
-    onMounted(() => document.addEventListener('mousedown', closeSettingsOnOutside, true));
+    onMounted(() => window.addEventListener('pointerdown', closeSettingsOnOutside, true));
 
     onUnmounted(() => {
       stopWatchWidth();
       stopWatchHeight();
-      document.removeEventListener('mousedown', closeSettingsOnOutside, true);
+      window.removeEventListener('pointerdown', closeSettingsOnOutside, true);
     });
 
     return () => {
@@ -395,7 +408,7 @@ const ResizableContainer = defineComponent({
                 border: `1px solid rgba(${toolTone}, 0.08)`,
               },
               // 工具条在内容外，但仍在 ProseMirror 里，不拦住会变成选段落；拦住后改为选中整块
-              onMousedown: (event: MouseEvent) => {
+              onPointerdown: (event: PointerEvent) => {
                 event.preventDefault();
                 event.stopPropagation();
                 props.selectBlock();
@@ -460,7 +473,7 @@ const ResizableContainer = defineComponent({
                     active: isExtractActive,
                     cursor: 'grab',
                     title: '拖出成画布块',
-                    onMousedown: startExtract,
+                    onPointerDown: startExtract,
                     onHover: (hovering) => {
                       isExtractHovered.value = hovering;
                     },
@@ -470,7 +483,7 @@ const ResizableContainer = defineComponent({
                     active: settingsOpen.value,
                     cursor: 'pointer',
                     title: '块设置',
-                    onMousedown: toggleSettings,
+                    onPointerDown: toggleSettings,
                     onHover: () => {},
                   }),
                   renderToolButton({
@@ -478,7 +491,7 @@ const ResizableContainer = defineComponent({
                     active: isResizeActive,
                     cursor: 'nwse-resize',
                     title: '拖动改变大小',
-                    onMousedown: startResize,
+                    onPointerDown: startResize,
                     onHover: (hovering) => {
                       isResizeHovered.value = hovering;
                     },
@@ -544,7 +557,7 @@ const ResizableContainer = defineComponent({
                   maxHeight: '60vh',
                   overflow: 'auto',
                 },
-                onMousedown: (event: MouseEvent) => event.stopPropagation(),
+                onPointerdown: (event: PointerEvent) => event.stopPropagation(),
               },
               [h('div', { ref: settingsHostRef })],
             ),

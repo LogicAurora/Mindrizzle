@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-17 -->
+<!-- 最后验证: 2026-11-22 -->
 
 # 09 性能：节流与缓存
 
@@ -16,6 +16,8 @@ flowchart TB
     G["contentResizeFrame<br/>onContentResize → syncAutoHeight"]
     H["tmSyncRaf / bridgeRaf<br/>block-handle 内"]
     I["rtTargetFrame / rtVisibleFrame<br/>帧内缓存"]
+    J["toolbarRefreshFrame / selectionRefreshFrame / handlesRefreshFrame<br/>富文本选区与工具栏"]
+    K["fingerDragFrame / handleDragFrame<br/>触摸选文拖动合并"]
   end
 ```
 
@@ -34,6 +36,7 @@ flowchart TB
     G["paperclipCandidates<br/>shallowRef"]
     H["virtualSnapshots<br/>shallowRef"]
     I["dragDom / dragHandleEl / dragSettingsEl<br/>会话开始时缓存"]
+    J["cachedScrollRect<br/>触摸选文手势内缓存 editor-scroll 矩形"]
   end
 ```
 
@@ -65,4 +68,4 @@ flowchart LR
 ## 维护提示
 
 - 新增逐帧路径 → 检查是否走 rAF + 是否读 DOM
-- 新增缓存 → 更新图 9.2，并说明失效条件
+- 新增缓存 → 更新图 9.2，并说明失效条件（如 `cachedScrollRect` 仅在手势内有效，起止必清）

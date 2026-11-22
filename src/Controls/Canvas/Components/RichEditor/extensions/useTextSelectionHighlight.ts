@@ -19,6 +19,7 @@ interface TextSelectionHighlightOptions {
 export function useTextSelectionHighlight(options: TextSelectionHighlightOptions) {
   const { editor, scrollRef, isToolbarInteractionActive } = options;
   const rects = ref<TextSelectionRect[]>([]);
+  let frame = 0;
 
   const elementOf = (node: Node): HTMLElement | null =>
     node instanceof HTMLElement ? node : node.parentElement;
@@ -58,6 +59,7 @@ export function useTextSelectionHighlight(options: TextSelectionHighlightOptions
   };
 
   const update = () => {
+    frame = 0;
     const view = getView(editor);
     const scroll = scrollRef.value;
     const range = view && scroll ? rangeOfSelection(view) : null;
@@ -75,20 +77,26 @@ export function useTextSelectionHighlight(options: TextSelectionHighlightOptions
     }));
   };
 
+  // selectionchange / scroll / resize 常同帧连发，合并到一帧只做一次 getClientRects
+  const scheduleUpdate = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(update);
+  };
+
   onMounted(() => {
-    document.addEventListener('selectionchange', update);
-    // 块内滚动不冒泡，所以直接挂滚动容器；画布滚动用捕获阶段兜底
-    scrollRef.value?.addEventListener('scroll', update);
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
+    document.addEventListener('selectionchange', scheduleUpdate);
+    // 块内滚动不冒泡，所以直接挂滚动容器；画布平移时选区与滚动原点同步位移、相对位置不变，无需全局 scroll
+    scrollRef.value?.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate, { passive: true });
   });
 
   onUnmounted(() => {
-    document.removeEventListener('selectionchange', update);
-    scrollRef.value?.removeEventListener('scroll', update);
-    window.removeEventListener('scroll', update, true);
-    window.removeEventListener('resize', update);
+    document.removeEventListener('selectionchange', scheduleUpdate);
+    scrollRef.value?.removeEventListener('scroll', scheduleUpdate);
+    window.removeEventListener('resize', scheduleUpdate);
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
   });
 
-  return { rects, refresh: update };
+  return { rects, refresh: scheduleUpdate };
 }

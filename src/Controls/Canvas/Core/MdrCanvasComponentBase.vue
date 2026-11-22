@@ -54,7 +54,8 @@
           :class="{ 'handle-bottom': placement === 'bottom' }"
           :data-uuid="uuid"
           :style="handleStyle"
-          @mousedown="onHandleDown"
+          @pointerdown="onHandleDown"
+          @mousedown.prevent
         >
           <v-icon size="16" color="on-surface-variant" :icon="icon" class="mr-1" />
           <span class="text-caption text-medium-emphasis user-select-none">{{ title }}</span>
@@ -165,7 +166,7 @@ const emit = defineEmits<{
   (e: 'resizestart', handle: string): void;
   (e: 'resizing', x: number, y: number, w: number, h: number): void;
   (e: 'resizestop', x: number, y: number, w: number, h: number): void;
-  (e: 'dragstart', event: MouseEvent): void;
+  (e: 'dragstart', event: PointerEvent): void;
 }>();
 
 const resizeBoxRef = ref<{ rootEl: HTMLElement | null } | null>(null);
@@ -344,8 +345,9 @@ defineExpose({
   getContentEl: () => contentEl.value,
 });
 
-const onHandleDown = (event: MouseEvent) => {
-  if (event.button !== 0) return;
+const onHandleDown = (event: PointerEvent) => {
+  // 触屏没有兼容 mousedown 时拖拽栏会完全失效，所以直接吃 pointerdown（鼠标同样是 pointer 事件）
+  if (event.button !== 0 || !event.isPrimary) return;
   emit('dragstart', event);
   event.preventDefault();
 };
@@ -465,6 +467,7 @@ const onHandleDown = (event: MouseEvent) => {
   white-space: nowrap;
   box-sizing: border-box;
   user-select: none;
+  touch-action: none;
   transition: background 0.2s;
   /* 贴边微调由内联 --handle-y 提供 */
   transform: translateY(var(--handle-y, -1px));

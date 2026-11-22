@@ -574,7 +574,7 @@ const lastMouse = { x: 0, y: 0 };
 // 箭头需按方向角定位，所以用响应式鼠标屏幕坐标（lastMouse 仅供 autoPan）
 const mouseScreen = ref({ x: -9999, y: -9999 });
 
-const updateMousePos = (e: MouseEvent) => {
+const updateMousePos = (e: MouseEvent | PointerEvent) => {
   const target = e.target as HTMLElement;
   const isCanvasTarget = target.closest?.('.canvas-container') === canvasContainerRef.value;
   const hasActivePointerSession =
@@ -1497,8 +1497,8 @@ const flushDragLayout = () => {
   syncDragDom();
 };
 
-const startCustomDrag = (item: CanvasItem, e: MouseEvent) => {
-  if (e.button !== 0) return;
+const startCustomDrag = (item: CanvasItem, e: PointerEvent) => {
+  if (e.button !== 0 || !e.isPrimary) return;
   if (!isEditMode.value) return;
   selectForDrag(item.uuid, e);
   customDrag.active = true;
@@ -2723,14 +2723,16 @@ const clearTouchLongPress = () => {
   touchLongPressTimer = 0;
 };
 
-const beginRichTextTouchSelection = (gesture: CanvasTouchGesture) => {
+const beginRichTextTouchSelection = (gesture: CanvasTouchGesture): boolean => {
   const blockUuid = gesture.target.closest<HTMLElement>('.drag-wrapper')?.dataset.uuid;
-  if (!blockUuid) return;
+  if (!blockUuid) return false;
   const didSelectWord = componentRefs.value[blockUuid]?.beginTouchTextSelection?.(
     gesture.startX,
     gesture.startY,
   );
-  if (didSelectWord) gesture.richTextSelection = { blockUuid };
+  if (!didSelectWord) return false;
+  gesture.richTextSelection = { blockUuid };
+  return true;
 };
 
 const extendRichTextTouchSelection = (gesture: CanvasTouchGesture, point: TouchPoint) => {
@@ -2813,7 +2815,22 @@ const beginTouchLongPress = (gesture: CanvasTouchGesture) => {
     gesture.mode = 'text-selection';
     // 选区更新可能替换行内 DOM，捕获到稳定的编辑器根节点避免拖动断流。
     editor.setPointerCapture(gesture.pointerId);
-    beginRichTextTouchSelection(gesture);
+    if (beginRichTextTouchSelection(gesture)) return;
+    // 长按没落在文字上（内边距/空行）时退回选中整块，触屏否则没有别的入口能选中富文本块去移动
+    if (editor.hasPointerCapture(gesture.pointerId))
+      editor.releasePointerCapture(gesture.pointerId);
+    gesture.mode = 'block-selection';
+    startSelection(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        clientX: gesture.startX,
+        clientY: gesture.startY,
+        button: 0,
+      }),
+      true,
+      editor,
+    );
     return;
   }
   if (gesture.target.closest('.edit-layer')) {
@@ -3426,7 +3443,7 @@ const outlineRingItems = computed(() =>
 );
 const outlineMaskId = `md-outline-mask-${useId()}`;
 
-const onFloatingHandleDown = (item: CanvasItem, e: MouseEvent) => {
+const onFloatingHandleDown = (item: CanvasItem, e: PointerEvent) => {
   startCustomDrag(item, e);
 };
 
@@ -4268,6 +4285,8 @@ onMounted(() => {
   window.addEventListener('mouseup', stopPan);
   window.addEventListener('contextmenu', preventContextMenu);
   window.addEventListener('mousemove', updateMousePos, true);
+  // 触屏拖动不派发 mousemove，autoPan 依赖 lastMouse 会永远读到旧值
+  window.addEventListener('pointermove', updateMousePos, true);
   window.addEventListener('Mindrizzle:canvas-pan', onCanvasPanEvent);
   window.addEventListener('Mindrizzle:extract-component', onExtractComponent);
   window.addEventListener('Mindrizzle:block-popup', onBlockPopupChange);
@@ -4297,6 +4316,7 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', stopPan);
   window.removeEventListener('contextmenu', preventContextMenu);
   window.removeEventListener('mousemove', updateMousePos, true);
+  window.removeEventListener('pointermove', updateMousePos, true);
   window.removeEventListener('Mindrizzle:canvas-pan', onCanvasPanEvent);
   window.removeEventListener('Mindrizzle:extract-component', onExtractComponent);
   window.removeEventListener('Mindrizzle:block-popup', onBlockPopupChange);

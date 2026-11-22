@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-08 -->
+<!-- 最后验证: 2026-11-22 -->
 
 # 04 拖拽与缩放
 
@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TD
-  A["MdrCanvasComponentBase 拖拽栏 mousedown"] --> A2["emit dragstart"]
+  A["MdrCanvasComponentBase 拖拽栏 pointerdown"] --> A2["emit dragstart"]
   A2 --> B["MdrCanvas startCustomDrag(item, e)"]
   B --> C["selectForDrag 选中"]
   C --> C2["收集 customDragGroup"]
@@ -49,6 +49,10 @@ flowchart LR
 ```
 
 > 拖拽期间 layout 不触发渲染，块本体与跟随浮层靠命令式写 DOM。只有存在链接时 `dragNeedsRender = true` 退回逐帧重渲染。
+>
+> 拖拽栏与缩放手柄的起手事件统一用 `pointerdown`（鼠标同样派发）：触屏不保证为拖动补发兼容 `mousemove`，只认 `mousedown` 会让平板彻底无法移动/缩放块。缩放手柄仅 8px，`@media (pointer: coarse)` 下用 `::before` 外扩 8px 命中区，视觉尺寸不变。
+>
+> autoPan 的速度取自 `lastMouse`，所以它必须同时由 `mousemove` 与 `pointermove`（捕获）更新：起手改成 `pointerdown` 后 `preventDefault` 会掐掉触屏的兼容鼠标事件，只挂 `mousemove` 时触屏拖到边缘不会自动滚动。
 
 ## 图 4.3 Resize 与联结传播
 
