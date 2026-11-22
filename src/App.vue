@@ -29,6 +29,7 @@ import { isNavigationFailure, useRoute, useRouter, type RouteLocationRaw } from 
 import { error as logError } from '@tauri-apps/plugin-log';
 
 import QuickOpenPalette from './Controls/QuickOpenPalette.vue';
+import OsFileOpenBridge from './Controls/OsFileOpenBridge.vue';
 import { getErrorMessage } from './utils/getErrorMessage';
 import { toolbarSelectionKey } from './utils/toolbarSelection';
 
@@ -355,6 +356,7 @@ function navigateFromMenu(path: string) {
 
 <template>
   <v-app class="container" :style="{ '--app-toolbar-height': toolbarHeight }">
+    <OsFileOpenBridge />
     <div class="window-outline" />
     <div
       v-if="isTauri()"

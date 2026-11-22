@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name={{name}}
+Comment={{comment}}
+# Tauri 2.12.4 打包器不会自动补字段码，手动写 %F 才能把双击的文件传给应用
+Exec={{exec}} %F
+Icon={{icon}}
+Terminal=false
+Type=Application
+Categories={{categories}}
+StartupWMClass={{exec}}
+MimeType=application/x-mindrizzle-mdrf

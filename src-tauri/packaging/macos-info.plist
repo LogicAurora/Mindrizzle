@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Tauri 2.12 的 fileAssociations 不能单独指定图标，这里覆写它生成的文档类型并补上 CFBundleTypeIconFile -->
+<plist version="1.0">
+  <dict>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleTypeExtensions</key>
+        <array>
+          <string>mdrf</string>
+        </array>
+        <key>CFBundleTypeIconFile</key>
+        <string>mdrf.icns</string>
+        <key>CFBundleTypeName</key>
+        <string>Mindrizzle Note</string>
+        <key>CFBundleTypeRole</key>
+        <string>Editor</string>
+        <key>LSHandlerRank</key>
+        <string>Owner</string>
+        <key>LSItemContentTypes</key>
+        <array>
+          <string>com.logicaurora.mindrizzle.mdrf</string>
+        </array>
+      </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+      <dict>
+        <key>UTTypeConformsTo</key>
+        <array>
+          <string>public.data</string>
+        </array>
+        <key>UTTypeDescription</key>
+        <string>Mindrizzle 笔记</string>
+        <key>UTTypeIdentifier</key>
+        <string>com.logicaurora.mindrizzle.mdrf</string>
+        <key>UTTypeTagSpecification</key>
+        <dict>
+          <key>public.filename-extension</key>
+          <array>
+            <string>mdrf</string>
+          </array>
+          <key>public.mime-type</key>
+          <string>application/x-mindrizzle-mdrf</string>
+        </dict>
+      </dict>
+    </array>
+  </dict>
+</plist>

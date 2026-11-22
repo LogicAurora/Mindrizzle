@@ -4,6 +4,7 @@ mod mdr_file_dir;
 mod mdr_file_op;
 mod mdr_file_struct;
 pub mod mdr_file_tar;
+mod mdrf_open;
 mod settings_store;
 mod system_theme;
 mod utils;
@@ -163,11 +164,16 @@ pub fn run() {
         ))
     };
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            mdrf_open::handle_args(app, argv);
+        }))
         .setup(|app| {
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
             app.handle().plugin(tauri_plugin_process::init())?;
+            // 首次启动的关联文件不会走单实例回调，必须自己读命令行
+            mdrf_open::handle_launch_args(app.handle());
             Ok(())
         })
         .plugin(
@@ -211,8 +217,10 @@ pub fn run() {
             settings_store::get_setting,
             settings_store::set_setting,
             settings_store::remove_setting,
-            system_theme::get_wallpaper_primary_color
+            system_theme::get_wallpaper_primary_color,
+            mdrf_open::take_pending_open_file
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| mdrf_open::handle_run_event(app, &event));
 }

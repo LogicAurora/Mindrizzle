@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-mindrizzle-mdrf">
+    <comment>Mindrizzle Note</comment>
+    <comment xml:lang="zh_CN">Mindrizzle 笔记</comment>
+    <icon name="application-x-mindrizzle-mdrf"/>
+    <glob pattern="*.mdrf"/>
+    <glob pattern="*.MDRF"/>
+  </mime-type>
+</mime-info>

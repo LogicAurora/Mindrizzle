@@ -46,4 +46,5 @@ url = "2.5.8"
 wallpaper = "3.2.0"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
 

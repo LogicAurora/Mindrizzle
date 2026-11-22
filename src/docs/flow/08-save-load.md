@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-11-08 -->
+<!-- 最后验证: 2026-11-22 -->
 
 # 08 序列化与加载
 
@@ -109,6 +109,31 @@ flowchart TD
 - 文件 IPC 统一收 `request` 结构体；`WorkspaceLocation` 用 `default` / `custom { dir }` 区分工作区，`NoteFileLocation` 用 `workspace { fileName, workspace }` / `externalFile { fileName, filePath }` 区分归档来源，互斥位置不再由多个可空字段表达。缓存键改用归档绝对路径，避免不同工作区同名笔记互相覆盖。
 - 网页端上传的 `.mdrf` 解包后只作为**外部文件副本**存进 IndexedDB（不写文件索引），打开与保存都按副本名读写。
 - 「移动到工作区」入口在便签卡片的更多操作菜单：工作区内的笔记与外部文件共用 `move_mdr_file`，由 `NoteFileLocation` 区分来源；网页端副本由 `moveLocalNoteToWorkspace` 把副本名补进文件索引。
+
+## 图 8.7 操作系统关联打开
+
+```mermaid
+flowchart TD
+  A["双击 .mdrf / 命令行参数"] --> B["Rust mdrf_open 解析路径"]
+  B --> C{"应用已运行？"}
+  C -->|否| D["setup 读取启动参数"]
+  C -->|是| E["single-instance 回调收到 argv"]
+  F["macOS RunEvent::Opened"] --> B
+  D --> G["登记待取请求 + 发送 mdrf-open-file"]
+  E --> G
+  G --> H["App.vue watchOsOpenFile（按 id 去重）"]
+  H --> I{"事件未被接收？"}
+  I -->|是| J["前端启动时 take_pending_open_file 兜底"]
+  I -->|否| K["useOpenNote(externalFile)"]
+  J --> K
+  K --> L["编辑器路由 ?path=<绝对路径>"]
+  L --> M["保存写回原 .mdrf"]
+```
+
+- 关联声明在 `src-tauri/tauri.conf.json` 的 `bundle.fileAssociations`，扩展名 `mdrf`，MIME `application/x-mindrizzle-mdrf`。
+- Linux 打包额外安装 shared-mime-info 定义与 `application-x-mindrizzle-mdrf` 图标（源自 `file-icon.svg`），deb/rpm 的 postinst/postrm 刷新 MIME、图标与 desktop 数据库。
+- Windows 由 NSIS 钩子把 `.mdrf` 的 `DefaultIcon` 指向随包分发的 `mdrf.ico`；macOS 用 `macos-info.plist` 覆写文档类型并指定 `CFBundleTypeIconFile=mdrf.icns`。
+- 启动早期前端监听尚未挂载，因此请求同时留在 `PENDING_OPEN_FILE`，由 `take_pending_open_file` 兜底；事件与兜底拉取共用请求 id，避免同一次打开执行两遍。
 
 ## 图 8.4 跨画布剪贴板
 

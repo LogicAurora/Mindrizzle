@@ -55,17 +55,78 @@
     "linux": {
       "appimage": {
         "bundleMediaFramework": false,
-        "files": {}
+        "files": {
+          "usr/share/icons/hicolor/32x32/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/32x32.png",
+          "usr/share/icons/hicolor/48x48/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/48x48.png",
+          "usr/share/icons/hicolor/64x64/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/64x64.png",
+          "usr/share/icons/hicolor/128x128/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/128x128.png",
+          "usr/share/icons/hicolor/256x256/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/256x256.png",
+          "usr/share/icons/hicolor/512x512/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/512x512.png",
+          "usr/share/icons/hicolor/scalable/mimetypes/application-x-mindrizzle-mdrf.svg": "icons/mimetypes/application-x-mindrizzle-mdrf.svg",
+          "usr/share/mime/packages/application-x-mindrizzle-mdrf.xml": "packaging/mime/application-x-mindrizzle-mdrf.xml"
+        }
       },
       "deb": {
         "section": "editors",
-        "files": {}
+        "files": {
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/32x32.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/48x48.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/64x64.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/128x128.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/256x256.png",
+          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/512x512.png",
+          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-mindrizzle-mdrf.svg": "icons/mimetypes/application-x-mindrizzle-mdrf.svg",
+          "/usr/share/mime/packages/application-x-mindrizzle-mdrf.xml": "packaging/mime/application-x-mindrizzle-mdrf.xml"
+        },
+        "postInstallScript": "packaging/mime/postinst.sh",
+        "postRemoveScript": "packaging/mime/postrm.sh",
+        "desktopTemplate": "packaging/mindrizzle.desktop"
       },
       "rpm": {
         "epoch": 0,
-        "files": {},
-        "release": "1"
+        "files": {
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/32x32.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/48x48.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/64x64.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/128x128.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/256x256.png",
+          "/usr/share/icons/hicolor/512x512/mimetypes/application-x-mindrizzle-mdrf.png": "icons/mimetypes/512x512.png",
+          "/usr/share/icons/hicolor/scalable/mimetypes/application-x-mindrizzle-mdrf.svg": "icons/mimetypes/application-x-mindrizzle-mdrf.svg",
+          "/usr/share/mime/packages/application-x-mindrizzle-mdrf.xml": "packaging/mime/application-x-mindrizzle-mdrf.xml"
+        },
+        "release": "1",
+        "postInstallScript": "packaging/mime/postinst.sh",
+        "postRemoveScript": "packaging/mime/postrm.sh",
+        "desktopTemplate": "packaging/mindrizzle.desktop"
       }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["mdrf"],
+        "name": "Mindrizzle Note",
+        "description": "Mindrizzle 笔记",
+        "mimeType": "application/x-mindrizzle-mdrf",
+        "role": "Editor",
+        "rank": "Owner",
+        "exportedType": {
+          "identifier": "com.logicaurora.mindrizzle.mdrf",
+          "conformsTo": ["public.data"]
+        }
+      }
+    ],
+    "resources": {
+      "icons/mimetypes/mdrf.ico": "mdrf.ico"
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "packaging/windows-file-icon.nsh"
+      }
+    },
+    "macOS": {
+      "files": {
+        "Resources/mdrf.icns": "icons/mimetypes/mdrf.icns"
+      },
+      "infoPlist": "packaging/macos-info.plist"
     }
   }
 }
