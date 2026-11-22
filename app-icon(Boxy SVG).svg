@@ -1,42 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 352" xmlns:bx="https://boxy-svg.com">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:bx="https://boxy-svg.com" style="filter: none;" viewBox="0 0 192 192" width="192px" height="192px">
   <defs>
     <bx:grid x="0" y="0" width="16" height="16" divisions="1"/>
-    <filter id="drop-shadow-filter-1" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
-      <title>投影</title>
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="gaussian-blur-0"/>
-      <feOffset dx="-10" dy="-10" in="gaussian-blur-0" result="offset-0"/>
-      <feComponentTransfer result="offsetblur" in="offset-0">
-        <feFuncA id="spread-ctrl" type="linear" slope="0.6"/>
-      </feComponentTransfer>
-      <feFlood flood-color="rgba(0,0,0,0.3)" result="flood-0"/>
-      <feComposite in2="offsetblur" operator="in" in="flood-0" result="composite-0"/>
-      <feMerge result="merge-0">
-        <feMergeNode in="composite-0"/>
+    <bx:export>
+      <bx:file format="svg" path="app-icon.svg" normalization="{&quot;removeBoxySVGMetadata&quot;:true,&quot;removeForeignMetadata&quot;:true,&quot;removeAnimations&quot;:true,&quot;resetTransformOrigins&quot;:true,&quot;setHrefAttributeNamespace&quot;:&quot;xlink&quot;,&quot;convertStopColorAlphaToStopOpacity&quot;:true,&quot;splitCompoundPaths&quot;:true}"/>
+    </bx:export>
+    <filter id="md3-tint-shade" x="-20%" y="-20%" width="140%" height="140%">
+      <title>md3-tint-shade</title>
+      <feMorphology in="SourceAlpha" operator="erode" radius="4" result="inner"/>
+      <feComposite in="SourceAlpha" in2="inner" operator="out" result="edge-ring"/>
+      <feOffset in="SourceAlpha" dy="4" result="off-down"/>
+      <feComposite in="SourceAlpha" in2="off-down" operator="out" result="raw-top"/>
+      <feComposite in="raw-top" in2="edge-ring" operator="in" result="uniform-top"/>
+      <feOffset in="SourceAlpha" dy="-4" result="off-up"/>
+      <feComposite in="SourceAlpha" in2="off-up" operator="out" result="raw-bottom"/>
+      <feComposite in="raw-bottom" in2="edge-ring" operator="in" result="uniform-bottom"/>
+      <feFlood flood-color="#FFFFFF" flood-opacity="0.15" result="tint-color"/>
+      <feComposite in="tint-color" in2="uniform-top" operator="in" result="tint"/>
+      <feFlood flood-color="#000000" flood-opacity="0.12" result="shade-color"/>
+      <feComposite in="shade-color" in2="uniform-bottom" operator="in" result="shade"/>
+      <feMerge>
         <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="tint"/>
+        <feMergeNode in="shade"/>
+      </feMerge>
+    </filter>
+    <filter id="md3-contact-shadow" bx:pinned="true" primitiveUnits="userSpaceOnUse" filterUnits="userSpaceOnUse" x="-20%" y="-20%" width="140%" height="140%">
+      <title>md3-contact-shadow</title>
+      <feDropShadow dx="4" dy="4" stdDeviation="16" flood-color="#000000" flood-opacity="0.15"/>
+    </filter>
+    <filter id="md3-finish" bx:pinned="true" primitiveUnits="userSpaceOnUse" filterUnits="userSpaceOnUse" x="-20%" y="-20%" width="140%" height="140%">
+      <title>md3-finish</title>
+      <feFlood result="flood-0" style="flood-color: rgb(255, 255, 255); flood-opacity: 0.1;"/>
+      <feGaussianBlur result="gaussian-blur-0" in="SourceAlpha" stdDeviation="40"/>
+      <feOffset result="offset-0" in="gaussian-blur-0" dx="-20" dy="-20"/>
+      <feComposite result="composite-0" in="offset-0" in2="SourceAlpha" operator="in"/>
+      <feComposite result="composite-1" in="flood-0" in2="composite-0" operator="in"/>
+      <feMerge result="merge-0">
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="composite-1"/>
       </feMerge>
     </filter>
     <filter id="round-edges-filter-0" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
       <title>圆边</title>
-      <feGaussianBlur in="SourceGraphic" stdDeviation="8 8" result="gaussian-blur-0"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="gaussian-blur-0"/>
       <feColorMatrix mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 200 -100" in="gaussian-blur-0" result="color-matrix-0"/>
       <feComposite in="SourceGraphic" operator="atop" in2="color-matrix-0" result="composite-0"/>
     </filter>
-    <filter id="outline-filter-0" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
-      <title>轮廓</title>
-      <feMorphology in="SourceAlpha" result="dilated" radius="8" operator="dilate"/>
-      <feFlood result="flood" style="flood-color: rgb(48, 48, 48);"/>
-      <feComposite in="flood" in2="dilated" operator="in" result="outline"/>
-      <feMerge result="merge-0">
-        <feMergeNode in="outline"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="round-edges-filter-1" bx:preset="round-edges 1 2" color-interpolation-filters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2 2"/>
+      <feColorMatrix mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 200 -100"/>
+      <feComposite in="SourceGraphic" operator="atop"/>
     </filter>
-    <bx:export>
-      <bx:file format="svg" path="app-icon.svg" normalization="{&quot;removeBoxySVGMetadata&quot;:true,&quot;removeForeignMetadata&quot;:true,&quot;removeAnimations&quot;:true,&quot;resetTransformOrigins&quot;:true,&quot;setHrefAttributeNamespace&quot;:&quot;xlink&quot;,&quot;convertStopColorAlphaToStopOpacity&quot;:true,&quot;splitCompoundPaths&quot;:true}"/>
-    </bx:export>
   </defs>
-  <rect x="16" y="16" width="208" height="208" style="stroke-linecap: round; stroke-linejoin: round; filter: url(&quot;#outline-filter-0&quot;); fill: rgb(255, 179, 0); stroke-width: 1;" rx="8" ry="8"/>
-  <polygon style="stroke-linecap: round; stroke-linejoin: round; filter: url(&quot;#round-edges-filter-0&quot;) url(&quot;#outline-filter-0&quot;) url(&quot;#drop-shadow-filter-1&quot;); fill: rgb(30, 136, 229); stroke-width: 1;" points="112.995 110.444 336 112 112 336"/>
-  <path d="M 232 272 L 272 272 L 272 232 C 272 227.582 275.582 224 280 224 C 284.418 224 288 227.582 288 232 L 288 272 L 328 272 C 332.418 272 336 275.582 336 280 C 336 284.418 332.418 288 328 288 L 288 288 L 288 328 C 288 332.418 284.418 336 280 336 C 275.582 336 272 332.418 272 328 L 272 288 L 232 288 C 227.582 288 224 284.418 224 280 C 224 275.582 227.582 272 232 272 Z" style="stroke-linejoin: round; stroke-linecap: round; stroke-width: 0; filter: url(&quot;#outline-filter-0&quot;) url(&quot;#drop-shadow-filter-1&quot;); fill: rgb(0, 137, 123);"/>
+  <path d="M 8 8 L 136 8 L 136 88 L 88 136 L 8 136 L 8 8 Z" style="filter: url(&quot;#round-edges-filter-0&quot;) url(&quot;#md3-tint-shade&quot;) url(&quot;#md3-contact-shadow&quot;) url(&quot;#md3-finish&quot;); stroke-width: 1; fill: rgb(255, 167, 38); shape-rendering: crispedges; will-change: content;"/>
+  <path d="M 56 56 L 184 56 L 56 184 L 56 56 Z" style="filter: url(&quot;#round-edges-filter-0&quot;) url(&quot;#md3-tint-shade&quot;) url(&quot;#md3-contact-shadow&quot;) url(&quot;#md3-finish&quot;); stroke-width: 1; fill: rgb(66, 165, 245); shape-rendering: crispedges; will-change: content;"/>
+  <path d="M 152 120 C 155.535 120 158.4 123.582 158.4 128 L 158.4 145.6 L 176 145.6 C 180.418 145.6 184 148.465 184 152 C 184 155.535 180.418 158.4 176 158.4 L 158.4 158.4 L 158.4 176 C 158.4 180.418 155.535 184 152 184 C 148.465 184 145.6 180.418 145.6 176 L 145.6 158.4 L 128 158.4 C 123.582 158.4 120 155.535 120 152 C 120 148.465 123.582 145.6 128 145.6 L 145.6 145.6 L 145.6 128 C 145.6 123.582 148.465 120 152 120 Z" style="filter: url(&quot;#round-edges-filter-1&quot;) url(&quot;#md3-tint-shade&quot;) url(&quot;#md3-contact-shadow&quot;) url(&quot;#md3-finish&quot;); stroke-width: 1; fill: rgb(102, 187, 106); shape-rendering: crispedges; will-change: content;"/>
 </svg>
