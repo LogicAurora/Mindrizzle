@@ -120,6 +120,7 @@
           </div>
         </div>
         <blockHandle :editor="editor" :read-only="readOnly" />
+        <SlashMenu v-if="!readOnly" :commands="editor.commands" />
         <!-- .vdr 的 transform 祖先会使 fixed 基准偏移，所以 Teleport 到 body -->
         <Teleport to="body">
           <RowDropIndicator :editor="editor" />
@@ -214,6 +215,7 @@ import 'prosekit/pm/view/style/prosemirror.css';
 import './selectionStyles.css';
 
 import blockHandle from './extensions/block-handle.vue';
+import SlashMenu from './extensions/SlashMenu.vue';
 import RowDropIndicator from './extensions/RowDropIndicator.vue';
 import { ref, shallowRef, onMounted, onUnmounted, computed, reactive, watch, nextTick } from 'vue';
 import { ProseKit, useDocChange } from '@prosekit/vue';

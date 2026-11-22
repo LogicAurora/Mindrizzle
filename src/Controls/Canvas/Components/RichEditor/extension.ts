@@ -42,6 +42,7 @@ import { defineBlockquote } from 'prosekit/extensions/blockquote';
 import { defineSubscript } from 'prosekit/extensions/subscript';
 import { defineSuperscript } from 'prosekit/extensions/superscript';
 import { defineGapCursor } from 'prosekit/extensions/gap-cursor';
+import { defineHorizontalRule } from 'prosekit/extensions/horizontal-rule';
 import { Fragment, Slice } from 'prosekit/pm/model';
 import type { Node as ProseMirrorNode, Schema } from 'prosekit/pm/model';
 import { TextSelection } from 'prosekit/pm/state';
@@ -134,19 +135,31 @@ const customCommands = defineCommands({
   },
   insertMathInline(latex: string) {
     return (state, dispatch) => {
-      const node = state.schema.nodes.mathInline?.create({}, state.schema.text(latex));
-      if (!node) return false;
-      const tr = state.tr.replaceSelectionWith(node);
-      if (dispatch) dispatch(tr);
+      const type = state.schema.nodes.mathInline;
+      if (!type) return false;
+      if (!dispatch) return true;
+      // 空字符串不能建文本节点，所以无内容时用 null
+      const node = type.create(null, latex ? state.schema.text(latex) : null);
+      dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
       return true;
     };
   },
   insertMathBlock(latex: string) {
     return (state, dispatch) => {
-      const node = state.schema.nodes.mathBlock?.create({}, state.schema.text(latex));
-      if (!node) return false;
-      const tr = state.tr.replaceSelectionWith(node);
-      if (dispatch) dispatch(tr);
+      const type = state.schema.nodes.mathBlock;
+      if (!type) return false;
+      if (!dispatch) return true;
+      const node = type.create(null, latex ? state.schema.text(latex) : null);
+      // 光标在段落内时块级节点插不进去，所以由 dropPoint 找最近的合法块间隙
+      const pos = dropPoint(
+        state.doc,
+        state.selection.anchor,
+        new Slice(Fragment.from(node), 0, 0),
+      );
+      if (pos == null) return false;
+      const tr = state.tr.insert(pos, node);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 1), 1));
+      dispatch(tr.scrollIntoView());
       return true;
     };
   },
@@ -161,12 +174,13 @@ export function defineExtension() {
     defineBaseKeymap(),
     defineHistory(),
     defineHeading(),
-    definePlaceholder({ placeholder: '写点什么吧' }),
+    definePlaceholder({ placeholder: '写点什么吧 [按下/打开菜单]' }),
     defineList(),
     defineBlockquote(),
     defineSubscript(),
     defineSuperscript(),
     defineGapCursor(),
+    defineHorizontalRule(),
     defineMath({
       renderMathBlock: renderKaTeXMathBlock,
       renderMathInline: renderKaTeXMathInline,
