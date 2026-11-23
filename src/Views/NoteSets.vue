@@ -91,6 +91,10 @@ import {
   workspaceDirectories,
 } from '../utils/workspaceStore';
 import { isPinnedNote, loadPinnedNotes, pinKeyOf, togglePinnedNote } from '../utils/homePinned';
+import { useTourKit, TourKitLayer } from '../utils/tour-kit';
+import { createNoteSetsTourSteps } from '../utils/tour-kit/tours/noteSetsTour';
+import { mdiCompassOutline } from '@mdi/js';
+import { getSetting, setSetting } from '../utils/settingsStore.ts';
 
 const startEditorTransition = inject(startEditorTransitionKey)!;
 const noteLoadController = inject(noteLoadControllerKey)!;
@@ -278,6 +282,7 @@ const isCompactToolbar = ref(false);
 let titleResizeObserver: ResizeObserver | null = null;
 let titleMutationObserver: MutationObserver | null = null;
 let layoutRaf = 0;
+let tourAutoStartTimer: number | undefined;
 
 function findTitleEl(): HTMLElement | null {
   const wrap = document.querySelector<HTMLElement>('.app-title-wrap');
@@ -631,6 +636,11 @@ onMounted(async () => {
   await loadActiveSection();
   await nextTick();
   setupTitleObserver();
+  // 完成与跳过都算“看过引导”，否则每次进入便签集都会被重新弹一遍
+  tour.onComplete(markTourDone);
+  tour.onExit(markTourDone);
+  if (await getSetting<boolean>('tour-notesets-done')) return;
+  tourAutoStartTimer = window.setTimeout(() => tour.start(), 800);
 });
 
 watch(listSentinel, (sentinel) => {
@@ -639,6 +649,7 @@ watch(listSentinel, (sentinel) => {
 });
 
 onBeforeUnmount(() => {
+  if (tourAutoStartTimer !== undefined) window.clearTimeout(tourAutoStartTimer);
   listObserver?.disconnect();
   listObserver = null;
   titleResizeObserver?.disconnect();
@@ -732,6 +743,18 @@ const FILE_NAME_IN_PATH = /[^\\/]*$/;
 const isSelectMode = ref(false);
 const selectedKeys = ref<string[]>([]);
 const selectedCount = computed(() => selectedKeys.value.length);
+const tour = useTourKit({
+  steps: createNoteSetsTourSteps({
+    activeSectionId,
+    isSelectMode,
+  }),
+});
+
+const markTourDone = () => {
+  setSetting('tour-notesets-done', true).catch((error) => {
+    console.warn('记录引导完成状态失败', error);
+  });
+};
 
 const toolbarSelection = useToolbarSelection();
 
@@ -1156,6 +1179,7 @@ function formatUpdatedAt(timestamp: number): string {
               :icon="mdiSort"
               :title="`排序：${sortLabel}`"
               variant="text"
+              data-tour="notes-sort"
             />
           </template>
           <v-list density="compact" min-width="160">
@@ -1175,6 +1199,14 @@ function formatUpdatedAt(timestamp: number): string {
           :title="activeFilterCount ? `筛选（${activeFilterCount}）` : '筛选'"
           variant="text"
           @click="openFilterDialog"
+          data-tour="notes-filter"
+        />
+        <v-btn
+          color="white"
+          :icon="mdiCompassOutline"
+          title="查看引导"
+          variant="text"
+          @click="tour.start()"
         />
       </template>
       <v-menu v-else location="bottom end" offset="4">
@@ -1215,6 +1247,12 @@ function formatUpdatedAt(timestamp: number): string {
               <v-icon :icon="mdiCheck" size="small" />
             </template>
           </v-list-item>
+          <v-list-item @click="tour.start()">
+            <template #prepend>
+              <v-icon :icon="mdiCompassOutline" size="small" />
+            </template>
+            <v-list-item-title>查看引导</v-list-item-title>
+          </v-list-item>
         </v-list>
       </v-menu>
     </Teleport>
@@ -1242,16 +1280,18 @@ function formatUpdatedAt(timestamp: number): string {
         />
       </template>
       <template v-else>
-        <WorkspaceSwitcher
-          :model-value="activeSectionId"
-          :options="sections"
-          :can-add-workspace="!isWebEnv"
-          @update:model-value="selectSection"
-          @add-workspace="pickWorkspaceDirectory"
-          @rename-workspace="openRenameWorkspace"
-          @move-workspace="moveWorkspace"
-          @remove-workspace="removeWorkspace"
-        />
+        <span data-tour="notes-workspace" class="d-inline-flex">
+          <WorkspaceSwitcher
+            :model-value="activeSectionId"
+            :options="sections"
+            :can-add-workspace="!isWebEnv"
+            @update:model-value="selectSection"
+            @add-workspace="pickWorkspaceDirectory"
+            @rename-workspace="openRenameWorkspace"
+            @move-workspace="moveWorkspace"
+            @remove-workspace="removeWorkspace"
+          />
+        </span>
         <TagLibraryMenu @changed="onTagLibraryChanged" />
         <v-btn
           :icon="mdiCheckboxMultipleOutline"
@@ -1259,6 +1299,7 @@ function formatUpdatedAt(timestamp: number): string {
           title="多选"
           variant="text"
           @click="enterSelectMode"
+          data-tour="notes-select"
         />
       </template>
     </Teleport>
@@ -1421,6 +1462,7 @@ function formatUpdatedAt(timestamp: number): string {
           v-for="(noteSet, index) in visibleNoteSets"
           :key="noteSetKeyOf(noteSet)"
           class="note-sets-card fade-up"
+          :data-tour="index === 0 ? 'notes-card' : undefined"
           :class="{
             'note-sets-card--selecting': isSelectMode,
             'note-sets-card--selected': isSelected(noteSet),
@@ -1594,7 +1636,13 @@ function formatUpdatedAt(timestamp: number): string {
     <div class="speed-dial-anchor">
       <v-speed-dial location="top center" transition="fade-transition">
         <template #activator="{ props: activatorProps }">
-          <v-fab v-bind="activatorProps" :icon="mdiPlus" :loading="isImporting" color="primary" />
+          <v-fab
+            v-bind="activatorProps"
+            :icon="mdiPlus"
+            :loading="isImporting"
+            color="primary"
+            data-tour="notes-fab"
+          />
         </template>
         <v-btn key="create" :icon="mdiPlus" @click="isCreateDialogOpen = true" />
         <v-btn v-if="isWebEnv" key="upload" :icon="mdiUpload" @click="triggerUpload" />
@@ -1670,6 +1718,7 @@ function formatUpdatedAt(timestamp: number): string {
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <TourKitLayer :tour="tour" />
   </v-sheet>
 </template>
 

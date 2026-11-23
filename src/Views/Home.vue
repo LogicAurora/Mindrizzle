@@ -36,7 +36,7 @@ import VChart from 'vue-echarts';
 
 use([BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
-import appIconUrl from '../../app-icon.svg';
+const appIconUrl = new URL('../../app-icon.svg', import.meta.url).href;
 
 import NewFileDialog from '../Controls/NewFileDialog.vue';
 import { noteFileLocationOf } from '../fileOperations';
@@ -56,7 +56,6 @@ import {
 } from '../utils/commandPaletteShortcut';
 import { externalNotes, loadWorkspaceState, workspaceDirectories } from '../utils/workspaceStore';
 import { getErrorMessage } from '../utils/getErrorMessage';
-import { BRAND_CHINESE_TAGLINE, BRAND_ENGLISH_TAGLINE } from '../utils/brandCopy';
 import { tagLibrary, loadTagLibrary, resolveTagColor } from '../utils/tagStore';
 import {
   isPinnedNote,
@@ -66,6 +65,10 @@ import {
   prunePinnedKeys,
   togglePinnedNote,
 } from '../utils/homePinned';
+import { useTourKit, TourKitLayer } from '../utils/tour-kit';
+import { homeTourSteps } from '../utils/tour-kit/tours/homeTour';
+import { mdiCompassOutline } from '@mdi/js';
+import { getSetting, setSetting } from '../utils/settingsStore.ts';
 
 const RECENT_LIMIT = 5;
 const HEATMAP_DAYS = 90;
@@ -77,6 +80,7 @@ const TOP_TAG_LIMIT = 12;
 const router = useRouter();
 const openNote = useOpenNote();
 const theme = useTheme();
+const tour = useTourKit({ steps: homeTourSteps });
 
 const notes = ref<NoteSetEntry[]>([]);
 const recentRefs = ref<RecentNote[]>([]);
@@ -87,6 +91,7 @@ const errorMessage = ref('');
 
 const today = ref(new Date());
 let todayTimer: number | undefined;
+let tourAutoStartTimer: number | undefined;
 
 const noteByKey = computed(() => new Map(notes.value.map((note) => [pinKeyOf(note), note])));
 
@@ -241,17 +246,26 @@ const stats = computed(() => [
   },
 ]);
 
-const quickActions = [
-  {
-    label: '新建文件',
-    icon: mdiFilePlusOutline,
-    color: 'primary',
-  },
+interface QuickAction {
+  label: string;
+  icon: string;
+  color: string;
+  to?: string;
+  action?: 'new' | 'palette';
+}
+
+const quickActions: QuickAction[] = [
+  { label: '新建文件', icon: mdiFilePlusOutline, color: 'primary', action: 'new' },
+  { label: '快速打开', icon: mdiMagnify, color: 'success', action: 'palette' },
   { label: '便签集', icon: mdiFormatListBulleted, color: 'secondary', to: '/set' },
   { label: '记事板', icon: mdiCalendarBlankOutline, color: 'info', to: '/board' },
   { label: '设置', icon: mdiCogOutline, color: 'warning', to: '/settings/about' },
-  { label: '快速打开', icon: mdiMagnify, color: 'success' },
 ];
+
+function runQuickAction(item: QuickAction) {
+  if (item.action === 'new') isCreateDialogOpen.value = true;
+  else if (item.action === 'palette') showCommandPalette();
+}
 
 const greeting = computed(() => {
   const hour = today.value.getHours();
@@ -574,16 +588,28 @@ function formatRelative(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
-onMounted(() => {
+// 完成与跳过都算“看过引导”，否则用户每次启动都会被重新弹一遍
+const markTourDone = () => {
+  setSetting('tour-home-done', true).catch((error) => {
+    console.warn('记录引导完成状态失败', error);
+  });
+};
+
+onMounted(async () => {
   void loadHomeData();
   todayTimer = window.setInterval(() => {
     const now = new Date();
     if (dateKey(now) !== dateKey(today.value)) today.value = now;
   }, 60_000);
+  tour.onComplete(markTourDone);
+  tour.onExit(markTourDone);
+  if (await getSetting<boolean>('tour-home-done')) return;
+  tourAutoStartTimer = window.setTimeout(() => tour.start(), 600);
 });
 
 onBeforeUnmount(() => {
   if (todayTimer !== undefined) window.clearInterval(todayTimer);
+  if (tourAutoStartTimer !== undefined) window.clearTimeout(tourAutoStartTimer);
 });
 </script>
 
@@ -593,44 +619,49 @@ onBeforeUnmount(() => {
       {{ errorMessage }}
     </v-snackbar>
 
-    <v-container fluid class="pa-4 pa-md-6" style="max-width: 1680px; margin: 0 auto">
-      <!-- 品牌条 -->
+    <v-container fluid class="home-container pa-4 pa-md-6">
+      <!-- 顶部栏 -->
       <header class="d-flex align-center justify-space-between mb-4 fade-up">
         <div class="d-flex align-center ga-3">
-          <v-avatar size="44" rounded="lg" style="overflow: visible; background: transparent">
+          <v-avatar size="40" rounded="lg" style="overflow: visible; background: transparent">
             <v-img :src="appIconUrl" alt="" />
           </v-avatar>
           <span class="text-body-1 font-weight-medium">Mindrizzle</span>
         </div>
-        <v-btn
-          :icon="mdiHelpCircleOutline"
-          aria-label="帮助与关于"
-          title="帮助与关于"
-          variant="text"
-          @click="openAbout"
-        />
+        <div class="d-flex align-center ga-1">
+          <v-btn
+            variant="text"
+            size="small"
+            :prepend-icon="mdiCompassOutline"
+            class="text-none"
+            @click="tour.start()"
+          >
+            引导
+          </v-btn>
+          <v-btn
+            :icon="mdiHelpCircleOutline"
+            aria-label="帮助与关于"
+            title="帮助与关于"
+            variant="text"
+            @click="openAbout"
+          />
+        </div>
       </header>
 
-      <!-- Hero -->
+      <!-- 问候条（精简版 Hero） -->
       <v-card
         class="hero-banner fade-up mb-4"
         :class="`hero-banner--${greeting.theme}`"
-        rounded="xl"
+        rounded="lg"
         :elevation="0"
       >
-        <span class="hero-glow hero-glow--a" />
-        <span class="hero-glow hero-glow--b" />
-        <div
-          class="hero-content d-flex flex-wrap align-center justify-space-between ga-4 pa-4 pa-md-6"
-        >
-          <div>
+        <div class="d-flex flex-wrap align-center justify-space-between ga-3 pa-4 pa-md-5">
+          <div class="min-w-0">
             <div class="hero-eyebrow">
               <v-icon :icon="greeting.icon" size="14" />
               <span>{{ dateLabel }}</span>
             </div>
-            <h1 class="hero-title">{{ greeting.text }}，欢迎回来</h1>
-            <p class="hero-subtitle">{{ BRAND_CHINESE_TAGLINE }}</p>
-            <p class="hero-tagline">{{ BRAND_ENGLISH_TAGLINE }}</p>
+            <h1 class="hero-title">{{ greeting.text }}</h1>
           </div>
           <div class="d-flex flex-wrap ga-2">
             <v-btn
@@ -639,6 +670,7 @@ onBeforeUnmount(() => {
               :prepend-icon="mdiMagnify"
               :title="`快速打开（${commandPaletteShortcut}）`"
               class="text-none"
+              data-tour="home-quick-open"
               @click="showCommandPalette"
             >
               快速打开
@@ -648,6 +680,7 @@ onBeforeUnmount(() => {
               color="white"
               :prepend-icon="mdiFilePlusOutline"
               class="text-none font-weight-bold"
+              data-tour="home-new-file"
               @click="isCreateDialogOpen = true"
             >
               新建文件
@@ -657,8 +690,8 @@ onBeforeUnmount(() => {
       </v-card>
 
       <!-- 统计条 -->
-      <v-row dense class="mb-2">
-        <v-col v-for="(stat, i) in stats" :key="stat.label" cols="6" md="3">
+      <v-row density="compact" class="mb-4" data-tour="home-stats">
+        <v-col v-for="(stat, i) in stats" :key="stat.label" cols="6" sm="3">
           <v-card
             variant="flat"
             border
@@ -666,7 +699,7 @@ onBeforeUnmount(() => {
             hover
             :to="stat.to"
             :link="!!stat.to"
-            class="fade-up"
+            class="fade-up h-100"
             :style="{ animationDelay: `${120 + i * 60}ms` }"
           >
             <div class="d-flex align-center ga-3 pa-3">
@@ -682,34 +715,35 @@ onBeforeUnmount(() => {
         </v-col>
       </v-row>
 
-      <!-- 快捷入口 -->
-      <v-row dense class="mb-2">
-        <v-col v-for="action in quickActions" :key="action.label" cols="auto">
-          <v-btn
-            :to="action.to"
-            :prepend-icon="action.icon"
-            :color="action.color"
-            variant="tonal"
-            class="text-none"
-            @click="!action.to && action.label === '新建文件' && (isCreateDialogOpen = true)"
-            @click.prevent="action.label === '快速打开' && showCommandPalette()"
-          >
-            {{ action.label }}
-          </v-btn>
-        </v-col>
-      </v-row>
+      <!-- 快捷操作 -->
+      <div class="d-flex flex-wrap ga-2 mb-4">
+        <v-btn
+          v-for="action in quickActions"
+          :key="action.label"
+          :to="action.to"
+          :prepend-icon="action.icon"
+          :color="action.color"
+          variant="tonal"
+          class="text-none"
+          @click="runQuickAction(action)"
+        >
+          {{ action.label }}
+        </v-btn>
+      </div>
 
-      <!-- 主体三列 -->
-      <v-row dense>
-        <v-col cols="12" md="8" xl="4">
+      <!-- 主体两列 -->
+      <v-row density="compact">
+        <!-- 左列：列表 + 图表 -->
+        <v-col cols="12" md="8" class="d-flex flex-column ga-4">
           <!-- 最近打开 -->
           <v-card
+            data-tour="home-recent"
             variant="flat"
             border
             rounded="lg"
             hover
             class="fade-up"
-            style="animation-delay: 260ms"
+            style="animation-delay: 200ms"
           >
             <v-card-item>
               <template #prepend>
@@ -783,8 +817,8 @@ onBeforeUnmount(() => {
             border
             rounded="lg"
             hover
-            class="fade-up mt-4"
-            style="animation-delay: 320ms"
+            class="fade-up"
+            style="animation-delay: 260ms"
           >
             <v-card-item>
               <template #prepend>
@@ -838,57 +872,15 @@ onBeforeUnmount(() => {
             </v-card-text>
           </v-card>
 
-          <!-- 标签云 -->
+          <!-- 文件活动 -->
           <v-card
-            variant="flat"
-            border
-            rounded="lg"
-            hover
-            class="fade-up mt-4"
-            style="animation-delay: 380ms"
-          >
-            <v-card-item>
-              <template #prepend>
-                <v-avatar color="info" variant="tonal" rounded="lg">
-                  <v-icon :icon="mdiFormatListBulleted" />
-                </v-avatar>
-              </template>
-              <v-card-title>标签云</v-card-title>
-              <v-card-subtitle>点击标签筛选便签</v-card-subtitle>
-            </v-card-item>
-            <v-card-text class="pt-0">
-              <div v-if="tagCloud.length" class="d-flex flex-wrap ga-2">
-                <v-chip
-                  v-for="tag in tagCloud"
-                  :key="tag.name"
-                  :color="tag.color"
-                  variant="tonal"
-                  class="text-none"
-                  @click="openTag(tag.name)"
-                >
-                  {{ tag.name }}
-                  <span class="text-caption ms-1">({{ tag.count }}个)</span>
-                </v-chip>
-              </div>
-              <v-empty-state
-                v-else
-                :icon="mdiFormatListBulleted"
-                title="还没有标签"
-                text="给笔记打上标签后会显示在这里"
-              />
-            </v-card-text>
-          </v-card>
-        </v-col>
-
-        <v-col cols="12" md="4" xl="5">
-          <!-- 文件活动：三图合一 -->
-          <v-card
+            data-tour="home-charts"
             variant="flat"
             border
             rounded="lg"
             hover
             class="fade-up"
-            style="animation-delay: 280ms"
+            style="animation-delay: 320ms"
           >
             <v-card-item>
               <template #prepend>
@@ -916,15 +908,19 @@ onBeforeUnmount(() => {
               </div>
             </v-card-text>
           </v-card>
+        </v-col>
 
-          <!-- 收藏 / 置顶 -->
+        <!-- 右列：卡片组 -->
+        <v-col cols="12" md="4" class="d-flex flex-column ga-4">
+          <!-- 收藏 -->
           <v-card
+            data-tour="home-pinned"
             variant="flat"
             border
             rounded="lg"
             hover
-            class="fade-up mt-4"
-            style="animation-delay: 340ms"
+            class="fade-up"
+            style="animation-delay: 240ms"
           >
             <v-card-item>
               <template #prepend>
@@ -980,168 +976,180 @@ onBeforeUnmount(() => {
               </v-btn>
             </v-card-text>
           </v-card>
-        </v-col>
 
-        <v-col cols="12" xl="3">
-          <v-row dense>
-            <v-col cols="12" sm="6" xl="12">
-              <!-- 热力图 -->
-              <v-card
-                variant="flat"
-                border
-                rounded="lg"
-                hover
-                class="fade-up h-100"
-                style="animation-delay: 300ms"
-              >
-                <v-card-item>
-                  <template #prepend>
-                    <v-avatar color="success" variant="tonal" rounded="lg">
-                      <v-icon :icon="mdiCalendarMonthOutline" />
-                    </v-avatar>
-                  </template>
-                  <v-card-title>创作热力图</v-card-title>
-                  <v-card-subtitle>过去 90 天的文件活动</v-card-subtitle>
-                </v-card-item>
-                <v-card-text class="pt-0">
-                  <div class="text-caption text-medium-emphasis mb-2">过去 90 天 — 今天</div>
-                  <div
-                    class="d-flex ga-2 overflow-x-auto"
-                    role="img"
-                    aria-label="过去 90 天文件活动热力图"
-                  >
-                    <div class="heatmap-weekdays">
-                      <span>一</span><span>三</span><span>五</span>
-                    </div>
-                    <div class="heatmap-grid">
-                      <span
-                        v-for="day in heatmapDays"
-                        :key="day.key"
-                        class="heatmap-cell rounded-sm"
-                        :class="`heatmap-level-${day.level}`"
-                        :title="day.title"
-                      />
-                    </div>
-                  </div>
-                  <div
-                    class="d-flex align-center justify-end ga-1 mt-3 text-caption text-medium-emphasis"
-                  >
-                    <span>少</span>
-                    <span
-                      v-for="level in 5"
-                      :key="level"
-                      class="heatmap-legend-cell rounded-sm"
-                      :class="`heatmap-level-${level - 1}`"
-                    />
-                    <span>多</span>
-                  </div>
-                </v-card-text>
-              </v-card>
-            </v-col>
+          <!-- 标签云 -->
+          <v-card
+            data-tour="home-tags"
+            variant="flat"
+            border
+            rounded="lg"
+            hover
+            class="fade-up"
+            style="animation-delay: 300ms"
+          >
+            <v-card-item>
+              <template #prepend>
+                <v-avatar color="info" variant="tonal" rounded="lg">
+                  <v-icon :icon="mdiFormatListBulleted" />
+                </v-avatar>
+              </template>
+              <v-card-title>标签云</v-card-title>
+              <v-card-subtitle>点击标签筛选便签</v-card-subtitle>
+            </v-card-item>
+            <v-card-text class="pt-0">
+              <div v-if="tagCloud.length" class="d-flex flex-wrap ga-2">
+                <v-chip
+                  v-for="tag in tagCloud"
+                  :key="tag.name"
+                  :color="tag.color"
+                  variant="tonal"
+                  class="text-none"
+                  @click="openTag(tag.name)"
+                >
+                  {{ tag.name }}
+                  <span class="text-caption ms-1">({{ tag.count }}个)</span>
+                </v-chip>
+              </div>
+              <v-empty-state
+                v-else
+                :icon="mdiFormatListBulleted"
+                title="还没有标签"
+                text="给笔记打上标签后会显示在这里"
+              />
+            </v-card-text>
+          </v-card>
 
-            <v-col v-if="isTauri()" cols="12" sm="6" xl="12">
-              <!-- 工作区 -->
-              <v-card
-                variant="flat"
-                border
-                rounded="lg"
-                hover
-                class="fade-up h-100"
-                style="animation-delay: 360ms"
+          <!-- 热力图 -->
+          <v-card
+            data-tour="home-heatmap"
+            variant="flat"
+            border
+            rounded="lg"
+            hover
+            class="fade-up"
+            style="animation-delay: 360ms"
+          >
+            <v-card-item>
+              <template #prepend>
+                <v-avatar color="success" variant="tonal" rounded="lg">
+                  <v-icon :icon="mdiCalendarMonthOutline" />
+                </v-avatar>
+              </template>
+              <v-card-title>创作热力图</v-card-title>
+              <v-card-subtitle>过去 90 天的文件活动</v-card-subtitle>
+            </v-card-item>
+            <v-card-text class="pt-0">
+              <div
+                class="d-flex ga-2 overflow-x-auto"
+                role="img"
+                aria-label="过去 90 天文件活动热力图"
               >
-                <v-card-item>
+                <div class="heatmap-weekdays">
+                  <span>一</span><span>三</span><span>五</span>
+                </div>
+                <div class="heatmap-grid">
+                  <span
+                    v-for="day in heatmapDays"
+                    :key="day.key"
+                    class="heatmap-cell rounded-sm"
+                    :class="`heatmap-level-${day.level}`"
+                    :title="day.title"
+                  />
+                </div>
+              </div>
+              <div
+                class="d-flex align-center justify-end ga-1 mt-3 text-caption text-medium-emphasis"
+              >
+                <span>少</span>
+                <span
+                  v-for="level in 5"
+                  :key="level"
+                  class="heatmap-legend-cell rounded-sm"
+                  :class="`heatmap-level-${level - 1}`"
+                />
+                <span>多</span>
+              </div>
+            </v-card-text>
+          </v-card>
+
+          <!-- 工作区 -->
+          <v-card
+            v-if="isTauri()"
+            data-tour="home-workspace"
+            variant="flat"
+            border
+            rounded="lg"
+            hover
+            class="fade-up"
+            style="animation-delay: 400ms"
+          >
+            <v-card-item>
+              <template #prepend>
+                <v-avatar color="primary" variant="tonal" rounded="lg">
+                  <v-icon :icon="mdiFolderMultipleOutline" />
+                </v-avatar>
+              </template>
+              <v-card-title>工作区</v-card-title>
+              <v-card-subtitle>
+                {{ workspaceStats.directories.length }} 个目录 · 默认
+                {{ workspaceStats.defaultCount }} 篇 · 外部
+                {{ workspaceStats.externalCount }} 个
+              </v-card-subtitle>
+            </v-card-item>
+            <v-card-text class="pt-0">
+              <v-list density="compact" class="pa-0">
+                <v-list-item rounded="lg" @click="openWorkspace()">
                   <template #prepend>
-                    <v-avatar color="primary" variant="tonal" rounded="lg">
-                      <v-icon :icon="mdiFolderMultipleOutline" />
-                    </v-avatar>
+                    <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
                   </template>
-                  <v-card-title>工作区</v-card-title>
-                  <v-card-subtitle>
-                    {{ workspaceStats.directories.length }} 个目录 · 默认
-                    {{ workspaceStats.defaultCount }} 篇 · 外部
-                    {{ workspaceStats.externalCount }} 个
-                  </v-card-subtitle>
-                </v-card-item>
-                <v-card-text class="pt-0">
-                  <v-list density="compact" class="pa-0">
-                    <v-list-item rounded="lg" @click="openWorkspace()">
-                      <template #prepend>
-                        <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
-                      </template>
-                      <v-list-item-title class="text-body-2">默认工作区</v-list-item-title>
-                      <v-list-item-subtitle class="text-caption">
-                        {{ workspaceStats.defaultCount }} 篇笔记
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                    <v-list-item
-                      v-for="dir in workspaceStats.directories.slice(0, 3)"
-                      :key="dir.id"
-                      rounded="lg"
-                      @click="openWorkspace(dir.dir)"
-                    >
-                      <template #prepend>
-                        <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
-                      </template>
-                      <v-list-item-title class="text-body-2">{{ dir.name }}</v-list-item-title>
-                      <v-list-item-subtitle class="text-caption" style="overflow-wrap: anywhere">
-                        {{ dir.count }} 篇 · {{ dir.dir }}
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                  </v-list>
-                  <v-btn
-                    v-if="workspaceStats.directories.length > 3"
-                    variant="text"
-                    size="small"
-                    to="/set"
-                    block
-                    class="mt-2"
-                  >
-                    查看全部 {{ workspaceStats.directories.length }} 个目录
-                  </v-btn>
-                </v-card-text>
-              </v-card>
-            </v-col>
-          </v-row>
+                  <v-list-item-title class="text-body-2">默认工作区</v-list-item-title>
+                  <v-list-item-subtitle class="text-caption">
+                    {{ workspaceStats.defaultCount }} 篇笔记
+                  </v-list-item-subtitle>
+                </v-list-item>
+                <v-list-item
+                  v-for="dir in workspaceStats.directories.slice(0, 3)"
+                  :key="dir.id"
+                  rounded="lg"
+                  @click="openWorkspace(dir.dir)"
+                >
+                  <template #prepend>
+                    <v-icon :icon="mdiFolderOutline" size="20" color="primary" />
+                  </template>
+                  <v-list-item-title class="text-body-2">{{ dir.name }}</v-list-item-title>
+                  <v-list-item-subtitle class="text-caption" style="overflow-wrap: anywhere">
+                    {{ dir.count }} 篇 · {{ dir.dir }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+              <v-btn
+                v-if="workspaceStats.directories.length > 3"
+                variant="text"
+                size="small"
+                to="/set"
+                block
+                class="mt-2"
+              >
+                查看全部 {{ workspaceStats.directories.length }} 个目录
+              </v-btn>
+            </v-card-text>
+          </v-card>
         </v-col>
       </v-row>
     </v-container>
 
-    <NewFileDialog
-      :is-open="isCreateDialogOpen"
-      @update:close="isCreateDialogOpen = $event.status"
-    />
+    <NewFileDialog :is-open="isCreateDialogOpen" @update:close="isCreateDialogOpen = $event.status" />
+    <TourKitLayer :tour="tour" />
   </main>
 </template>
 
 <style scoped>
-.home-page {
-  height: 100%;
-  overflow: auto;
-  background: rgb(var(--v-theme-background));
+.home-container {
+  max-width: 1680px;
+  margin: 0 auto;
 }
 
-.min-w-0 {
-  min-width: 0;
-}
-
-/* ---------- 入场 ---------- */
-.fade-up {
-  opacity: 0;
-  animation: fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ---------- Hero ---------- */
+/* ---------- Hero（精简） ---------- */
 .hero-banner {
   position: relative;
   overflow: hidden;
@@ -1151,95 +1159,40 @@ onBeforeUnmount(() => {
 
 .hero-banner--morning {
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(255, 200, 150, 0.35), transparent 55%),
-    radial-gradient(100% 120% at 100% 100%, rgba(255, 230, 160, 0.28), transparent 60%),
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 200, 150, 0.3), transparent 55%),
     rgb(var(--v-theme-primary));
 }
 
 .hero-banner--afternoon {
   background:
-    radial-gradient(120% 140% at 100% 0%, rgba(160, 200, 255, 0.32), transparent 55%),
-    radial-gradient(100% 120% at 0% 100%, rgba(200, 180, 255, 0.22), transparent 60%),
+    radial-gradient(120% 140% at 100% 0%, rgba(160, 200, 255, 0.28), transparent 55%),
     rgb(var(--v-theme-primary));
 }
 
 .hero-banner--evening {
   background:
-    radial-gradient(120% 140% at 0% 100%, rgba(255, 160, 120, 0.3), transparent 55%),
-    radial-gradient(100% 120% at 100% 0%, rgba(180, 140, 220, 0.28), transparent 60%),
+    radial-gradient(120% 140% at 0% 100%, rgba(255, 160, 120, 0.28), transparent 55%),
     rgb(var(--v-theme-primary));
 }
 
 .hero-banner--night {
   background:
-    radial-gradient(120% 140% at 100% 0%, rgba(120, 140, 220, 0.32), transparent 55%),
-    radial-gradient(100% 120% at 0% 100%, rgba(90, 90, 150, 0.32), transparent 60%),
+    radial-gradient(120% 140% at 100% 0%, rgba(120, 140, 220, 0.3), transparent 55%),
     rgb(var(--v-theme-primary));
-}
-
-.hero-glow {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  pointer-events: none;
-  will-change: transform;
-}
-
-.hero-glow--a {
-  top: -60px;
-  right: -40px;
-  width: 220px;
-  height: 220px;
-  animation: float-a 14s ease-in-out infinite;
-}
-
-.hero-glow--b {
-  bottom: -100px;
-  left: 30%;
-  width: 260px;
-  height: 260px;
-  background: rgba(255, 255, 255, 0.07);
-  animation: float-b 18s ease-in-out infinite;
-}
-
-@keyframes float-a {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(-24px, 20px) scale(1.08);
-  }
-}
-
-@keyframes float-b {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(30px, -18px) scale(1.05);
-  }
-}
-
-.hero-content {
-  position: relative;
-  z-index: 1;
 }
 
 .hero-eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  opacity: 0.82;
+  opacity: 0.8;
 }
 
 .hero-title {
-  margin: 10px 0 0;
-  font-size: 1.65rem;
+  margin: 6px 0 0;
+  font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -1247,22 +1200,22 @@ onBeforeUnmount(() => {
 
 @media (min-width: 960px) {
   .hero-title {
-    font-size: 2rem;
+    font-size: 1.6rem;
   }
 }
 
-.hero-subtitle {
-  margin: 6px 0 0;
-  font-size: 0.95rem;
-  opacity: 0.9;
-}
+/* ---------- 减少动效 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .heatmap-grid {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 
-.hero-tagline {
-  margin: 2px 0 0;
-  font-size: 0.75rem;
-  font-style: italic;
-  opacity: 0.6;
-  letter-spacing: 0.02em;
+  .heatmap-cell {
+    transition: none !important;
+  }
 }
 
 .stat-value {
@@ -1293,6 +1246,7 @@ onBeforeUnmount(() => {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -1327,15 +1281,19 @@ onBeforeUnmount(() => {
 .heatmap-level-0 {
   background: rgba(var(--v-theme-on-surface), 0.07);
 }
+
 .heatmap-level-1 {
   background: rgba(var(--v-theme-primary), 0.18);
 }
+
 .heatmap-level-2 {
   background: rgba(var(--v-theme-primary), 0.38);
 }
+
 .heatmap-level-3 {
   background: rgba(var(--v-theme-primary), 0.62);
 }
+
 .heatmap-level-4 {
   background: rgb(var(--v-theme-primary));
 }

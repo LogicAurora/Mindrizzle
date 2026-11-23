@@ -17,6 +17,7 @@
         "@tauri-apps/plugin-log": "^2.10.2",
         "@tauri-apps/plugin-opener": "^2.7.3",
         "@tauri-apps/plugin-process": "^2.4.0",
+        "@vuetify/v0": "^1.4.0",
         "@vxe-ui/core": "^4.5.9",
         "dom-zindex": "^1.0.8",
         "dompurify": "^3.4.17",
@@ -457,7 +458,7 @@
 
     "@vuetify/loader-shared": ["@vuetify/loader-shared@2.1.2", "https://registry.npmmirror.com/@vuetify/loader-shared/-/loader-shared-2.1.2.tgz", { "dependencies": { "upath": "^2.0.1" }, "peerDependencies": { "vue": "^3.0.0", "vuetify": ">=3" } }, "sha512-X+1jBLmXHkpQEnC0vyOb4rtX2QSkBiFhaFXz8yhQqN2A4vQ6k2nChxN4Ol7VAY5KoqMdFoRMnmNdp/1qYXDQig=="],
 
-    "@vuetify/v0": ["@vuetify/v0@1.3.2", "https://registry.npmmirror.com/@vuetify/v0/-/v0-1.3.2.tgz", { "peerDependencies": { "@adobe/leonardo-contrast-colors": ">=1.0.0", "@ant-design/colors": ">=7.0.0", "@flagsmith/flagsmith": ">=11.0.0", "@floating-ui/dom": ">=1.8.0", "@js-temporal/polyfill": ">=0.5.0", "@material/material-color-utilities": ">=0.3.0", "@vue/devtools-api": ">=7.0.0", "launchdarkly-js-client-sdk": "^3.0.0", "posthog-js": "^1.0.0", "vue": ">=3.5.0 || >=3.6.0-0", "vue-i18n": ">=10.0.0" }, "optionalPeers": ["@adobe/leonardo-contrast-colors", "@ant-design/colors", "@flagsmith/flagsmith", "@floating-ui/dom", "@js-temporal/polyfill", "@material/material-color-utilities", "@vue/devtools-api", "launchdarkly-js-client-sdk", "posthog-js", "vue-i18n"] }, "sha512-+LXktqYC91aTbS3WOPvEOjo1CmtwpuAmqQZTtygpR/tVll9uzCQzscNhTPexlyx28bFOn5pbxAQj7LBhqohdIA=="],
+    "@vuetify/v0": ["@vuetify/v0@1.4.0", "https://registry.npmmirror.com/@vuetify/v0/-/v0-1.4.0.tgz", { "peerDependencies": { "@adobe/leonardo-contrast-colors": ">=1.0.0", "@ant-design/colors": ">=7.0.0", "@flagsmith/flagsmith": ">=11.0.0", "@floating-ui/dom": ">=1.8.0", "@js-temporal/polyfill": ">=0.5.0", "@material/material-color-utilities": ">=0.3.0", "@vue/devtools-api": ">=7.0.0", "launchdarkly-js-client-sdk": "^3.0.0", "posthog-js": "^1.0.0", "vue": ">=3.5.0 || >=3.6.0-0", "vue-i18n": ">=10.0.0" }, "optionalPeers": ["@adobe/leonardo-contrast-colors", "@ant-design/colors", "@flagsmith/flagsmith", "@floating-ui/dom", "@js-temporal/polyfill", "@material/material-color-utilities", "@vue/devtools-api", "launchdarkly-js-client-sdk", "posthog-js", "vue-i18n"] }, "sha512-Kwk1RAYkCY7r+30iFi+UtSRLkI75qF1uhmPPA33fcHHbafkXUWb+FV3RkASSAVb8ZusLkk2vY3ZqWPy0iaYADg=="],
 
     "@vxe-ui/core": ["@vxe-ui/core@4.5.9", "https://registry.npmmirror.com/@vxe-ui/core/-/core-4.5.9.tgz", { "dependencies": { "dom-zindex": "^1.0.8", "xe-utils": "^4.1.5" }, "peerDependencies": { "vue": "^3.2.0" } }, "sha512-b65Md4gLuDW5vpHNLJ9sLkXsw2VUsHsHlKVZVTOyw+/wE6uh6rryg1pRnlhTywphRgVkQBOzXoZ44s3KQ6lWRA=="],
 
@@ -1074,6 +1075,8 @@
     "parse-entities/@types/unist": ["@types/unist@2.0.11", "https://registry.npmmirror.com/@types/unist/-/unist-2.0.11.tgz", {}, "sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA=="],
 
     "vue-router/chokidar": ["chokidar@6.0.0", "https://registry.npmmirror.com/chokidar/-/chokidar-6.0.0.tgz", { "dependencies": { "readdirp": "^5.1.1" } }, "sha512-Ec2Z7wpcKBiMpR7DxteoqS/sq5G5d2A4fpxzPv6+fD7xNNdrTghn7L11YwV5EN1B3i72Erc3XVT5FkWIDx90+A=="],
+
+    "vuetify/@vuetify/v0": ["@vuetify/v0@1.3.2", "https://registry.npmmirror.com/@vuetify/v0/-/v0-1.3.2.tgz", { "peerDependencies": { "@adobe/leonardo-contrast-colors": ">=1.0.0", "@ant-design/colors": ">=7.0.0", "@flagsmith/flagsmith": ">=11.0.0", "@floating-ui/dom": ">=1.8.0", "@js-temporal/polyfill": ">=0.5.0", "@material/material-color-utilities": ">=0.3.0", "@vue/devtools-api": ">=7.0.0", "launchdarkly-js-client-sdk": "^3.0.0", "posthog-js": "^1.0.0", "vue": ">=3.5.0 || >=3.6.0-0", "vue-i18n": ">=10.0.0" }, "optionalPeers": ["@adobe/leonardo-contrast-colors", "@ant-design/colors", "@flagsmith/flagsmith", "@floating-ui/dom", "@js-temporal/polyfill", "@material/material-color-utilities", "@vue/devtools-api", "launchdarkly-js-client-sdk", "posthog-js", "vue-i18n"] }, "sha512-+LXktqYC91aTbS3WOPvEOjo1CmtwpuAmqQZTtygpR/tVll9uzCQzscNhTPexlyx28bFOn5pbxAQj7LBhqohdIA=="],
 
     "@babel/parser/@babel/types/@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.14", "https://registry.npmmirror.com/@babel/helper-string-parser/-/helper-string-parser-7.29.14.tgz", {}, "sha512-CXvKMFvM80ihI7Vox9jb+kQjnyjESQNPM+vB7U0Zz6TWuZA+Z/FL0QPMH300h33qJtIx+REeBhXqWOPW48TcAQ=="],
 

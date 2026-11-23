@@ -265,10 +265,10 @@ fn list_archive_paths(archive_path: &Path, compressed: bool, prefix: &str) -> Re
     for entry in archive.entries().context("读取归档条目")? {
         let entry = entry.context("读取归档条目")?;
         let key = archive_key_of(&entry.path().context("读取归档条目路径")?);
-        if let Some(relative) = key.strip_prefix(prefix) {
-            if !relative.is_empty() {
-                paths.push(relative.to_string());
-            }
+        if let Some(relative) = key.strip_prefix(prefix)
+            && !relative.is_empty()
+        {
+            paths.push(relative.to_string());
         }
     }
     paths.sort();

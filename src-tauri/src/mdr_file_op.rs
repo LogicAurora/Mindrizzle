@@ -466,7 +466,7 @@ pub(crate) fn resolve_mdrf_file_name(file_name: &str) -> anyhow::Result<String> 
     };
     if resolved.len() > MINDRIZZLE_FILE_MAX_NAME_LEN
         || resolved.starts_with(' ')
-        || resolved.ends_with(&[' ', '.'])
+        || resolved.ends_with([' ', '.'])
     {
         return Err(anyhow::anyhow!("文件名过长或首尾含非法字符"));
     }
@@ -623,12 +623,11 @@ fn read_note_meta_xml(
     compressed: bool,
     signature: &str,
 ) -> anyhow::Result<Vec<u8>> {
-    if let Some(dir) = named_cache_dir(&archive.to_string_lossy()) {
-        if read_signature(&dir).as_deref() == Some(signature) {
-            if let Ok(xml) = fs::read(dir.join("meta.json")) {
-                return Ok(xml);
-            }
-        }
+    if let Some(dir) = named_cache_dir(&archive.to_string_lossy())
+        && read_signature(&dir).as_deref() == Some(signature)
+        && let Ok(xml) = fs::read(dir.join("meta.json"))
+    {
+        return Ok(xml);
     }
     let file =
         File::open(archive).with_context(|| format!("打开笔记文件：{}", archive.display()))?;
