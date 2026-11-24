@@ -158,7 +158,7 @@ onMounted(() => {
               @click="knockVersion"
             >
               <v-icon :icon="mdiTagOutline" size="14" />
-              <span>{{ appVersion }}</span>
+              <span>v{{ appVersion }}</span>
             </button>
             <span class="about-chip">
               <v-icon :icon="mdiSourceCommit" size="14" />

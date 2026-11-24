@@ -71,7 +71,7 @@ jobs:
               const text = fs.readFileSync(file, "utf8");
               fs.writeFileSync(file, text.replace(pattern, replacement));
             };
-            replaceFirst("package.json", /("version":\s*")[^"]*(")/, `$1v${version}$2`);
+            replaceFirst("package.json", /("version":\s*")[^"]*(")/, `$1${version}$2`);
             replaceFirst("src-tauri/Cargo.toml", /^version = ".*"$/m, `version = "${version}"`);
             replaceFirst("src-tauri/tauri.conf.json", /^  "version": ".*",$/m, `  "version": "${version}",`);
             // 工作区成员版本写在 [[package]] 块里，Cargo.toml 改了它不会跟着变

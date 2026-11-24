@@ -262,18 +262,27 @@ jobs:
           V: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
-          # 更新 tauri.conf.json
+          node -e '
+            const fs = require("fs");
+            const V = process.env.V;
+            const p = "package.json";
+            const c = JSON.parse(fs.readFileSync(p, "utf8"));
+            c.version = V;                      // 不带 v 前缀
+            fs.writeFileSync(p, JSON.stringify(c, null, 2) + "\n");
+            console.log("Injected version into package.json:", V);
+          '
           node -e '
             const fs = require("fs");
             const V = process.env.V;
             const p1 = "src-tauri/tauri.conf.json";
             const c = JSON.parse(fs.readFileSync(p1, "utf8"));
             c.version = V;
-            fs.writeFileSync(p1, JSON.stringify(c, null, 2));
+            fs.writeFileSync(p1, JSON.stringify(c, null, 2) + "\n");
             console.log("Injected version into tauri.conf.json:", V);
           '
-          # 精确更新 Cargo.toml 的 [package] version
           cargo set-version --manifest-path src-tauri/Cargo.toml "$V"
+          # workspace lock 里 [[package]] name = "Mindrizzle" 的版本不会跟着变
+          cargo update -p Mindrizzle --manifest-path src-tauri/Cargo.toml --precise "$V" || true
 
       - name: Configure signing env (only if secrets set)
         shell: bash
