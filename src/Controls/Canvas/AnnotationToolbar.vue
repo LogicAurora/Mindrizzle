@@ -266,7 +266,6 @@ import {
   type ConnectorShape,
   type ConnectorStyle,
 } from './Core/annotationModel.ts';
-import { watch } from 'vue';
 
 type SelectedPatch = AnnotationPatch;
 
