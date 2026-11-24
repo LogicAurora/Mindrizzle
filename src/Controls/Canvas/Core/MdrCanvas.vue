@@ -51,9 +51,14 @@
         :tool="annotationTool"
         :active="isAnnotationMode"
         :zoom="zoom"
+        :color="annotationColor"
+        :selected-id="selectedAnnotationId"
         :to-content="annotationPointOf"
+        :to-viewport="annotationViewportPointOf"
         @create="addAnnotation"
+        @update="updateAnnotation"
         @erase="eraseAnnotation"
+        @select="selectAnnotation"
       />
 
       <v-fade-transition :duration="120">
@@ -170,7 +175,12 @@
       :visible="isAnnotationMode"
       :tool="annotationTool"
       :count="annotations.length"
+      :color="annotationColor"
+      :selected="selectedAnnotation"
       @set-tool="setAnnotationTool"
+      @set-color="setAnnotationColor"
+      @update-selected="patchSelectedAnnotation"
+      @clear-selection="clearAnnotationSelection"
       @clear="clearAnnotations"
       @exit="setAnnotationMode(false)"
     />
@@ -251,9 +261,12 @@ import { Z_LAYER } from './zIndex.ts';
 import AnnotationLayer from './AnnotationLayer.vue';
 import AnnotationToolbar from '../AnnotationToolbar.vue';
 import {
+  DEFAULT_ANNOTATION_COLOR,
   normalizeAnnotations,
   type AnnotationBlock,
   type AnnotationItem,
+  type AnnotationPatch,
+  type AnnotationText,
   type AnnotationTool,
 } from './annotationModel.ts';
 import { isTauri } from '@tauri-apps/api/core';
@@ -340,6 +353,13 @@ const isActive = (id: string): boolean => isEditMode.value && state.selectedIds.
 const annotations = ref<AnnotationItem[]>([]);
 const isAnnotationMode = ref(false);
 const annotationTool = ref<AnnotationTool>('pen');
+const annotationColor = ref(DEFAULT_ANNOTATION_COLOR);
+const selectedAnnotationId = ref<string | null>(null);
+
+const selectedAnnotation = computed<AnnotationItem | null>(() => {
+  const id = selectedAnnotationId.value;
+  return id ? (annotations.value.find((item) => item.id === id) ?? null) : null;
+});
 
 const annotationBlocks = computed<AnnotationBlock[]>(() => {
   void layoutVersion.value;
@@ -354,28 +374,83 @@ const annotationPointOf = (clientX: number, clientY: number): Point | null => {
   return screenToContent(canvasTransform(), rect, clientX, clientY);
 };
 
+// 文本框编辑器 Teleport 到容器层，所以返回相对 .canvas-container 的视觉坐标
+const annotationViewportPointOf = (x: number, y: number): Point => {
+  const rect = canvasContainerRef.value?.getBoundingClientRect();
+  if (!rect) return { x: 0, y: 0 };
+  const screen = contentToScreen(canvasTransform(), rect, x, y);
+  return { x: screen.x - rect.left, y: screen.y - rect.top };
+};
+
 const addAnnotation = (item: AnnotationItem) => {
-  annotations.value = [...annotations.value, item];
+  annotations.value = [
+    ...annotations.value,
+    { ...item, color: item.color ?? annotationColor.value },
+  ];
+};
+
+const updateAnnotation = (item: AnnotationItem) => {
+  annotations.value = annotations.value.map((current) => (current.id === item.id ? item : current));
 };
 
 const hasAnnotationConnectors = (): boolean =>
   annotations.value.some((item) => item.kind === 'connector');
 
+const clearAnnotationSelection = () => {
+  selectedAnnotationId.value = null;
+};
+
+const selectAnnotation = (id: string | null) => {
+  selectedAnnotationId.value = id;
+};
+
 const eraseAnnotation = (id: string) => {
   annotations.value = annotations.value.filter((item) => item.id !== id);
+  if (selectedAnnotationId.value === id) clearAnnotationSelection();
 };
 
 const clearAnnotations = () => {
   annotations.value = [];
+  clearAnnotationSelection();
+};
+
+const setAnnotationColor = (color: string) => {
+  annotationColor.value = color;
+  if (selectedAnnotationId.value) patchSelectedAnnotation({ color });
+};
+
+// 连接线/文本字段不通用，按类型只合并各自的字段，避免把锚点写进文本框
+const mergeAnnotationPatch = (item: AnnotationItem, patch: AnnotationPatch): AnnotationItem => {
+  if (item.kind === 'stroke') return patch.color ? { ...item, color: patch.color } : item;
+  if (item.kind === 'text') {
+    const next: AnnotationText = { ...item };
+    if (patch.color !== undefined) next.color = patch.color;
+    if (patch.text !== undefined) next.text = patch.text;
+    if (patch.fontSize !== undefined) next.fontSize = patch.fontSize;
+    return next;
+  }
+  return { ...item, ...patch };
+};
+
+const patchSelectedAnnotation = (patch: AnnotationPatch) => {
+  const id = selectedAnnotationId.value;
+  if (!id) return;
+  annotations.value = annotations.value.map((item) =>
+    item.id === id ? mergeAnnotationPatch(item, patch) : item,
+  );
 };
 
 const setAnnotationTool = (tool: AnnotationTool) => {
   annotationTool.value = tool;
+  clearAnnotationSelection();
 };
 
 const setAnnotationMode = (enabled: boolean) => {
   isAnnotationMode.value = enabled;
-  if (!enabled) return;
+  if (!enabled) {
+    clearAnnotationSelection();
+    return;
+  }
   state.selectedIds = new Set();
   hoveredUuid.value = null;
 };
@@ -384,23 +459,28 @@ const setAnnotationMode = (enabled: boolean) => {
 const pruneAnnotationConnectors = (removedIds: Set<string>) => {
   const kept = annotations.value.filter(
     (item) =>
-      item.kind === 'stroke' || (!removedIds.has(item.fromUuid) && !removedIds.has(item.toUuid)),
+      item.kind !== 'connector' || (!removedIds.has(item.fromUuid) && !removedIds.has(item.toUuid)),
   );
   if (kept.length !== annotations.value.length) annotations.value = kept;
+  if (!kept.some((item) => item.id === selectedAnnotationId.value)) clearAnnotationSelection();
 };
 
 const serializeAnnotations = (offsetX: number, offsetY: number) =>
-  annotations.value.map((item) =>
-    item.kind === 'stroke'
-      ? {
-          ...item,
-          points: item.points.map((point) => ({
-            x: Math.round(point.x + offsetX),
-            y: Math.round(point.y + offsetY),
-          })),
-        }
-      : item,
-  );
+  annotations.value.map((item) => {
+    if (item.kind === 'stroke') {
+      return {
+        ...item,
+        points: item.points.map((point) => ({
+          x: Math.round(point.x + offsetX),
+          y: Math.round(point.y + offsetY),
+        })),
+      };
+    }
+    if (item.kind === 'text') {
+      return { ...item, x: Math.round(item.x + offsetX), y: Math.round(item.y + offsetY) };
+    }
+    return item;
+  });
 
 // #endregion 批注
 
@@ -451,17 +531,19 @@ const rebaseOrigin = (offset: { x: number; y: number }) => {
     item.layout.y -= dy;
   });
   // 批注共用块坐标系，重定位时须同步平移，否则批注会与块错位
-  annotations.value = annotations.value.map((item) =>
-    item.kind === 'stroke'
-      ? {
-          ...item,
-          points: item.points.map((point) => ({
-            x: point.x - dx,
-            y: point.y - dy,
-          })),
-        }
-      : item,
-  );
+  annotations.value = annotations.value.map((item) => {
+    if (item.kind === 'stroke') {
+      return {
+        ...item,
+        points: item.points.map((point) => ({
+          x: point.x - dx,
+          y: point.y - dy,
+        })),
+      };
+    }
+    if (item.kind === 'text') return { ...item, x: item.x - dx, y: item.y - dy };
+    return item;
+  });
   origin.x += dx;
   origin.y += dy;
 };
@@ -4086,6 +4168,7 @@ const load = async (raw: string) => {
     parsed.annotations,
     new Set(state.items.map((item) => item.uuid)),
   );
+  clearAnnotationSelection();
   await nextTick();
   await nextTick();
   autoArrange();

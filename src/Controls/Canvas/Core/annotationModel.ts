@@ -2,12 +2,23 @@ import type { Point } from '../../../utils/canvasCoords.ts';
 import type { Rect } from '../Registry/canvasComponents.ts';
 
 export type ConnectorShape = 'line' | 'arrow' | 'curve';
-export type AnnotationTool = 'pen' | ConnectorShape | 'eraser';
+export type AnnotationTool = 'pen' | ConnectorShape | 'eraser' | 'select' | 'text';
+export type AnchorSide = 'auto' | 'top' | 'right' | 'bottom' | 'left';
+export type CurveBend = 'auto' | 'horizontal' | 'vertical';
+
+export const DEFAULT_ANNOTATION_COLOR = '#ef4444';
+export const DEFAULT_TEXT_WIDTH = 240;
+export const DEFAULT_TEXT_FONT_SIZE = 16;
+export const TEXT_LINE_HEIGHT = 1.4;
+export const MIN_TEXT_FONT_SIZE = 10;
+export const MAX_TEXT_FONT_SIZE = 48;
+const MAX_TEXT_LENGTH = 2000;
 
 export interface AnnotationStroke {
   id: string;
   kind: 'stroke';
   points: Point[];
+  color?: string;
 }
 
 export interface AnnotationConnector {
@@ -16,9 +27,40 @@ export interface AnnotationConnector {
   shape: ConnectorShape;
   fromUuid: string;
   toUuid: string;
+  fromAnchor?: AnchorSide;
+  toAnchor?: AnchorSide;
+  bend?: CurveBend;
+  // 0..1，映射到控制点距十字中线的比例；1 即旧版出弯位置
+  curvature?: number;
+  color?: string;
 }
 
-export type AnnotationItem = AnnotationStroke | AnnotationConnector;
+export interface AnnotationText {
+  id: string;
+  kind: 'text';
+  x: number;
+  y: number;
+  text: string;
+  width?: number;
+  fontSize?: number;
+  color?: string;
+}
+
+export type AnnotationItem = AnnotationStroke | AnnotationConnector | AnnotationText;
+
+export interface ConnectorStyle {
+  shape: ConnectorShape;
+  fromAnchor?: AnchorSide;
+  toAnchor?: AnchorSide;
+  bend?: CurveBend;
+  curvature?: number;
+}
+
+export type AnnotationPatch = Partial<ConnectorStyle> & {
+  color?: string;
+  text?: string;
+  fontSize?: number;
+};
 
 export interface AnnotationBlock {
   uuid: string;
@@ -38,6 +80,11 @@ const ARROW_HALF_WIDTH = 7;
 const COORD_SCALE = 100;
 const THIRD = 1 / 3;
 const EPSILON = 1e-6;
+export const DEFAULT_CURVATURE = 1;
+// curvature=1 时控制点落在中线，再大就会越过中线把曲线拉成回环
+const MAX_CONTROL_RATIO = 0.5;
+
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 const roundCoord = (value: number): number => Math.round(value * COORD_SCALE) / COORD_SCALE;
 
@@ -51,8 +98,17 @@ const lerp = (from: Point, to: Point, t: number): Point => ({
   y: from.y + (to.y - from.y) * t,
 });
 
-// 箭头端点要贴在块边上，所以从块心朝目标点做射线，取与矩形边框的交点
-export const anchorOnRect = (rect: Rect, towards: Point): Point => {
+const edgeMidpointOf = (rect: Rect, side: Exclude<AnchorSide, 'auto'>): Point => {
+  const center = centerOf(rect);
+  if (side === 'top') return { x: center.x, y: rect.y };
+  if (side === 'bottom') return { x: center.x, y: rect.y + rect.h };
+  if (side === 'left') return { x: rect.x, y: center.y };
+  return { x: rect.x + rect.w, y: center.y };
+};
+
+// 箭头端点要贴在块边上，所以从块心朝目标点做射线，取与矩形边框的交点；指定锚边时取该边中点
+export const anchorOnRect = (rect: Rect, towards: Point, side: AnchorSide = 'auto'): Point => {
+  if (side !== 'auto') return edgeMidpointOf(rect, side);
   const center = centerOf(rect);
   const dx = towards.x - center.x;
   const dy = towards.y - center.y;
@@ -65,20 +121,29 @@ export const anchorOnRect = (rect: Rect, towards: Point): Point => {
   return { x: center.x + dx * scale, y: center.y + dy * scale };
 };
 
-// 曲线走主轴中线出弯，贴边接线才不会在块角处急拐
-const curveControls = (start: Point, end: Point): { first: Point; second: Point } => {
-  const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-  if (isHorizontal) {
-    const midX = (start.x + end.x) / 2;
+// 曲线沿选定轴出弯，贴边接线才不会在块角处急拐；curvature 越小控制点越靠近端点，曲线越平直
+const curveControls = (
+  start: Point,
+  end: Point,
+  bend: CurveBend,
+  curvature: number,
+): { first: Point; second: Point } => {
+  const axis =
+    bend === 'auto'
+      ? Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
+        ? 'horizontal'
+        : 'vertical'
+      : bend;
+  const ratio = clamp01(curvature) * MAX_CONTROL_RATIO;
+  if (axis === 'horizontal') {
     return {
-      first: { x: midX, y: start.y },
-      second: { x: midX, y: end.y },
+      first: { x: start.x + (end.x - start.x) * ratio, y: start.y },
+      second: { x: end.x - (end.x - start.x) * ratio, y: end.y },
     };
   }
-  const midY = (start.y + end.y) / 2;
   return {
-    first: { x: start.x, y: midY },
-    second: { x: end.x, y: midY },
+    first: { x: start.x, y: start.y + (end.y - start.y) * ratio },
+    second: { x: end.x, y: end.y - (end.y - start.y) * ratio },
   };
 };
 
@@ -110,9 +175,11 @@ const samplePath = (start: Point, first: Point, second: Point, end: Point): Poin
 const pathOf = (start: Point, first: Point, second: Point, end: Point): string =>
   `M ${roundCoord(start.x)} ${roundCoord(start.y)} C ${roundCoord(first.x)} ${roundCoord(first.y)} ${roundCoord(second.x)} ${roundCoord(second.y)} ${roundCoord(end.x)} ${roundCoord(end.y)}`;
 
-const buildPath = (start: Point, end: Point, shape: ConnectorShape): ConnectorPath => {
+const buildPath = (start: Point, end: Point, style: ConnectorStyle): ConnectorPath => {
   const { first, second } =
-    shape === 'curve' ? curveControls(start, end) : linearControls(start, end);
+    style.shape === 'curve'
+      ? curveControls(start, end, style.bend ?? 'auto', style.curvature ?? DEFAULT_CURVATURE)
+      : linearControls(start, end);
   return {
     d: pathOf(start, first, second, end),
     tip: end,
@@ -121,21 +188,32 @@ const buildPath = (start: Point, end: Point, shape: ConnectorShape): ConnectorPa
   };
 };
 
-export const connectorPathOf = (from: Rect, to: Rect, shape: ConnectorShape): ConnectorPath => {
-  const start = anchorOnRect(from, centerOf(to));
-  const end = anchorOnRect(to, centerOf(from));
-  return buildPath(start, end, shape);
+export const connectorPathOf = (from: Rect, to: Rect, style: ConnectorStyle): ConnectorPath => {
+  const start = anchorOnRect(from, centerOf(to), style.fromAnchor ?? 'auto');
+  const end = anchorOnRect(to, centerOf(from), style.toAnchor ?? 'auto');
+  return buildPath(start, end, style);
 };
 
 // 拖拽预览时末端还没有落块，直接落到指针位置
 export const previewConnectorPath = (
   from: Rect,
   point: Point,
-  shape: ConnectorShape,
-): ConnectorPath => buildPath(anchorOnRect(from, point), point, shape);
+  style: ConnectorStyle,
+): ConnectorPath => buildPath(anchorOnRect(from, point, style.fromAnchor ?? 'auto'), point, style);
+
+// 曲率 0 时控制点与端点重合，方向向量退化，所以回退到最后一小段采样
+const directionAtTip = (path: ConnectorPath): Point => {
+  const dx = path.tip.x - path.approach.x;
+  const dy = path.tip.y - path.approach.y;
+  if (Math.hypot(dx, dy) > EPSILON) return { x: dx, y: dy };
+  const previous = path.samples[path.samples.length - 2];
+  if (!previous) return { x: 1, y: 0 };
+  return { x: path.tip.x - previous.x, y: path.tip.y - previous.y };
+};
 
 export const arrowHeadOf = (path: ConnectorPath): string => {
-  const angle = Math.atan2(path.tip.y - path.approach.y, path.tip.x - path.approach.x);
+  const direction = directionAtTip(path);
+  const angle = Math.atan2(direction.y, direction.x);
   const baseX = path.tip.x - Math.cos(angle) * ARROW_LENGTH;
   const baseY = path.tip.y - Math.sin(angle) * ARROW_LENGTH;
   const offsetX = Math.sin(angle) * ARROW_HALF_WIDTH;
@@ -171,10 +249,29 @@ const distanceToPolyline = (point: Point, samples: Point[]): number => {
 
 const polylineOf = (item: AnnotationItem, blockMap: Map<string, Rect>): Point[] | null => {
   if (item.kind === 'stroke') return item.points;
+  if (item.kind === 'text') return null;
   const from = blockMap.get(item.fromUuid);
   const to = blockMap.get(item.toUuid);
   if (!from || !to) return null;
-  return connectorPathOf(from, to, item.shape).samples;
+  return connectorPathOf(from, to, item).samples;
+};
+
+// 文本框按内容估算行数，命中判定不必与 DOM 像素级一致
+const textBoxOf = (item: AnnotationText): Rect => {
+  const fontSize = item.fontSize ?? DEFAULT_TEXT_FONT_SIZE;
+  const width = item.width ?? DEFAULT_TEXT_WIDTH;
+  const charsPerLine = Math.max(1, Math.floor(width / (fontSize * 0.75)));
+  const lines = item.text
+    .split('\n')
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+  return { x: item.x, y: item.y, w: width, h: lines * fontSize * TEXT_LINE_HEIGHT };
+};
+
+const isPointInTextBox = (point: Point, item: AnnotationText): boolean => {
+  const box = textBoxOf(item);
+  return (
+    point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h
+  );
 };
 
 interface AnnotationHit {
@@ -187,9 +284,14 @@ interface AnnotationHit {
 // 后画的批注压在先画的上层，所以从尾部往前找第一条命中的
 export const hitAnnotationId = (input: AnnotationHit): string | null => {
   for (let i = input.items.length - 1; i >= 0; i--) {
-    const samples = polylineOf(input.items[i], input.blockMap);
+    const item = input.items[i];
+    if (item.kind === 'text') {
+      if (isPointInTextBox(input.point, item)) return item.id;
+      continue;
+    }
+    const samples = polylineOf(item, input.blockMap);
     if (!samples || samples.length === 0) continue;
-    if (distanceToPolyline(input.point, samples) <= input.tolerance) return input.items[i].id;
+    if (distanceToPolyline(input.point, samples) <= input.tolerance) return item.id;
   }
   return null;
 };
@@ -202,6 +304,21 @@ const isFinitePoint = (value: unknown): value is Point => {
   return !!point && Number.isFinite(point.x) && Number.isFinite(point.y);
 };
 
+const ANCHOR_SIDES: readonly AnchorSide[] = ['auto', 'top', 'right', 'bottom', 'left'];
+const CURVE_BENDS: readonly CurveBend[] = ['auto', 'horizontal', 'vertical'];
+
+const isAnchorSide = (value: unknown): value is AnchorSide =>
+  typeof value === 'string' && (ANCHOR_SIDES as readonly string[]).includes(value);
+
+const isCurveBend = (value: unknown): value is CurveBend =>
+  typeof value === 'string' && (CURVE_BENDS as readonly string[]).includes(value);
+
+const normalizeColor = (raw: unknown): string | undefined =>
+  typeof raw === 'string' && /^#[0-9a-f]{3,8}$/i.test(raw) ? raw : undefined;
+
+const normalizeCurvature = (raw: unknown): number | undefined =>
+  typeof raw === 'number' && Number.isFinite(raw) ? clamp01(raw) : undefined;
+
 const normalizeStroke = (raw: any): AnnotationStroke | null => {
   if (!Array.isArray(raw?.points)) return null;
   const points: Point[] = (raw.points as unknown[]).filter(isFinitePoint);
@@ -211,6 +328,30 @@ const normalizeStroke = (raw: any): AnnotationStroke | null => {
     id: String(raw.id),
     kind: 'stroke',
     points: points.map((point) => ({ x: point.x, y: point.y })),
+    color: normalizeColor(raw.color),
+  };
+};
+
+const normalizeText = (raw: any): AnnotationText | null => {
+  if (typeof raw?.text !== 'string') return null;
+  if (!Number.isFinite(raw?.x) || !Number.isFinite(raw?.y)) return null;
+  const fontSize =
+    typeof raw.fontSize === 'number' && Number.isFinite(raw.fontSize)
+      ? Math.min(MAX_TEXT_FONT_SIZE, Math.max(MIN_TEXT_FONT_SIZE, raw.fontSize))
+      : undefined;
+  const width =
+    typeof raw.width === 'number' && Number.isFinite(raw.width) && raw.width > 0
+      ? raw.width
+      : undefined;
+  return {
+    id: String(raw.id),
+    kind: 'text',
+    x: raw.x,
+    y: raw.y,
+    text: raw.text.slice(0, MAX_TEXT_LENGTH),
+    width,
+    fontSize,
+    color: normalizeColor(raw.color),
   };
 };
 
@@ -224,6 +365,11 @@ const normalizeConnector = (raw: any, blockIds: Set<string>): AnnotationConnecto
     shape: raw.shape,
     fromUuid: raw.fromUuid,
     toUuid: raw.toUuid,
+    fromAnchor: isAnchorSide(raw.fromAnchor) ? raw.fromAnchor : undefined,
+    toAnchor: isAnchorSide(raw.toAnchor) ? raw.toAnchor : undefined,
+    bend: isCurveBend(raw.bend) ? raw.bend : undefined,
+    curvature: normalizeCurvature(raw.curvature),
+    color: normalizeColor(raw.color),
   };
 };
 
@@ -240,6 +386,11 @@ export const normalizeAnnotations = (raw: unknown, blockIds: Set<string>): Annot
     if (entry?.kind === 'connector') {
       const connector = normalizeConnector(entry, blockIds);
       if (connector && connector.id) items.push(connector);
+      return;
+    }
+    if (entry?.kind === 'text') {
+      const text = normalizeText(entry);
+      if (text && text.id) items.push(text);
     }
   });
   return items;
