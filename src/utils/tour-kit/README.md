@@ -20,7 +20,7 @@
 
 ## 1. 文件结构
 
-```
+```text
 src/utils/tour-kit/
 ├── index.ts              # 统一出口
 ├── useTourKit.ts         # 核心逻辑（类型 + resolveTarget + useTourKit）
