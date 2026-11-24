@@ -1,10 +1,11 @@
 import type { Ref } from 'vue';
 import type { TourStep } from '../useTourKit';
-import { waitForCondition } from '../tourHelpers';
+import { waitForClick, waitForCondition } from '../tourHelpers';
 
 export interface NoteSetsTourState {
   activeSectionId: Ref<string>;
   isSelectMode: Ref<boolean>;
+  exitSelectMode: () => void;
 }
 
 export function createNoteSetsTourSteps(state: NoteSetsTourState): TourStep[] {
@@ -14,19 +15,19 @@ export function createNoteSetsTourSteps(state: NoteSetsTourState): TourStep[] {
     {
       id: 'welcome',
       title: '欢迎使用便签集',
-      content: '这里是所有笔记的列表。花一分钟了解工作区、筛选和多选操作。',
+      content: '这里是所有笔记的列表。花一分钟了解工作区、排序、筛选和多选。',
       placement: 'center',
     },
     {
       id: 'workspace',
       target: '[data-tour="notes-workspace"]',
       title: '工作区',
-      content: '点击这里切换工作区。请试着切换到另一个工作区（或先留在默认工作区）。',
+      content: '点击这里切换工作区，按项目或主题组织你的笔记。',
       placement: 'bottom',
-      skipIfMissing: false,
+      waitingText: '请点击工作区并选择另一个目录（10 秒后自动继续）',
       isReady: ({ tour }) =>
         waitForCondition(() => state.activeSectionId.value !== entrySectionId, tour, {
-          timeout: 20000,
+          timeout: 10000,
         }),
     },
     {
@@ -45,23 +46,21 @@ export function createNoteSetsTourSteps(state: NoteSetsTourState): TourStep[] {
     },
     {
       id: 'select',
-      target: '[data-tour="notes-select"]',
+      // 多选按钮点击后会从 DOM 移除，不能作为交互步骤的目标；
+      // 用稳定的工具栏容器锚定卡片，再用 waitForClick 监听按钮
+      target: '#toolbar-actions',
       title: '多选',
-      content: '点击进入多选模式，可批量复制或删除。请试着点一下进入多选。',
+      content: '点击工具栏中的多选按钮进入多选模式，可批量复制或删除便签。',
       placement: 'bottom',
-      skipIfMissing: false,
-      isReady: ({ tour }) =>
-        waitForCondition(() => state.isSelectMode.value === true, tour, { timeout: 20000 }),
-    },
-    {
-      id: 'exit-select',
-      target: '[data-tour="notes-select"]',
-      title: '退出多选',
-      content: '再次点击多选按钮（或点击空白处）可以退出多选。',
-      placement: 'bottom',
-      skipIfMissing: false,
-      isReady: ({ tour }) =>
-        waitForCondition(() => state.isSelectMode.value === false, tour, { timeout: 20000 }),
+      waitingText: '请点击多选按钮（进入多选后会自动退出）',
+      isReady: async ({ tour }) => {
+        const ok = await waitForClick('[data-tour="notes-select"]', tour);
+        if (ok) {
+          // 退出多选，让下一步展示正常卡片；不自动前进，用户点“下一步”
+          state.exitSelectMode();
+        }
+        return ok;
+      },
     },
     {
       id: 'card',
@@ -80,7 +79,7 @@ export function createNoteSetsTourSteps(state: NoteSetsTourState): TourStep[] {
     {
       id: 'done',
       title: '完成了',
-      content: '现在你可以自由管理便签了。随时从左上角重新打开引导。',
+      content: '现在你可以自由管理便签了。随时从右上角重新打开引导。',
       placement: 'center',
     },
   ];

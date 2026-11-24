@@ -367,7 +367,12 @@ Vuetify0 的 `Tour.Highlight` 在 `blocking=false`（默认）时：
 
 ### 7.1 `useTourKit(options)`
 
-接收 `{ steps: TourStep[] }`，返回 `TourKitReturn`。
+接收 `{ steps: TourStep[], zIndex? }`，返回 `TourKitReturn`。
+
+| 字段     | 类型         | 默认值 | 说明                                                             |
+| :------- | :----------- | :----- | :--------------------------------------------------------------- |
+| `steps`  | `TourStep[]` | 必填   | 步骤列表                                                         |
+| `zIndex` | `number`     | `1900` | 遮罩与卡片的 z-index 基准值，见 [9.8](#98-层级z-index与页面弹层) |
 
 ### 7.2 `TourKitReturn` 字段
 
@@ -529,6 +534,18 @@ tour._registerCleanup(() => {
 ### 9.7 Vuetify0 版本兼容
 
 `createTour`、`Tour.Highlight`、`Tour.Keyboard`、`Tour.Root`、`Tour.Content` 的导入路径和 API 在 Vuetify0 早期版本中可能有微调。如果升级 `@vuetify/v0` 后引导异常，**只需检查 `useTourKit.ts` 和 `TourKitLayer.vue` 顶部的 import 两行**，业务代码不受影响。
+
+### 9.8 层级（z-index）与页面弹层
+
+引导遮罩与卡片通过 Vuetify0 的 `Portal` 注册到 **v0 自己的 z-index 栈**，`useTourKit` 会为它提供独立的栈基准 `TOUR_BASE_Z_INDEX = 1900`（遮罩 1900、卡片 1910）。
+
+原因：Vuetify 的 `v-menu` / `v-dialog` / `v-snackbar` 等覆盖层默认从 **2000** 起叠加。若引导也用默认的 2000，交互步骤里弹出的菜单会与引导卡片同层甚至被卡片盖住，用户点不到（典型症状：工作区切换、排序、筛选下拉点不动）。
+
+因此：
+
+- **不要**把 `zIndex` 调到 2000 以上，否则页面弹层会被引导卡片挡住；
+- 页面内的自绘浮层若高于 1900 会盖住引导，需要降到 1900 以下，或在引导步骤中避免使用；
+- `useTourKit` 提供的是**局部栈**，只影响引导组件，不会改动应用其它 v0 组件的层级。
 
 ---
 

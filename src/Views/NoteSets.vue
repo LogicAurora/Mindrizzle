@@ -747,6 +747,7 @@ const tour = useTourKit({
   steps: createNoteSetsTourSteps({
     activeSectionId,
     isSelectMode,
+    exitSelectMode,
   }),
 });
 

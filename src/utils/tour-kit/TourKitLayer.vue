@@ -17,13 +17,16 @@ const steps = props.tour._steps;
     <Tour.Highlight :blocking="blocking ?? false" :padding="8" />
     <Tour.Keyboard />
 
-    <!-- 目标由 useTourKit 的 enter 通过 activate() 程序化注册；这里不能再渲染 Tour.Activator，
-         否则空 span 会抢先占用注册表，导致卡片锚定到错误位置 -->
     <Tour.Root v-for="step in steps" :key="step.id" :step="step.id">
       <Tour.Content :placement="step.placement ?? 'bottom'">
         <div class="tour-kit-card">
           <h3 v-if="step.title" class="tour-kit-title">{{ step.title }}</h3>
           <p v-if="step.content" class="tour-kit-content">{{ step.content }}</p>
+
+          <div v-if="step.isReady && !state.isReady.value" class="tour-kit-waiting">
+            <span class="tour-kit-waiting-dot" />
+            <span>{{ step.waitingText ?? '请按提示完成页面上的操作，完成后会自动继续' }}</span>
+          </div>
 
           <div class="tour-kit-actions">
             <button
@@ -33,7 +36,6 @@ const steps = props.tour._steps;
             >
               上一步
             </button>
-            <!-- 完成按钮不能用 canGoNext：底层在最后一步恒为 false，会永远禁用 -->
             <button
               class="tour-kit-btn tour-kit-btn-primary"
               :disabled="!state.isReady.value"
@@ -75,6 +77,45 @@ const steps = props.tour._steps;
   margin: 0 0 14px;
 }
 
+.tour-kit-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tour-kit-waiting-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: tour-kit-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tour-kit-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
+.tour-target-blocked,
+.tour-target-blocked * {
+  cursor: not-allowed !important;
+}
+
 .tour-kit-actions {
   display: flex;
   justify-content: flex-end;
@@ -113,5 +154,11 @@ const steps = props.tour._steps;
   color: rgba(var(--v-theme-on-surface), 0.5);
   cursor: pointer;
   padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-kit-waiting-dot {
+    animation: none;
+  }
 }
 </style>

@@ -1,31 +1,35 @@
-import { createTour } from '@vuetify/v0';
-import { getCurrentScope, onScopeDispose, provide, watch, type Ref } from 'vue';
+import { createStackContext, createTour } from '@vuetify/v0';
+import { computed, getCurrentScope, onScopeDispose, provide, ref, watch, type Ref } from 'vue';
 
 export type TourPlacement = 'top' | 'bottom' | 'left' | 'right' | 'center';
 
 export interface TourStep {
   id: string;
-  /** CSS 选择器，或返回元素的函数，或返回 Promise 的函数 */
   target?: string | (() => Element | null) | (() => Promise<Element | null>);
   title?: string;
   content?: string;
   placement?: TourPlacement;
-  /** 目标不存在时静默跳过，默认 true */
   skipIfMissing?: boolean;
-  /** 是否滚动目标进入视野，默认 true */
   scroll?: boolean;
-  /**
-   * 自定义就绪判定。返回 false 或 Promise<false> 时步骤保持未就绪；
-   * 返回 true 时自动就绪。未提供时步骤在激活后立即可推进。
-   */
   isReady?: (ctx: { tour: TourKitReturn; visit: number }) => boolean | Promise<boolean>;
+  blockTarget?: boolean;
+  waitingText?: string;
 }
 
 export interface TourKitOptions {
   steps: TourStep[];
+  /**
+   * 引导遮罩与卡片的 z-index 基准值。
+   * 不要抬到 Vuetify 覆盖层区间（默认从 2000 起），否则交互步骤里弹出的
+   * 菜单/对话框会被引导卡片盖住（如工作区下拉）。
+   */
+  zIndex?: number;
 }
 
-/** 完成 / 退出回调；返回的取消函数用于在组件卸载或不再需要时移除订阅 */
+// Vuetify 的 v-menu / v-dialog 等覆盖层默认从 2000 起叠加，引导必须压在其下；
+// 同时要高过页面自身的浮层（导航抽屉 1004、画布浮层最高 2110 但不在引导页面）
+const TOUR_BASE_Z_INDEX = 1900;
+
 export type TourLifecycleHandler = () => void;
 export type TourCompleteHandler = TourLifecycleHandler;
 
@@ -38,16 +42,7 @@ export interface TourKitReturn {
   reset: () => void;
   step: (n: number) => void;
   ready: (stepId: string, visit: number) => void;
-  /**
-   * 注册完成回调，返回取消订阅函数。
-   * 仅在引导真正完成时触发（最后一步完成 / 显式 complete()），
-   * 用户提前 stop() 不会触发；同一轮运行内至多触发一次。
-   */
   onComplete: (fn: TourCompleteHandler) => () => void;
-  /**
-   * 注册退出回调（用户跳过 / 按 Esc / 调用 stop()）。
-   * 与 onComplete 互斥：同一轮运行只会触发其中一个。
-   */
   onExit: (fn: TourLifecycleHandler) => () => void;
   state: {
     isActive: Readonly<Ref<boolean>>;
@@ -56,12 +51,10 @@ export interface TourKitReturn {
     isLast: Readonly<Ref<boolean>>;
     canGoNext: Readonly<Ref<boolean>>;
     canGoBack: Readonly<Ref<boolean>>;
-    total: Number;
+    total: number;
   };
-  /** 供 TourKitLayer 内部使用，业务代码不应直接依赖 */
   _tour: ReturnType<typeof createTour>;
   _steps: TourStep[];
-  /** 注册副作用清理函数，stop() 时统一执行 */
   _registerCleanup: (fn: () => void) => void;
 }
 
@@ -98,21 +91,30 @@ export function useTourKit(options: TourKitOptions): TourKitReturn {
   const completeHandlers = new Set<TourLifecycleHandler>();
   const exitHandlers = new Set<TourLifecycleHandler>();
 
+  // 当前步骤是否就绪。不依赖底层 tour.isReady：Vuetify0 在步骤切换时
+  // 不保证重置 isReady，上一步 ready 后下一步仍为 true，导致
+  // waitingText 不显示、按钮不禁用、交互步骤被"下一步"直接绕过。
+  const currentReady = ref(false);
+  const canGoNext = computed(() => currentReady.value);
+  const canGoBack = computed(() => !tour.isFirst.value);
+
   provide('v0:tour', tour);
 
-  // 一轮运行内 complete 与 exit 只通知一次，避免包装层与底层双触发
+  // v0 的遮罩与卡片各自通过 Portal 注册到 v0 的 z-index 栈，默认基准 2000
+  // 与 Vuetify 覆盖层同层，卡片会盖住步骤中弹出的菜单；这里换成更低一档的独立栈
+  const [, provideStack] = createStackContext({ baseZIndex: options.zIndex ?? TOUR_BASE_Z_INDEX });
+  provideStack();
+
   let completedInCurrentRun = false;
   let notifiedInCurrentRun = false;
-  // 底层没有 onComplete 钩子，Esc / Tour.Skip / 直接 stop() 都会绕过包装层，
-  // 因此统一由 isActive 落回 false 时收尾，保证跳过也能被业务感知
   let roundActive = false;
+  let activeBlock: { el: Element; controller: AbortController } | null = null;
 
   let tourKitReturn: TourKitReturn;
 
   function emit(handlers: Set<TourLifecycleHandler>, label: string) {
     if (notifiedInCurrentRun) return;
     notifiedInCurrentRun = true;
-    // 复制一份再遍历：回调里取消订阅或重新 start 都不影响本轮通知
     for (const handler of [...handlers]) {
       try {
         handler();
@@ -127,8 +129,39 @@ export function useTourKit(options: TourKitOptions): TourKitReturn {
     pendingCleanups.clear();
   };
 
+  const unblockTarget = () => {
+    if (!activeBlock) return;
+    activeBlock.controller.abort();
+    activeBlock.el.classList.remove('tour-target-blocked');
+    activeBlock = null;
+  };
+
+  const blockTarget = (el: Element) => {
+    unblockTarget();
+    const controller = new AbortController();
+    const prevent = (e: Event) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (el === target || el.contains(target)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+    const opts: AddEventListenerOptions = { capture: true, signal: controller.signal };
+    document.addEventListener('click', prevent, opts);
+    document.addEventListener('mousedown', prevent, opts);
+    document.addEventListener('pointerdown', prevent, opts);
+    document.addEventListener('touchstart', prevent, { ...opts, passive: false });
+    el.classList.add('tour-target-blocked');
+    activeBlock = { el, controller };
+  };
+
+  const markReady = (stepId: string, visit: number) => {
+    tour.ready(stepId, visit);
+    currentReady.value = true;
+  };
+
   const tickets = options.steps.map((step) => {
-    // v0 的 onboard 会复制 ticket，中途再改 noActivator 不会同步到注册表，必须在注册前定好
     const ticket: Record<string, unknown> = {
       id: step.id,
       noActivator: !step.target,
@@ -142,45 +175,44 @@ export function useTourKit(options: TourKitOptions): TourKitReturn {
         activate: (el: Element, opts?: { scroll?: boolean }) => void;
         visit: number;
       }) => {
-        // 1. 无目标：居中显示卡片（noActivator 已在注册前声明）
+        unblockTarget();
+        // 进入新步骤：先标记未就绪，waitingText 由此显示
+        currentReady.value = false;
+
         if (!step.target) {
           done();
-          if (!step.isReady) tour.ready(step.id, visit);
+          if (!step.isReady) markReady(step.id, visit);
           return;
         }
 
-        // 2. 解析并激活目标
         const el = await resolveTarget(step.target);
 
         if (el) {
           activate(el, { scroll: step.scroll !== false });
+          const shouldBlock = step.blockTarget ?? !step.isReady;
+          if (shouldBlock) blockTarget(el);
           done();
         } else if (step.skipIfMissing !== false) {
-          // 目标不存在且允许跳过：先就绪再前进
           done();
-          tour.ready(step.id, visit);
+          markReady(step.id, visit);
           await tour.next();
           return;
         } else {
-          // 目标不存在且不允许跳过：停留在未就绪状态
           done();
-          return;
+          if (!step.isReady) return;
         }
 
-        // 3. 无交互要求：立即可推进
         if (!step.isReady) {
-          tour.ready(step.id, visit);
+          markReady(step.id, visit);
           return;
         }
 
-        // 4. 有交互要求：等待用户逻辑决定何时就绪
         try {
           const ready = await step.isReady({ tour: tourKitReturn, visit });
-          if (ready) tour.ready(step.id, visit);
+          if (ready) markReady(step.id, visit);
         } catch (e) {
           console.warn(`[tour-kit] isReady failed for step "${step.id}"`, e);
-          // 异常时放行，避免用户因意外错误永久卡住
-          tour.ready(step.id, visit);
+          markReady(step.id, visit);
         }
       },
     };
@@ -189,22 +221,22 @@ export function useTourKit(options: TourKitOptions): TourKitReturn {
 
   tour.steps.onboard(tickets as any);
 
-  // 底层没有完成钩子，只能靠 isActive 回落来收尾；完成标记先行置位，
-  // 因此正常完成不会误报 onExit
   watch(tour.isActive, (active) => {
     if (active) {
       roundActive = true;
       return;
     }
+    unblockTarget();
+    currentReady.value = false;
     if (!roundActive) return;
     roundActive = false;
     flushCleanups();
     emit(exitHandlers, 'onExit');
   });
 
-  // 组件卸载 / effectScope 销毁时清空订阅，避免旧实例残留
   if (getCurrentScope()) {
     onScopeDispose(() => {
+      unblockTarget();
       flushCleanups();
       completeHandlers.clear();
       exitHandlers.clear();
@@ -212,29 +244,30 @@ export function useTourKit(options: TourKitOptions): TourKitReturn {
   }
 
   const start = (opts?: { stepId?: string }) => {
-    // 新一轮运行：重置标记，允许本轮完成 / 退出时再次通知
     completedInCurrentRun = false;
     notifiedInCurrentRun = false;
+    currentReady.value = false;
     tour.start(opts);
   };
 
   const stop = () => {
+    unblockTarget();
+    currentReady.value = false;
     flushCleanups();
     tour.stop();
   };
 
   const complete = () => {
     if (completedInCurrentRun) return;
-    // 先标记再调用：底层 complete 是异步的，isActive 回落时不能误判成“跳过”
     completedInCurrentRun = true;
     try {
       tour.complete();
     } catch (error) {
-      // 底层在非激活状态下 complete 可能抛错，此时不应通知“完成”
       completedInCurrentRun = false;
       console.warn('[tour-kit] complete() failed', error);
       return;
     }
+    unblockTarget();
     emit(completeHandlers, 'onComplete');
   };
 
@@ -246,26 +279,25 @@ export function useTourKit(options: TourKitOptions): TourKitReturn {
     complete,
     reset: tour.reset,
     step: tour.step,
-    ready: tour.ready,
+    ready: (stepId, visit) => {
+      tour.ready(stepId, visit);
+      currentReady.value = true;
+    },
     onComplete: (fn) => {
       completeHandlers.add(fn);
-      return () => {
-        completeHandlers.delete(fn);
-      };
+      return () => completeHandlers.delete(fn);
     },
     onExit: (fn) => {
       exitHandlers.add(fn);
-      return () => {
-        exitHandlers.delete(fn);
-      };
+      return () => exitHandlers.delete(fn);
     },
     state: {
       isActive: tour.isActive,
-      isReady: tour.isReady,
+      isReady: currentReady,
       isFirst: tour.isFirst,
       isLast: tour.isLast,
-      canGoNext: tour.canGoNext,
-      canGoBack: tour.canGoBack,
+      canGoNext,
+      canGoBack,
       total: tour.total,
     },
     _tour: tour,

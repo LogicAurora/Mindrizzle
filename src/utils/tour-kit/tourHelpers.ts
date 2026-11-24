@@ -2,30 +2,55 @@ import type { TourKitReturn } from './useTourKit';
 
 /**
  * 等待选择器对应的元素被点击。
- * - 元素不存在：立即放行（返回 true），避免教程卡死；
- * - 教程被 stop()：通过 cleanup 取消监听并 resolve(false)；
- * - 适合按钮类交互，不适用于会打开模态框后遮挡教程卡片的场景。
+ * - 元素尚未渲染（Teleport defer / 懒加载）：轮询等待，不再秒回 true；
+ * - 元素在超时时间内一直不存在：放行（返回 true），避免教程卡死；
+ * - 教程被 stop()：通过 cleanup 取消监听并 resolve(false)。
  */
-export function waitForClick(selector: string, tour: TourKitReturn): Promise<boolean> {
+export function waitForClick(
+  selector: string,
+  tour: TourKitReturn,
+  { timeout = 15000, interval = 100 }: { timeout?: number; interval?: number } = {},
+): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
-    const el = document.querySelector(selector);
-    if (!el) {
-      resolve(true);
-      return;
-    }
-    const controller = new AbortController();
-    el.addEventListener(
-      'click',
-      () => {
-        controller.abort();
-        resolve(true);
-      },
-      { signal: controller.signal, once: true },
-    );
-    tour._registerCleanup(() => {
-      controller.abort();
-      resolve(false);
-    });
+    const startedAt = Date.now();
+    let controller: AbortController | null = null;
+    let timer: number | null = null;
+    let settled = false;
+
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      controller?.abort();
+      controller = null;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      resolve(result);
+    };
+
+    const attach = () => {
+      if (settled) return;
+      const el = document.querySelector(selector);
+      if (!el) {
+        if (Date.now() - startedAt >= timeout) {
+          // 目标一直没出现：放行，避免永久卡住
+          finish(true);
+          return;
+        }
+        timer = window.setTimeout(attach, interval);
+        return;
+      }
+      controller = new AbortController();
+      el.addEventListener('click', () => finish(true), {
+        signal: controller.signal,
+        once: true,
+      });
+    };
+
+    tour._registerCleanup(() => finish(false));
+
+    attach();
   });
 }
 
@@ -52,7 +77,6 @@ export function waitForCondition(
       }
       if (Date.now() - startedAt >= timeout) {
         cleanup();
-        // 超时放行，避免用户卡死；需要严格时在调用方自行处理
         resolve(true);
       }
     }, interval);
