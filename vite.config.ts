@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vuetify from 'vite-plugin-vuetify';
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 import ViteFonts from 'unplugin-fonts/vite';
 
 const { TAURI_DEV_HOST: host, HOME: homeDir } = process.env;
@@ -9,6 +10,18 @@ const { TAURI_DEV_HOST: host, HOME: homeDir } = process.env;
 // bun 的依赖是经 ~/.bun/install/cache 的符号链接暴露的，realpath 后落在 workspace 之外，
 // 必须显式放行该缓存目录，否则 Vite 的 fs 守门会拒绝加载 Vuetify 等依赖的样式
 const bunCacheDir = homeDir ? `${homeDir}/.bun/install/cache` : undefined;
+
+function getGitHash(): string {
+  // 优先使用外部环境变量（CI / tauri-action 场景）
+  if (process.env.VITE_GIT_HASH) {
+    return process.env.VITE_GIT_HASH;
+  }
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -43,6 +56,9 @@ export default defineConfig(async () => ({
       },
     }),
   ],
+  define: {
+    'import.meta.env.VITE_GIT_HASH': JSON.stringify(getGitHash()),
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

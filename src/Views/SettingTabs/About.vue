@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -15,7 +15,7 @@ import {
   mdiTranslate,
   mdiWeb,
 } from '@mdi/js';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import packageInfo from '../../../package.json';
 import appIconUrl from '../../../app-icon.svg';
@@ -26,8 +26,7 @@ import { saveDeveloperMode } from '../../utils/developerMode';
 import { pendingSettingsTab } from '../../utils/settingsTabIntent';
 import { BRAND_CHINESE_TAGLINE, BRAND_ENGLISH_TAGLINE } from '../../utils/brandCopy';
 
-const isGitCommitLoaded = ref(!isTauri());
-const gitCommit = ref(isTauri() ? '读取中' : '不可用（网页预览）');
+const gitCommit = import.meta.env.VITE_GIT_HASH || '未知';
 const isCopyComplete = ref(false);
 const copyError = ref('');
 const appVersion = packageInfo.version;
@@ -76,7 +75,7 @@ const openSourceProjects = [
 const diagnosticText = computed(() =>
   [
     `应用版本：${appVersion}`,
-    `Git 提交：${gitCommit.value}`,
+    `Git 提交：${gitCommit}`,
     `运行环境：${environment.value}`,
     `系统平台：${systemPlatform}`,
     `浏览器：${browserInfo}`,
@@ -84,17 +83,6 @@ const diagnosticText = computed(() =>
     `语言：${navigator.language}`,
   ].join('\n'),
 );
-
-async function loadGitCommit() {
-  if (!isTauri() || isGitCommitLoaded.value) return;
-  try {
-    gitCommit.value = await invoke<string>('get_git_commit');
-  } catch {
-    gitCommit.value = '未知';
-  } finally {
-    isGitCommitLoaded.value = true;
-  }
-}
 
 async function copyDiagnostics() {
   try {
@@ -120,10 +108,6 @@ function openDeveloperTab() {
   void saveDeveloperMode(true).catch(() => undefined);
   pendingSettingsTab.value = 'developer';
 }
-
-onMounted(() => {
-  void loadGitCommit();
-});
 </script>
 
 <template>

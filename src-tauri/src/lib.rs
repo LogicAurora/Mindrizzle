@@ -60,11 +60,6 @@ async fn is_file_name_valid(request: mdr_file_op::IsFileNameAvailableRequest) ->
 }
 
 #[tauri::command]
-fn get_git_commit() -> &'static str {
-    env!("GIT_COMMIT")
-}
-
-#[tauri::command]
 fn print_main_webview(window: tauri::WebviewWindow) -> Result<(), String> {
     window.print().map_err(|error| error.to_string())
 }
@@ -194,7 +189,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             fetch_file_list,
             is_file_name_valid,
-            get_git_commit,
             print_main_webview,
             save_export_file,
             check_update,
