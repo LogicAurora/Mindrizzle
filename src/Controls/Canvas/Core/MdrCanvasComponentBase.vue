@@ -72,7 +72,7 @@
         >
           <v-btn
             size="x-small"
-            variant="tonal"
+            variant="text"
             color="grey"
             icon
             title="块设置"
