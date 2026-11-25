@@ -426,6 +426,7 @@ function navigateFromMenu(path: string) {
     </v-toolbar>
 
     <v-navigation-drawer
+      style="z-index: 3001"
       v-model="menuRef"
       :location="isMobileLayout ? 'bottom' : undefined"
       temporary
@@ -883,5 +884,9 @@ textarea {
 
 .loading-curtain__loader .v-progress-circular__content {
   color: rgb(var(--v-theme-on-background));
+}
+
+.v-navigation-drawer__scrim {
+  z-index: 3000 !important;
 }
 </style>
