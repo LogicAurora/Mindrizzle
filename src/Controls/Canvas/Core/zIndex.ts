@@ -19,14 +19,14 @@ export const Z_LAYER = {
   settingsMenu: 2100,
   // 设置项里的下拉菜单也挂在 body，必须高于设置菜单卡片，否则选项被卡片盖住点不到
   settingsDropdown: 2110,
-  // 格式模式选择器挂在画布容器右上角，只需压过画布浮层
+  // 格式模式选择器挂在画布容器右侧，只需压过画布浮层
   formatModePicker: 1010,
   // 格式详情选择器的弹窗要压在主选择器之上，展开时才能完整可见
   formatDetailPicker: 1011,
   // 富文本选区工具栏使用画布同步变换浮层，需压过 SideToolbar 和块内浮层
   textSelectionToolbar: 1012,
   textSelectionHandles: 1013,
-  // 富文本 hover 行高亮挂在 body，须压过画布内容但不能盖住右上角的选择器
+  // 富文本 hover 行高亮挂在 body，须压过画布内容但不能盖住右侧的选择器
   blockLineHighlight: 1006,
   appLoadingCurtain: 10002,
 } as const;

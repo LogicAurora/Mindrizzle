@@ -126,7 +126,7 @@
           <RowDropIndicator :editor="editor" />
         </Teleport>
       </ProseKit>
-      <!-- 格式模式属于富文本块，选择器由块提供、定位到画布右上角 -->
+      <!-- 格式模式属于富文本块，选择器由块提供、定位到画布右侧 -->
       <FormatModePicker
         v-if="showFormatModes"
         :modes="FORMAT_MODES"

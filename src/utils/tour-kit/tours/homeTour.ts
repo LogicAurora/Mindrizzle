@@ -4,7 +4,7 @@ export const homeTourSteps: TourStep[] = [
   {
     id: 'welcome',
     title: '欢迎使用 Mindrizzle',
-    content: '这是你的首页。花一分钟快速了解各个区域，之后随时可以从右上角重新打开引导。',
+    content: '这是你的首页。花一分钟快速了解各个区域，之后随时可以从左上角重新打开引导。',
     placement: 'center',
   },
   {
@@ -74,7 +74,7 @@ export const homeTourSteps: TourStep[] = [
   {
     id: 'done',
     title: '准备好了',
-    content: '开始记录吧！随时可以从右上角的“引导”按钮重新打开。',
+    content: '开始记录吧！随时可以从左上角的“引导”按钮重新打开。',
     placement: 'center',
   },
 ];

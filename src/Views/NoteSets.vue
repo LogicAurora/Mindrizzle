@@ -1452,7 +1452,7 @@ function formatUpdatedAt(timestamp: number): string {
         v-else-if="filteredNoteSets.length === 0"
         :icon="mdiFilterVariant"
         title="没有符合条件的便签"
-        text="请调整右上角的标签过滤条件"
+        text="请调整左上角的标签过滤条件"
       >
         <template #actions>
           <v-btn variant="tonal" color="primary" @click="clearAllFilters"> 清除筛选条件 </v-btn>

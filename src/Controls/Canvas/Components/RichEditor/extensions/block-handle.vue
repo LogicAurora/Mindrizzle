@@ -534,7 +534,7 @@ onUnmounted(() => window.removeEventListener('Mindrizzle:scrollbar-drag', onScro
   background: rgba(var(--v-theme-primary), 0.07);
   box-shadow: inset 0 2px 0 0 rgba(var(--v-theme-primary), 0.45);
   pointer-events: none;
-  /* 取 Z_LAYER.blockLineHighlight：要压过画布内容，但不能盖住画布右上角的格式模式选择器 */
+  /* 取 Z_LAYER.blockLineHighlight：要压过画布内容，但不能盖住画布右侧的格式模式选择器 */
   z-index: 1006;
 }
 
