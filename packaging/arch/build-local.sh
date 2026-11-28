@@ -19,8 +19,16 @@ work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
 
 # 工作区脏文件也算源码：本地打包常带着未提交的改动验证
-git -C "$repo_root" ls-files -z -co --exclude-standard |
-  tar -C "$repo_root" --null -T - --transform "s,^,Mindrizzle-$pkgver/," -czf "$work_dir/Mindrizzle-$pkgver.tar.gz"
+if git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$repo_root" ls-files -z -co --exclude-standard |
+    tar -C "$repo_root" --null -T - --transform "s,^,Mindrizzle-$pkgver/," -czf "$work_dir/Mindrizzle-$pkgver.tar.gz"
+else
+  # CI 容器没装 git 时 checkout 走 REST 归档，拿不到 .git，只能整目录打包
+  tar -C "$repo_root" \
+    --exclude-vcs --exclude=node_modules --exclude=target --exclude=src-tauri/target --exclude=dist \
+    --transform "s,^\./,Mindrizzle-$pkgver/," \
+    -czf "$work_dir/Mindrizzle-$pkgver.tar.gz" .
+fi
 sed "s/^pkgver=.*/pkgver=$pkgver/" "$pkgbuild_src" > "$work_dir/PKGBUILD"
 cp "$repo_root/packaging/arch/mindrizzle.install" "$work_dir/"
 
