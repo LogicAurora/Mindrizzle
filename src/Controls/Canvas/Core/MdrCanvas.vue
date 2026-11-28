@@ -820,8 +820,13 @@ const startPan = (e: MouseEvent) => {
 
 // mousedown 捕获阶段读 e.buttons 不可靠，所以单独跟踪左键按下
 let leftButtonDown = false;
+// 编辑器内起手、块外松手时 click 派发到两者公共祖先，不能当成点空白
+let pressInTextEditor = false;
 const trackLeftButtonDown = (e: MouseEvent) => {
-  if (e.button === 0) leftButtonDown = true;
+  if (e.button !== 0) return;
+  leftButtonDown = true;
+  pressInTextEditor =
+    (e.target as HTMLElement | null)?.closest?.('.editor-mount.ProseMirror') != null;
 };
 const trackLeftButtonUp = () => {
   leftButtonDown = false;
@@ -3607,6 +3612,8 @@ const focusBlockOnClick = (id: string, target: HTMLElement) => {
 };
 
 const handleCanvasClick = (e: MouseEvent) => {
+  const pressedInTextEditor = pressInTextEditor;
+  pressInTextEditor = false;
   const target = e.target as HTMLElement;
   if (selectionState.justFinishedSelection || dragJustFinished) {
     selectionState.justFinishedSelection = false;
@@ -3624,6 +3631,8 @@ const handleCanvasClick = (e: MouseEvent) => {
     focusBlockOnClick(id, target);
     return;
   }
+  // 拖选文本拖到块外松手会走到这里，清块选中会连带折叠文本选区并失焦，所以保留
+  if (pressedInTextEditor) return;
   state.selectedIds = new Set();
 };
 
@@ -4365,6 +4374,7 @@ const abortSessions = () => {
   if (selectionState.active) finishSelection();
   if (panSession.active) stopPan();
   leftButtonDown = false;
+  pressInTextEditor = false;
   rightClickTextSelectionGesture = null;
 };
 
