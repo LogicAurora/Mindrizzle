@@ -696,19 +696,18 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             :to="stat.to"
             :link="!!stat.to"
             class="fade-up h-100"
             :style="{ animationDelay: `${120 + i * 60}ms` }"
           >
-            <div class="d-flex align-center ga-3 pa-3">
+            <div class="stat-body d-flex align-center ga-3 pa-3">
               <v-avatar :color="stat.color" variant="tonal" rounded="lg" size="36">
                 <v-icon :icon="stat.icon" size="20" />
               </v-avatar>
-              <div class="min-w-0">
+              <div class="stat-text">
                 <div class="text-h6 font-weight-bold stat-value">{{ stat.value }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ stat.label }}</div>
+                <div class="text-caption text-medium-emphasis stat-label">{{ stat.label }}</div>
               </div>
             </div>
           </v-card>
@@ -741,7 +740,6 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             class="fade-up"
             style="animation-delay: 200ms"
           >
@@ -812,14 +810,7 @@ onBeforeUnmount(() => {
           </v-card>
 
           <!-- 最近更新 -->
-          <v-card
-            variant="flat"
-            border
-            rounded="lg"
-            hover
-            class="fade-up"
-            style="animation-delay: 260ms"
-          >
+          <v-card variant="flat" border rounded="lg" class="fade-up" style="animation-delay: 260ms">
             <v-card-item>
               <template #prepend>
                 <v-avatar color="primary" variant="tonal" rounded="lg">
@@ -878,7 +869,6 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             class="fade-up"
             style="animation-delay: 320ms"
           >
@@ -918,7 +908,6 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             class="fade-up"
             style="animation-delay: 240ms"
           >
@@ -983,7 +972,6 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             class="fade-up"
             style="animation-delay: 300ms"
           >
@@ -1025,7 +1013,6 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             class="fade-up"
             style="animation-delay: 360ms"
           >
@@ -1040,13 +1027,12 @@ onBeforeUnmount(() => {
             </v-card-item>
             <v-card-text class="pt-0">
               <div
-                class="d-flex ga-2 overflow-x-auto"
+                class="d-flex ga-2 overflow-x-auto hidden-scrollbar"
                 role="img"
                 aria-label="过去 90 天文件活动热力图"
+                style="overflow: visible"
               >
-                <div class="heatmap-weekdays">
-                  <span>一</span><span>三</span><span>五</span>
-                </div>
+                <div class="heatmap-weekdays"><span>一</span><span>三</span><span>五</span></div>
                 <div class="heatmap-grid">
                   <span
                     v-for="day in heatmapDays"
@@ -1079,7 +1065,6 @@ onBeforeUnmount(() => {
             variant="flat"
             border
             rounded="lg"
-            hover
             class="fade-up"
             style="animation-delay: 400ms"
           >
@@ -1092,8 +1077,7 @@ onBeforeUnmount(() => {
               <v-card-title>工作区</v-card-title>
               <v-card-subtitle>
                 {{ workspaceStats.directories.length }} 个目录 · 默认
-                {{ workspaceStats.defaultCount }} 篇 · 外部
-                {{ workspaceStats.externalCount }} 个
+                {{ workspaceStats.defaultCount }} 篇 · 外部 {{ workspaceStats.externalCount }} 个
               </v-card-subtitle>
             </v-card-item>
             <v-card-text class="pt-0">
@@ -1138,7 +1122,10 @@ onBeforeUnmount(() => {
       </v-row>
     </v-container>
 
-    <NewFileDialog :is-open="isCreateDialogOpen" @update:close="isCreateDialogOpen = $event.status" />
+    <NewFileDialog
+      :is-open="isCreateDialogOpen"
+      @update:close="isCreateDialogOpen = $event.status"
+    />
     <TourKitLayer :tour="tour" />
   </main>
 </template>
@@ -1218,8 +1205,31 @@ onBeforeUnmount(() => {
   }
 }
 
+.stat-text {
+  flex: 1;
+  min-width: 0;
+}
+
 .stat-value {
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 小屏两列时卡片窄，标签单行省略，别为放全名字多占一行 */
+.stat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 窄屏收紧图标间距，尽量在省略前多留几个字的位置 */
+@media (max-width: 380px) {
+  .stat-body {
+    gap: 8px;
+    padding: 8px 10px;
+  }
 }
 
 /* ---------- 图表 ---------- */
@@ -1235,10 +1245,12 @@ onBeforeUnmount(() => {
 /* ---------- 热力图 ---------- */
 .heatmap-grid {
   display: grid;
-  grid-auto-columns: 11px;
+  flex: 1;
+  min-width: 0;
+  grid-auto-columns: 1fr;
   grid-auto-flow: column;
-  grid-template-rows: repeat(7, 11px);
-  gap: 3px;
+  grid-template-rows: repeat(7, auto);
+  gap: 2px;
   animation: fade-in 0.8s ease both;
 }
 
@@ -1254,16 +1266,33 @@ onBeforeUnmount(() => {
 
 .heatmap-weekdays {
   display: grid;
-  grid-template-rows: repeat(7, 11px);
-  gap: 3px;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 2px;
   color: rgba(var(--v-theme-on-surface), 0.5);
   font-size: 10px;
-  line-height: 11px;
+  line-height: 1;
+}
+
+/* 只标周一/周三/周五，必须按行号定位，顺序填充会挤在前三行 */
+.heatmap-weekdays span {
+  align-self: center;
+}
+
+.heatmap-weekdays span:nth-child(1) {
+  grid-row: 1;
+}
+
+.heatmap-weekdays span:nth-child(2) {
+  grid-row: 3;
+}
+
+.heatmap-weekdays span:nth-child(3) {
+  grid-row: 5;
 }
 
 .heatmap-cell {
-  width: 11px;
-  height: 11px;
+  width: 100%;
+  aspect-ratio: 1;
   background: rgba(var(--v-theme-on-surface), 0.07);
   transition: transform 0.12s ease;
 }
@@ -1311,5 +1340,19 @@ onBeforeUnmount(() => {
   .heatmap-cell {
     transition: none !important;
   }
+}
+
+/* 隐藏整个滚动条 */
+.hidden-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 或者只隐藏滚动条的滑块，保留轨道（通常不推荐，直接 display:none 更常见） */
+.hidden-scrollbar::-webkit-scrollbar-thumb {
+  display: none;
+}
+
+.hidden-scrollbar {
+  scrollbar-width: none; /* 隐藏滚动条 */
 }
 </style>
