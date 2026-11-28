@@ -1,4 +1,4 @@
-name: Release (draft)
+name: Release
 
 on:
   workflow_dispatch:
@@ -13,6 +13,11 @@ on:
         description: '主版本号（例：1.4.0；v 前缀可有可无；不要带 -beta.1 后缀）'
         required: true
         type: string
+      publish:
+        description: '构建完成后自动发布（不勾选则停在草稿，人工核对后再发）'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: release-manual
@@ -32,6 +37,7 @@ jobs:
       apple_signed: ${{ steps.calc.outputs.apple_signed }}
       win_signed: ${{ steps.calc.outputs.win_signed }}
       release_id: ${{ steps.create.outputs.release_id }}
+      publish: ${{ inputs.publish }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -465,8 +471,23 @@ jobs:
           path: target/arch/*.pkg.tar.zst
           retention-days: 7
 
-  summary:
+  publish-release:
     needs: [build, matrix-build, arch-package]
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false
+          echo "::notice::已发布 $TAG，channel-manifest 接着写入通道清单"
+
+  summary:
+    needs: [build, matrix-build, arch-package, publish-release]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -479,20 +500,27 @@ jobs:
           PRE: ${{ needs.build.outputs.prerelease }}
           APPLE_SIGNED: ${{ needs.build.outputs.apple_signed }}
           WIN_SIGNED: ${{ needs.build.outputs.win_signed }}
+          PUBLISH: ${{ needs.build.outputs.publish }}
+          PUBLISH_RESULT: ${{ needs.publish-release.result }}
           REPO: ${{ github.repository }}
         run: |
-          echo "## 本次操作：构建草稿（手动发布由你完成）" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$PUBLISH" == "true" && "$PUBLISH_RESULT" == "success" ]]; then
+            echo "## 本次操作：构建并自动发布" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## 本次操作：构建草稿（手动发布由你完成）" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "${{ needs.build.result }}" != "success" || "${{ needs.matrix-build.result }}" != "success" || "${{ needs.arch-package.result }}" != "success" ]]; then
+          if [[ "${{ needs.build.result }}" != "success" || "${{ needs.matrix-build.result }}" != "success" || "${{ needs.arch-package.result }}" != "success" || "${{ needs.publish-release.result }}" == "failure" ]]; then
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## ❌ 草稿构建失败
+          ## ❌ 构建或发布失败
 
           查上方失败日志：
 
           - \`build\` 失败 → version 格式 / 防重 / tag 解析 / git-cliff
           - \`matrix-build\` 失败 → 平台构建或 updater 签名
           - \`arch-package\` 失败 → Arch 容器内依赖安装、makepkg 或资产上传
+          - \`publish-release\` 失败 → 资产已齐但发布失败，手动执行 \`gh release edit ${TAG:-<tag>} --draft=false\`
 
           丢弃草稿（如需）：
 
@@ -507,8 +535,18 @@ jobs:
           [[ "$APPLE_SIGNED" == "true" ]] && SIGN+="macOS 已签名；" || SIGN+="macOS 未签名（首次打开需放行）；"
           [[ "$WIN_SIGNED" == "true" ]]   && SIGN+="Windows 已签名" || SIGN+="Windows 未签名（SmartScreen 需放行）"
 
+          if [[ "$PUBLISH" == "true" && "$PUBLISH_RESULT" == "success" ]]; then
+            TITLE="## ✅ 已自动发布"
+            CHECKLIST="### 发布后核对"
+            ADDR="https://github.com/$REPO/releases/tag/$TAG"
+          else
+            TITLE="## ✅ 草稿已就绪（尚未发布）"
+            CHECKLIST="### 手动发布 checklist"
+            ADDR="https://github.com/$REPO/releases/edit/$TAG"
+          fi
+
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## ✅ 草稿已就绪（尚未发布）
+          $TITLE
 
           | 项目 | 值 |
           |------|-----|
@@ -517,9 +555,9 @@ jobs:
           | 通道 | \`$CH\` |
           | 预发布标记 | \`$PRE\` |
           | 签名状态 | $SIGN |
-          | 草稿地址 | https://github.com/$REPO/releases/edit/$TAG |
+          | Release 地址 | $ADDR |
 
-          ### 手动发布 checklist
+          $CHECKLIST
 
           **1. 核对资产**
 
@@ -533,6 +571,17 @@ jobs:
           jq -r '.platforms | keys[]' /tmp/chk/latest.json
           \`\`\`
 
+          EOF
+
+          if [[ "$PUBLISH" == "true" && "$PUBLISH_RESULT" == "success" ]]; then
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          **2. 发布草稿**
+
+          已由本次 workflow 自动发布，无需手动操作。
+
+          EOF
+          else
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           **2. 发布草稿**
 
           \`\`\`bash
@@ -540,6 +589,7 @@ jobs:
           \`\`\`
 
           EOF
+          fi
 
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
 
@@ -552,7 +602,7 @@ jobs:
           cp /tmp/upd/latest.json channel/$CH-latest.json
           \`\`\`
 
-          **4. 丢弃草稿（如需）**
+          **4. 删除 Release（如需）**
 
           \`\`\`bash
           gh release delete $TAG --yes --cleanup-tag
