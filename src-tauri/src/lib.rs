@@ -217,6 +217,7 @@ pub fn run() {
         ))
     };
     tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             mdrf_open::handle_args(app, argv);
         }))

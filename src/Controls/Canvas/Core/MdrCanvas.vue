@@ -162,7 +162,7 @@
 
       <div
         v-if="
-          !isMobileLayout && addPreviewPos && addPreviewKey && previewVisible && !isAnnotationMode
+          hasHoverPointer && addPreviewPos && addPreviewKey && previewVisible && !isAnnotationMode
         "
         class="add-preview"
         :style="addPreviewStyle"
@@ -186,7 +186,9 @@
     />
     <!-- 箭头用屏幕坐标、不随画布变换，所以定位在容器层 -->
     <div
-      v-if="!isMobileLayout && addPreviewPos && addPreviewKey && !previewVisible"
+      v-if="
+        !isMobileDevice() && !isAnnotationMode && addPreviewPos && addPreviewKey && !previewVisible
+      "
       class="add-preview-arrow"
       :style="previewArrowStyle"
     >
@@ -223,7 +225,6 @@ import {
 } from 'vue';
 
 import { mdiPaperclip, mdiArrowUp } from '@mdi/js';
-import { useDisplay } from 'vuetify';
 import {
   CANVAS_COMPONENTS,
   DEFAULT_COMPONENT_KEY,
@@ -237,6 +238,7 @@ import {
   type Rect,
   type WidgetConfig,
 } from '../Registry/canvasComponents.ts';
+import { isMobileDevice } from '../../../utils/device.ts';
 import { blockDefinitionOf, embeddedBlockOf } from '../Sdk/blockRegistry.ts';
 import type { AnyBlockDefinition, BlockEnv } from '../Sdk/block.types.ts';
 import PluginBlockHost from '../Sdk/PluginBlockHost.vue';
@@ -305,7 +307,6 @@ import {
 
 // #region 编辑模式
 const isEditMode = ref(true);
-const { mobile: isMobileLayout } = useDisplay();
 // #endregion 编辑模式
 
 // #region 画布状态与 z 层
@@ -3092,6 +3093,14 @@ const abortTouchGestures = () => {
   if (panSession.active) stopPan();
 };
 
+// 触屏没有 hover，预览只服务可悬停的指针；按指针能力判定而非窗口宽度，窄桌面窗口同样要显示
+const hoverPointerQuery = window.matchMedia('(hover: hover), (any-hover: hover)');
+const hasHoverPointer = ref(hoverPointerQuery.matches);
+const syncHoverPointer = (event: MediaQueryListEvent) => {
+  hasHoverPointer.value = event.matches;
+};
+hoverPointerQuery.addEventListener('change', syncHoverPointer);
+
 // 预览跟随鼠标：落位解析每帧 O(N)，所以节流到 ~30fps；拖拽/框选会话激活时清空
 const addPreviewKey = ref<CanvasItem['component'] | null>(null);
 const addPreviewPos = ref<{ x: number; y: number } | null>(null);
@@ -3109,7 +3118,7 @@ const applyAddPreview = () => {
   previewRafId = 0;
   if (
     !isEditMode.value ||
-    isMobileLayout.value ||
+    !hasHoverPointer.value ||
     state.selectedIds.size > 0 ||
     !addPreviewKey.value ||
     selectionState.active ||
@@ -3127,7 +3136,7 @@ const applyAddPreview = () => {
 const updateAddPreview = (e: MouseEvent) => {
   if (
     !isEditMode.value ||
-    isMobileLayout.value ||
+    !hasHoverPointer.value ||
     state.selectedIds.size > 0 ||
     !addPreviewKey.value ||
     selectionState.active ||
@@ -4393,6 +4402,7 @@ onMounted(() => {
 onUnmounted(() => {
   abortTouchGestures();
   cancelPreviewFrame();
+  hoverPointerQuery.removeEventListener('change', syncHoverPointer);
   if (geometryRafId) cancelAnimationFrame(geometryRafId);
   if (virtualRafId) cancelAnimationFrame(virtualRafId);
   canvasContainerRef.value?.removeEventListener('mousedown', handleCanvasMouseDownCapture, true);
