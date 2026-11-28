@@ -424,8 +424,8 @@ jobs:
             const V = process.env.V;
             const targets = [
               ["package.json", /("version":\s*")[^"]*(")/],
-              ["src-tauri/tauri.conf.json", /^  "version": ".*",$/m],
-              ["src-tauri/Cargo.toml", /^version = ".*"$/m],
+              ["src-tauri/tauri.conf.json", /^(  "version": ")[^"]*(",)$/m],
+              ["src-tauri/Cargo.toml", /^(version = ")[^"]*(")$/m],
               // 锁文件里的版本不跟着改，cargo --locked 会直接判为过期
               ["Cargo.lock", /(name = "Mindrizzle"\nversion = ")[^"]*(")/],
             ];
