@@ -461,7 +461,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.build.outputs.tag }}
-        run: gh release upload "$TAG" "$GITHUB_WORKSPACE"/target/arch/*.pkg.tar.zst --clobber
+          REPO: ${{ github.repository }}
+        # 容器里的 workspace 没有 .git，gh 不能自动推断仓库，必须显式 --repo
+        run: gh release upload "$TAG" "$GITHUB_WORKSPACE"/target/arch/*.pkg.tar.zst --repo "$REPO" --clobber
 
       - name: Backup artifacts
         if: always()
