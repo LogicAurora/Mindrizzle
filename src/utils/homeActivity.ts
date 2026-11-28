@@ -85,3 +85,8 @@ export function recordRecentNote(note: NoteFileContext): void {
 export function loadRecentNotes(): RecentNote[] {
   return readStorage(RECENT_NOTES_KEY, isRecentNotes, []);
 }
+
+export function clearHomeRecords(): void {
+  localStorage.removeItem(ACTIVITY_KEY);
+  localStorage.removeItem(RECENT_NOTES_KEY);
+}

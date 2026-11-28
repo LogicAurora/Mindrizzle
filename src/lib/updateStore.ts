@@ -18,6 +18,8 @@ const info = shallowRef<UpdateInfo | null>(null);
 const errorMessage = ref('');
 const isDialogOpen = ref(false);
 const isSupported = ref(false);
+// 调试页注入假更新时置真，避免把预览当成真的可安装更新
+const isPreview = ref(false);
 // null 表示远端没给总大小，进度条走不确定态
 const downloadPercent = ref<number | null>(null);
 
@@ -30,6 +32,7 @@ export const updateInfo = readonly(info);
 export const updateError = readonly(errorMessage);
 export const isUpdateDialogOpen = readonly(isDialogOpen);
 export const isUpdateSupported = readonly(isSupported);
+export const isUpdatePreview = readonly(isPreview);
 export const updatePercent = readonly(downloadPercent);
 
 export const isUpdateBusy = computed(
@@ -82,6 +85,7 @@ export async function runCheck(options: { isSilent?: boolean } = {}) {
   await ensureUpdateSupport();
   if (!isSupported.value) return;
 
+  isPreview.value = false;
   phase.value = 'checking';
   errorMessage.value = '';
   try {
@@ -107,7 +111,7 @@ export async function runCheck(options: { isSilent?: boolean } = {}) {
 
 export async function installUpdate() {
   if (!isTauri() || !isSupported.value || isUpdateBusy.value) return;
-  if (phase.value !== 'available') return;
+  if (phase.value !== 'available' || isPreview.value) return;
 
   phase.value = 'downloading';
   downloadPercent.value = null;
@@ -126,11 +130,22 @@ export function closeUpdateDialog() {
   isDialogOpen.value = false;
 }
 
+export function previewUpdate(preview: UpdateInfo) {
+  info.value = preview;
+  phase.value = 'available';
+  errorMessage.value = '';
+  downloadPercent.value = null;
+  isPreview.value = true;
+  isDialogOpen.value = true;
+}
+
 export function resetUpdateState() {
   phase.value = 'idle';
   info.value = null;
   errorMessage.value = '';
   downloadPercent.value = null;
+  isPreview.value = false;
+  isDialogOpen.value = false;
 }
 
 function handleProgress(payload: UpdateProgressPayload) {

@@ -9,6 +9,7 @@ import {
   installUpdate,
   isUpdateBusy,
   isUpdateDialogOpen,
+  isUpdatePreview,
   updateError,
   updateInfo,
   updatePercent,
@@ -48,6 +49,9 @@ const statusText = computed(() => {
         <div v-if="notesHtml" v-html="notesHtml" />
         <p v-else class="text-medium-emphasis">该版本未提供更新说明。</p>
         <p v-if="statusText" class="text-medium-emphasis update-status">{{ statusText }}</p>
+        <p v-if="isUpdatePreview" class="text-medium-emphasis update-status">
+          预览模式：不会真正下载安装。
+        </p>
         <v-progress-linear
           v-if="statusText"
           class="mt-2"
@@ -67,6 +71,7 @@ const statusText = computed(() => {
           v-if="updatePhase === 'available'"
           color="primary"
           :prepend-icon="mdiDownload"
+          :disabled="isUpdatePreview"
           @click="installUpdate"
           >下载并安装</v-btn
         >

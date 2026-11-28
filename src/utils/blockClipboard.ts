@@ -102,6 +102,11 @@ export function loadClipboardEntries(): void {
   }
 }
 
+export function clearClipboardEntries(): void {
+  clipboardEntries.value = [];
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 function persist(): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clipboardEntries.value));
