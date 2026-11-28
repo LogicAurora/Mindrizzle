@@ -1,4 +1,4 @@
-<!-- 最后验证: 2026-10-25 -->
+<!-- 最后验证: 2026-11-28 -->
 
 # 07 常见坑
 
@@ -31,6 +31,7 @@
 - 尺寸可变性只影响「联结与手柄」，组件自己调 `resizeTo` 不受限制。
 - 自动高度块要把 `heightChangableOf` 设为 `false`，否则会被联结传播改高度。
 - 高度会被 `constraints.minHeight + 8` 钳制，别用固定高度硬顶。
+- 需要多行自动换行的单行输入不能用 `<input>`（永远不折行），换 `<textarea rows="1">` 后按 `scrollHeight` 回写高度，并在块宽变化时重算（参考 `TaskListView.vue` 的 `fitAllFields`）。
 
 ## 快照
 

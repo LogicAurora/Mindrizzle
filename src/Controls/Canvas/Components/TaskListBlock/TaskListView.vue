@@ -1,11 +1,13 @@
 <template>
   <div ref="rootRef" class="task-view">
-    <input
-      class="task-title"
+    <textarea
+      class="task-field task-title"
       :value="title"
+      rows="1"
       placeholder="清单标题"
       :readonly="readOnly"
       @input="onTitleInput"
+      @keydown.enter.prevent="onTitleEnter"
       @blur="onTitleBlur"
     />
 
@@ -23,11 +25,12 @@
           :disabled="readOnly"
           @change="onToggle(task, $event)"
         />
-        <input
-          class="task-text"
+        <textarea
+          class="task-field task-text"
           :value="task.text"
           :readonly="readOnly"
           :data-task="task.id"
+          rows="1"
           :placeholder="index === 0 ? '要做什么？' : ''"
           @input="onTextInput(task, $event)"
           @keydown="onTextKeydown($event, task)"
@@ -56,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { mdiClose, mdiPlus } from '@mdi/js';
 
 import type { TaskItem } from '../../Registry/canvasComponents.ts';
@@ -77,16 +80,40 @@ const rootRef = ref<HTMLElement | null>(null);
 const draftTitle = ref(props.title);
 const doneCount = computed(() => props.tasks.filter((task) => task.done).length);
 
+// textarea 不随内容长高，所以每次改文本/换行宽都先归零再读 scrollHeight 重算
+const fitField = (el: HTMLTextAreaElement | null) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+};
+const fitAllFields = () => {
+  rootRef.value?.querySelectorAll<HTMLTextAreaElement>('.task-field').forEach((el) => fitField(el));
+};
+
+// 块宽变化会改变折行行数，所以要跟着重量
+const fieldResizeObserver = new ResizeObserver(() => fitAllFields());
+onMounted(() => {
+  if (rootRef.value) fieldResizeObserver.observe(rootRef.value);
+  fitAllFields();
+});
+onUnmounted(() => fieldResizeObserver.disconnect());
+
+watch(
+  () => props.tasks,
+  () => void nextTick(fitAllFields),
+);
+
 watch(
   () => props.title,
   (next) => {
     draftTitle.value = next;
+    void nextTick(fitAllFields);
   },
 );
 
 const focusTask = async (id: string) => {
   await nextTick();
-  rootRef.value?.querySelector<HTMLInputElement>(`[data-task="${CSS.escape(id)}"]`)?.focus();
+  rootRef.value?.querySelector<HTMLTextAreaElement>(`[data-task="${CSS.escape(id)}"]`)?.focus();
 };
 
 const addTask = (shouldFocus = true) => {
@@ -104,10 +131,11 @@ const removeTask = (id: string) => {
 
 // 每键更新走受控 value：Vue 对相同值写入不会移动光标，所以不必攒到 blur
 const onTextInput = (task: TaskItem, event: Event) => {
-  const text = (event.target as HTMLInputElement).value;
+  const target = event.target as HTMLTextAreaElement;
+  fitField(target);
   emit(
     'update:tasks',
-    props.tasks.map((item) => (item.id === task.id ? { ...item, text } : item)),
+    props.tasks.map((item) => (item.id === task.id ? { ...item, text: target.value } : item)),
   );
 };
 
@@ -116,7 +144,7 @@ const onTextKeydown = (event: KeyboardEvent, task: TaskItem) => {
   if (event.key !== 'Enter') return;
   event.preventDefault();
   if (task.text.trim() === '') {
-    (event.target as HTMLInputElement).blur();
+    (event.target as HTMLTextAreaElement).blur();
     return;
   }
   addTask();
@@ -131,7 +159,13 @@ const onToggle = (task: TaskItem, event: Event) => {
 };
 
 const onTitleInput = (event: Event) => {
-  draftTitle.value = (event.target as HTMLInputElement).value;
+  const target = event.target as HTMLTextAreaElement;
+  fitField(target);
+  draftTitle.value = target.value;
+};
+
+const onTitleEnter = (event: KeyboardEvent) => {
+  (event.target as HTMLTextAreaElement).blur();
 };
 
 const onTitleBlur = () => {
@@ -151,16 +185,29 @@ const onTitleBlur = () => {
   gap: 6px;
 }
 
-.task-title {
-  flex: 0 0 auto;
+.task-field {
+  display: block;
+  margin: 0;
+  padding: 0;
   border: 0;
   outline: none;
   background: transparent;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
   color: inherit;
   user-select: text;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.task-title {
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .task-title::placeholder {
@@ -179,7 +226,7 @@ const onTitleBlur = () => {
 
 .task-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   border-radius: 4px;
   padding: 1px 2px;
@@ -193,6 +240,7 @@ const onTitleBlur = () => {
   flex: 0 0 auto;
   width: 14px;
   height: 14px;
+  margin-top: 4px;
   accent-color: rgb(var(--v-theme-primary));
   cursor: pointer;
 }
@@ -200,13 +248,8 @@ const onTitleBlur = () => {
 .task-text {
   flex: 1;
   min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font: inherit;
   font-size: 12px;
-  color: inherit;
-  user-select: text;
+  line-height: 1.45;
 }
 
 .task-text::placeholder {
@@ -220,6 +263,7 @@ const onTitleBlur = () => {
 
 .task-remove {
   flex: 0 0 auto;
+  margin-top: 1px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
