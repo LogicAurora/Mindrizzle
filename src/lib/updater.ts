@@ -25,6 +25,11 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
   return version ? { available: true, version, channel } : { available: false };
 }
 
+// 只有被 tauri bundler 打过 bundle 标记的安装（AppImage/deb/rpm/NSIS/.app）才能被 updater 原地替换
+export async function canSelfUpdate(): Promise<boolean> {
+  return invoke<boolean>('supports_self_update');
+}
+
 export async function applyUpdate() {
   await invoke('install_update', { channel: readUpdateChannel() });
   await relaunch();

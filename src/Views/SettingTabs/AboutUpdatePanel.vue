@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { mdiCheckCircle, mdiDownload, mdiRefresh } from '@mdi/js';
 import { isTauri } from '@tauri-apps/api/core';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import {
   applyUpdate,
+  canSelfUpdate,
   checkForUpdates,
   readUpdateChannel,
   saveUpdateChannel,
@@ -20,12 +21,23 @@ const CHANNEL_OPTIONS: { value: UpdateChannel; title: string }[] = [
 ];
 
 const isDesktop = isTauri();
+const isUpdateUsable = ref(false);
 const channel = ref<UpdateChannel>(readUpdateChannel());
 const state = ref<UpdateState>('idle');
 const latestVersion = ref('');
 const errorMessage = ref('');
 
 const isBusy = computed(() => state.value === 'checking' || state.value === 'installing');
+
+onMounted(async () => {
+  if (!isDesktop) return;
+  try {
+    isUpdateUsable.value = await canSelfUpdate();
+  } catch {
+    // 能力查询失败就按不可更新处理，别把用户引到会覆盖安装文件的路径
+    isUpdateUsable.value = false;
+  }
+});
 
 const statusText = computed(() => {
   switch (state.value) {
@@ -40,7 +52,11 @@ const statusText = computed(() => {
     case 'failed':
       return errorMessage.value;
     default:
-      return isDesktop ? '点击检查更新获取最新版本。' : '更新仅在桌面版可用。';
+      if (!isDesktop) return '更新仅在桌面版可用。';
+      if (isUpdateUsable.value) return '点击检查更新获取最新版本。';
+      return import.meta.env.DEV
+        ? '开发模式下不检查更新。'
+        : '当前安装包不支持应用内更新，请用系统包管理器升级。';
   }
 });
 
@@ -53,7 +69,7 @@ function handleChannelChange(value: unknown) {
 }
 
 async function runCheck() {
-  if (!isDesktop || isBusy.value) return;
+  if (!isDesktop || !isUpdateUsable.value || isBusy.value) return;
   state.value = 'checking';
   errorMessage.value = '';
   try {
@@ -71,7 +87,7 @@ async function runCheck() {
 }
 
 async function runInstall() {
-  if (!isDesktop || isBusy.value) return;
+  if (!isDesktop || !isUpdateUsable.value || isBusy.value) return;
   state.value = 'installing';
   errorMessage.value = '';
   try {
@@ -99,7 +115,7 @@ function describeError(error: unknown) {
         :items="CHANNEL_OPTIONS"
         item-title="title"
         item-value="value"
-        :disabled="!isDesktop || isBusy"
+        :disabled="!isDesktop || !isUpdateUsable || isBusy"
         class="update-channel"
         density="comfortable"
         variant="outlined"
@@ -112,7 +128,7 @@ function describeError(error: unknown) {
         :prepend-icon="mdiDownload"
         color="primary"
         :loading="state === 'installing'"
-        :disabled="!isDesktop"
+        :disabled="!isDesktop || !isUpdateUsable"
         @click="runInstall"
         >下载并安装</v-btn
       >
@@ -122,7 +138,7 @@ function describeError(error: unknown) {
         color="primary"
         variant="tonal"
         :loading="state === 'checking'"
-        :disabled="!isDesktop"
+        :disabled="!isDesktop || !isUpdateUsable"
         @click="runCheck"
         >检查更新</v-btn
       >

@@ -107,6 +107,18 @@ cd src-tauri && cargo check
 cd src-tauri && cargo test
 ```
 
+### Arch Linux 打包
+
+发布工作流会在 `archlinux:base-devel` 容器内用 [packaging/arch](./packaging/arch) 产出 `.pkg.tar.zst` 并附到草稿 Release；本机验证直接跑：
+
+```bash
+packaging/arch/build-local.sh
+```
+
+本机只装了 rustup 时 makepkg 认不出 `rust` 依赖，需要 `MAKEPKG_EXTRA_ARGS=--nodeps`；产物落在 `target/arch/`。
+
+Arch 包不能用应用内更新：updater 靠 tauri bundler 写进二进制的 bundle 标记挑安装器，makepkg 装的是裸二进制，更新面板会提示改用 `pacman -Syu`。
+
 ## 参与贡献
 
 欢迎通过 [Issues](https://github.com/LogicAurora/Mindrizzle/issues) 报告问题或提出想法，也欢迎提交 Pull Request。提交前请根据改动范围运行前端类型检查、Vite 构建或 Rust 检查；涉及画布与编辑器交互时，也请同步维护 `src/docs/flow` 中的流程文档。

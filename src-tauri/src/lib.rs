@@ -95,8 +95,21 @@ fn endpoint_for(channel: &str) -> String {
     }
 }
 
+// 内置更新靠打包器写入的 bundle 类型挑安装器：deb/rpm/AppImage 都被 tauri bundler 打过标记，pacman 包是裸二进制，标记为空
+fn can_self_update() -> bool {
+    !tauri::is_dev() && tauri::utils::platform::bundle_type().is_some()
+}
+
+#[tauri::command]
+fn supports_self_update() -> bool {
+    can_self_update()
+}
+
 #[tauri::command]
 async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<String>, String> {
+    if !can_self_update() {
+        return Err("当前安装方式不支持应用内更新，请通过系统包管理器升级".into());
+    }
     let updater = app
         .updater_builder()
         .endpoints(vec![
@@ -115,6 +128,9 @@ async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<S
 
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle, channel: String) -> Result<(), String> {
+    if !can_self_update() {
+        return Err("当前安装方式不支持应用内更新，请通过系统包管理器升级".into());
+    }
     let updater = app
         .updater_builder()
         .endpoints(vec![
@@ -191,6 +207,7 @@ pub fn run() {
             is_file_name_valid,
             print_main_webview,
             save_export_file,
+            supports_self_update,
             check_update,
             install_update,
             mdr_file_op::get_mdr_file_meta,

@@ -168,8 +168,9 @@ jobs:
           | macOS | Apple Silicon (aarch64) | `.app.tar.gz` + `.sig` |
           | macOS | Intel (x86_64) | `.app.tar.gz` + `.sig` |
           | Windows | x64 | NSIS 安装程序 + `.sig` |
-          | Linux | x64 | AppImage + `.sig`（deb/rpm 无更新签名） |
-          | Linux | Arch x64 | `.pkg.tar.zst`（`pacman -U` 安装，不走内置更新） |
+          | Linux | x64 | AppImage + `.sig`（应用内更新） |
+          | Linux | x64 | deb / rpm（应用内更新会提权调用 dpkg/rpm） |
+          | Linux | Arch x64 | `.pkg.tar.zst`（`pacman -U` 安装，仅包管理器升级） |
 
           `latest.json` 为自动更新清单。
 
@@ -179,6 +180,8 @@ jobs:
           ## 自动更新
 
           已安装旧版本的用户会在下次检查更新时收到提示。更新包经内置公钥校验签名后安装。
+
+          Linux 只有 AppImage 与 deb/rpm 支持应用内更新（deb/rpm 需在弹窗里授权）；Arch 的 `.pkg.tar.zst` 没有 updater 需要的内置标记，更新面板会提示改用 `pacman -Syu` 升级。
 
           ## 签名校验
 
