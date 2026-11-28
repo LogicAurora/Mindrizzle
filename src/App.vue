@@ -30,6 +30,13 @@ import { error as logError } from '@tauri-apps/plugin-log';
 
 import QuickOpenPalette from './Controls/QuickOpenPalette.vue';
 import OsFileOpenBridge from './Controls/OsFileOpenBridge.vue';
+import UpdateDialog from './Controls/UpdateDialog.vue';
+import {
+  checkForUpdatesOnStartup,
+  disposeUpdateListener,
+  isUpdateProgressVisible,
+  updatePercent,
+} from './lib/updateStore';
 import { getErrorMessage } from './utils/getErrorMessage';
 import { toolbarSelectionKey } from './utils/toolbarSelection';
 
@@ -296,12 +303,14 @@ onMounted(() => {
     onKonami: () => playEasterEgg('rainbow'),
     onDrizzle: () => playEasterEgg('rain'),
   });
+  void checkForUpdatesOnStartup();
 });
 
 onBeforeUnmount(() => {
   if (bootTitleTimer !== undefined) clearTimeout(bootTitleTimer);
   clearTimeout(titleSwitchTimer);
   detachSecretKeyboard?.();
+  disposeUpdateListener();
 });
 
 const titleRollName = computed(() =>
@@ -423,6 +432,15 @@ function navigateFromMenu(path: string) {
           <div id="toolbar-tabs" class="toolbar-tabs" />
         </div>
       </template>
+      <v-progress-linear
+        v-if="isUpdateProgressVisible"
+        :model-value="updatePercent ?? 0"
+        :indeterminate="updatePercent === null"
+        location="bottom"
+        absolute
+        height="3"
+        color="secondary"
+      />
     </v-toolbar>
 
     <v-navigation-drawer
@@ -477,6 +495,7 @@ function navigateFromMenu(path: string) {
       </router-view>
     </v-main>
     <QuickOpenPalette />
+    <UpdateDialog />
     <div
       class="loading-curtain"
       :class="`is-${curtainState}`"

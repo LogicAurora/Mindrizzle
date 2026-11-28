@@ -81,6 +81,7 @@ tauri_cmd! {
     }
 }
 
+use tauri::Emitter;
 use tauri_plugin_updater::UpdaterExt;
 
 // 通道清单放 main 的 channel/ 下：固定 tag 的锚点 release 会一直占着 tag 与 release 列表
@@ -105,8 +106,29 @@ fn supports_self_update() -> bool {
     can_self_update()
 }
 
+// 更新日志随清单的 notes 一起下发给前端展示
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AvailableUpdate {
+    version: String,
+    current_version: String,
+    notes: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase", tag = "stage")]
+enum UpdateProgress {
+    Downloading { downloaded: u64, total: Option<u64> },
+    Installing,
+}
+
+const UPDATE_PROGRESS_EVENT: &str = "update-progress";
+
 #[tauri::command]
-async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<String>, String> {
+async fn check_update(
+    app: tauri::AppHandle,
+    channel: String,
+) -> Result<Option<AvailableUpdate>, String> {
     if !can_self_update() {
         return Err("当前安装方式不支持应用内更新，请通过系统包管理器升级".into());
     }
@@ -120,7 +142,11 @@ async fn check_update(app: tauri::AppHandle, channel: String) -> Result<Option<S
         .map_err(|e| e.to_string())?;
 
     match updater.check().await {
-        Ok(Some(u)) => Ok(Some(u.version)),
+        Ok(Some(update)) => Ok(Some(AvailableUpdate {
+            version: update.version,
+            current_version: update.current_version,
+            notes: update.body,
+        })),
         Ok(None) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -141,10 +167,26 @@ async fn install_update(app: tauri::AppHandle, channel: String) -> Result<(), St
         .map_err(|e| e.to_string())?;
 
     match updater.check().await {
-        Ok(Some(u)) => u
-            .download_and_install(|_chunk, _total| {}, || {})
-            .await
-            .map_err(|e| e.to_string()),
+        Ok(Some(update)) => {
+            let progress_app = app.clone();
+            let finish_app = app.clone();
+            let mut downloaded: u64 = 0;
+            update
+                .download_and_install(
+                    |chunk_length, total| {
+                        downloaded += chunk_length as u64;
+                        let _ = progress_app.emit(
+                            UPDATE_PROGRESS_EVENT,
+                            UpdateProgress::Downloading { downloaded, total },
+                        );
+                    },
+                    || {
+                        let _ = finish_app.emit(UPDATE_PROGRESS_EVENT, UpdateProgress::Installing);
+                    },
+                )
+                .await
+                .map_err(|e| e.to_string())
+        }
         Ok(None) => Ok(()),
         Err(e) => Err(e.to_string()),
     }

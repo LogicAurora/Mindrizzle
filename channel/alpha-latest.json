@@ -1,6 +1,6 @@
 {
   "version": "0.0.1-alpha.4",
-  "notes": "",
+  "notes": "### ✨ 新功能\n\n- Tour基础和首页/便签集的教程 — [`cc3f134`](https://github.com/LogicAurora/Mindrizzle/commit/cc3f134518a8404f31bb036a26b566a1cacf6db9)\n\n- 更好的批注 — [`c5e5eab`](https://github.com/LogicAurora/Mindrizzle/commit/c5e5eab8d46b30dd6ed243e7faf7e29663ba2333)\n\n\n### 🐛 问题修复\n\n- 交互式引导不可用 — [`7480631`](https://github.com/LogicAurora/Mindrizzle/commit/74806310a2e6c0d677571968c12efa7398d61a45)\n\n\n### 🔧 杂项\n\n- Markdown不合规 — [`530e042`](https://github.com/LogicAurora/Mindrizzle/commit/530e042c02b3654d85cf2b79f8f8a7d774e9b171)\n\n- 升级依赖 — [`a1f3982`](https://github.com/LogicAurora/Mindrizzle/commit/a1f398287b8d80b6018cc051ce8279bc56a5b2d2)\n\n\n### 👷 流水线\n\n- 修复编译时漏掉注入package.json版本号 — [`89c6d91`](https://github.com/LogicAurora/Mindrizzle/commit/89c6d91ab71018bf86e05ba5bc1720de6572c91e)\n\n\n\n## 🙏 贡献者\n\n感谢以下贡献者对本版本的贡献：\n\n\n- Ivan-Hu233",
   "pub_date": "2026-11-24T07:14:52.032Z",
   "platforms": {
     "linux-x86_64": {

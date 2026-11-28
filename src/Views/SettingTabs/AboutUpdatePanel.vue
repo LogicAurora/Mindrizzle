@@ -4,15 +4,17 @@ import { isTauri } from '@tauri-apps/api/core';
 import { computed, onMounted, ref } from 'vue';
 
 import {
-  applyUpdate,
-  canSelfUpdate,
-  checkForUpdates,
-  readUpdateChannel,
-  saveUpdateChannel,
-  type UpdateChannel,
-} from '../../lib/updater';
-
-type UpdateState = 'idle' | 'checking' | 'latest' | 'available' | 'installing' | 'failed';
+  ensureUpdateSupport,
+  installUpdate,
+  isUpdateBusy,
+  isUpdateSupported,
+  resetUpdateState,
+  runCheck,
+  updateError,
+  updateInfo,
+  updatePhase,
+} from '../../lib/updateStore';
+import { readUpdateChannel, saveUpdateChannel, type UpdateChannel } from '../../lib/updater';
 
 const CHANNEL_OPTIONS: { value: UpdateChannel; title: string }[] = [
   { value: 'stable', title: '稳定版' },
@@ -21,39 +23,29 @@ const CHANNEL_OPTIONS: { value: UpdateChannel; title: string }[] = [
 ];
 
 const isDesktop = isTauri();
-const isUpdateUsable = ref(false);
 const channel = ref<UpdateChannel>(readUpdateChannel());
-const state = ref<UpdateState>('idle');
-const latestVersion = ref('');
-const errorMessage = ref('');
 
-const isBusy = computed(() => state.value === 'checking' || state.value === 'installing');
-
-onMounted(async () => {
-  if (!isDesktop) return;
-  try {
-    isUpdateUsable.value = await canSelfUpdate();
-  } catch {
-    // 能力查询失败就按不可更新处理，别把用户引到会覆盖安装文件的路径
-    isUpdateUsable.value = false;
-  }
+onMounted(() => {
+  void ensureUpdateSupport();
 });
 
 const statusText = computed(() => {
-  switch (state.value) {
+  switch (updatePhase.value) {
     case 'checking':
       return '正在检查更新…';
     case 'latest':
       return '当前已是最新版本。';
     case 'available':
-      return `发现新版本 ${latestVersion.value}`;
+      return `发现新版本 ${updateInfo.value?.version ?? ''}`;
+    case 'downloading':
+      return '正在下载更新…';
     case 'installing':
-      return '正在下载并安装，完成后应用会自动重启。';
+      return '正在安装更新，完成后应用会自动重启。';
     case 'failed':
-      return errorMessage.value;
+      return updateError.value;
     default:
       if (!isDesktop) return '更新仅在桌面版可用。';
-      if (isUpdateUsable.value) return '点击检查更新获取最新版本。';
+      if (isUpdateSupported.value) return '点击检查更新获取最新版本。';
       return import.meta.env.DEV
         ? '开发模式下不检查更新。'
         : '当前安装包不支持应用内更新，请用系统包管理器升级。';
@@ -65,41 +57,7 @@ function handleChannelChange(value: unknown) {
   if (!matched) return;
   channel.value = matched.value;
   saveUpdateChannel(matched.value);
-  state.value = 'idle';
-}
-
-async function runCheck() {
-  if (!isDesktop || !isUpdateUsable.value || isBusy.value) return;
-  state.value = 'checking';
-  errorMessage.value = '';
-  try {
-    const result = await checkForUpdates();
-    if (!result.available) {
-      state.value = 'latest';
-      return;
-    }
-    latestVersion.value = result.version;
-    state.value = 'available';
-  } catch (error) {
-    errorMessage.value = `检查更新失败：${describeError(error)}`;
-    state.value = 'failed';
-  }
-}
-
-async function runInstall() {
-  if (!isDesktop || !isUpdateUsable.value || isBusy.value) return;
-  state.value = 'installing';
-  errorMessage.value = '';
-  try {
-    await applyUpdate();
-  } catch (error) {
-    errorMessage.value = `安装更新失败：${describeError(error)}`;
-    state.value = 'failed';
-  }
-}
-
-function describeError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  resetUpdateState();
 }
 </script>
 
@@ -115,7 +73,7 @@ function describeError(error: unknown) {
         :items="CHANNEL_OPTIONS"
         item-title="title"
         item-value="value"
-        :disabled="!isDesktop || !isUpdateUsable || isBusy"
+        :disabled="!isDesktop || !isUpdateSupported || isUpdateBusy"
         class="update-channel"
         density="comfortable"
         variant="outlined"
@@ -124,12 +82,16 @@ function describeError(error: unknown) {
         @update:model-value="handleChannelChange"
       />
       <v-btn
-        v-if="state === 'available' || state === 'installing'"
+        v-if="
+          updatePhase === 'available' ||
+          updatePhase === 'downloading' ||
+          updatePhase === 'installing'
+        "
         :prepend-icon="mdiDownload"
         color="primary"
-        :loading="state === 'installing'"
-        :disabled="!isDesktop || !isUpdateUsable"
-        @click="runInstall"
+        :loading="updatePhase === 'downloading' || updatePhase === 'installing'"
+        :disabled="!isDesktop || !isUpdateSupported"
+        @click="installUpdate"
         >下载并安装</v-btn
       >
       <v-btn
@@ -137,14 +99,14 @@ function describeError(error: unknown) {
         :prepend-icon="mdiRefresh"
         color="primary"
         variant="tonal"
-        :loading="state === 'checking'"
-        :disabled="!isDesktop || !isUpdateUsable"
-        @click="runCheck"
+        :loading="updatePhase === 'checking'"
+        :disabled="!isDesktop || !isUpdateSupported || isUpdateBusy"
+        @click="runCheck()"
         >检查更新</v-btn
       >
     </div>
-    <div class="text-caption update-status" :class="{ 'text-error': state === 'failed' }">
-      <v-icon v-if="state === 'latest'" :icon="mdiCheckCircle" size="16" />
+    <div class="text-caption update-status" :class="{ 'text-error': updatePhase === 'failed' }">
+      <v-icon v-if="updatePhase === 'latest'" :icon="mdiCheckCircle" size="16" />
       {{ statusText }}
     </div>
   </section>

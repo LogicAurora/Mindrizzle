@@ -3,8 +3,14 @@ import { relaunch } from '@tauri-apps/plugin-process';
 
 export type UpdateChannel = 'stable' | 'beta' | 'alpha';
 
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+}
+
 export type UpdateCheckResult =
-  { available: false } | { available: true; version: string; channel: UpdateChannel };
+  { available: false } | ({ available: true } & UpdateInfo & { channel: UpdateChannel });
 
 const CHANNEL_STORAGE_KEY = 'updater_channel';
 const UPDATE_CHANNELS: readonly UpdateChannel[] = ['stable', 'beta', 'alpha'];
@@ -21,8 +27,8 @@ export function saveUpdateChannel(channel: UpdateChannel) {
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   const channel = readUpdateChannel();
-  const version = await invoke<string | null>('check_update', { channel });
-  return version ? { available: true, version, channel } : { available: false };
+  const update = await invoke<UpdateInfo | null>('check_update', { channel });
+  return update ? { available: true, ...update, channel } : { available: false };
 }
 
 // 只有被 tauri bundler 打过 bundle 标记的安装（AppImage/deb/rpm/NSIS/.app）才能被 updater 原地替换

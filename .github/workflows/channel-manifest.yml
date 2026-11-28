@@ -60,6 +60,20 @@ jobs:
           mkdir -p "$WORK"
           gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir "$WORK" --clobber
 
+          # tauri-action 生成 latest.json 时 notes 取 releaseBody 输入（此处没传），应用内更新弹窗只认这个字段，所以从 release body 搬过来
+          # gh 取回的 body 是 CRLF，不去掉会让标题匹配失败
+          gh release view "$TAG" --repo "$REPO" --json body -q .body | tr -d '\r' > "$WORK/body.md"
+          # 只取「更新内容」段，安装与签名说明留给 Release 页面
+          awk '/^## 更新内容$/{capture=1; next} /^## 安装包$/{capture=0} capture' "$WORK/body.md" > "$WORK/notes.md"
+          if [[ -s "$WORK/notes.md" ]]; then
+            jq --rawfile notes "$WORK/notes.md" '.notes = ($notes | sub("^\\s+"; "") | sub("\\s+$"; ""))' \
+              "$WORK/latest.json" > "$WORK/latest-with-notes.json"
+            mv "$WORK/latest-with-notes.json" "$WORK/latest.json"
+            echo "notes 已写入 $(wc -c < "$WORK/notes.md") 字节"
+          else
+            echo "::warning::release body 里没有更新内容段，notes 留空"
+          fi
+
           VERSION="$(jq -r '.version' "$WORK/latest.json")"
           cp "$WORK/latest.json" "channel/${CH}-latest.json"
 
