@@ -1,0 +1,21 @@
+pkgbase = mindrizzle
+	pkgdesc = 把笔记放上无限画布的桌面应用
+	pkgver = 0.0.1.alpha.4
+	pkgrel = 1
+	url = https://github.com/LogicAurora/Mindrizzle
+	install = mindrizzle.install
+	arch = x86_64
+	arch = aarch64
+	license = GPL-3.0-only
+	makedepends = rust
+	makedepends = bun
+	depends = webkit2gtk-4.1
+	depends = gtk3
+	depends = hicolor-icon-theme
+	depends = shared-mime-info
+	options = !lto
+	options = !debug
+	source = Mindrizzle-0.0.1.alpha.4.tar.gz
+	sha256sums = SKIP
+
+pkgname = mindrizzle

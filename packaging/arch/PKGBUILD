@@ -1,0 +1,60 @@
+# Maintainer: LogicAurora <noreply@github.com>
+pkgname=mindrizzle
+_pkgname=Mindrizzle
+pkgver=0.0.1.alpha.4
+pkgrel=1
+pkgdesc='把笔记放上无限画布的桌面应用'
+arch=('x86_64' 'aarch64')
+url='https://github.com/LogicAurora/Mindrizzle'
+license=('GPL-3.0-only')
+depends=('webkit2gtk-4.1' 'gtk3' 'hicolor-icon-theme' 'shared-mime-info')
+makedepends=('rust' 'bun')
+# ring 的汇编走 cc 编译，Arch 默认的 -flto 会产生 rust-lld 无法链接的 GCC 位码
+options=('!lto' '!debug')
+install="$pkgname.install"
+source=("$_pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_target_dir() {
+  printf '%s' "${CARGO_TARGET_DIR:-$srcdir/$_pkgname-$pkgver/src-tauri/target}"
+}
+
+build() {
+  cd "$srcdir/$_pkgname-$pkgver"
+  # 构建机的 bunfig 若开了 isolated 全局仓库，包目录会是指向缓存的符号链接，vite 从缓存真实路径解析依赖必失败
+  bun install --frozen-lockfile --linker=hoisted --backend=copyfile
+  bun run build
+  # panic 位置会把源码路径写进二进制，remap 掉才能避免包内残留 $srcdir
+  RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir/$_pkgname-$pkgver=/usr/src/debug/$pkgname" \
+    cargo build --manifest-path src-tauri/Cargo.toml --release --locked \
+      --features tauri/custom-protocol --target-dir "$(_target_dir)"
+}
+
+package() {
+  cd "$srcdir/$_pkgname-$pkgver"
+
+  install -Dm755 "$(_target_dir)/release/Mindrizzle" "$pkgdir/usr/bin/mindrizzle"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 packaging/arch/mindrizzle.desktop "$pkgdir/usr/share/applications/mindrizzle.desktop"
+  install -Dm644 src-tauri/packaging/mime/application-x-mindrizzle-mdrf.xml \
+    "$pkgdir/usr/share/mime/packages/application-x-mindrizzle-mdrf.xml"
+
+  install -Dm644 src-tauri/icons/32x32.png \
+    "$pkgdir/usr/share/icons/hicolor/32x32/apps/mindrizzle.png"
+  install -Dm644 src-tauri/icons/64x64.png \
+    "$pkgdir/usr/share/icons/hicolor/64x64/apps/mindrizzle.png"
+  install -Dm644 src-tauri/icons/128x128.png \
+    "$pkgdir/usr/share/icons/hicolor/128x128/apps/mindrizzle.png"
+  install -Dm644 src-tauri/icons/128x128@2x.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/mindrizzle.png"
+  install -Dm644 src-tauri/icons/icon.png \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/mindrizzle.png"
+
+  for size in 32 48 64 128 256 512; do
+    install -Dm644 "src-tauri/icons/mimetypes/${size}x${size}.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/mimetypes/application-x-mindrizzle-mdrf.png"
+  done
+  install -Dm644 src-tauri/icons/mimetypes/application-x-mindrizzle-mdrf.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/mimetypes/application-x-mindrizzle-mdrf.svg"
+}
+

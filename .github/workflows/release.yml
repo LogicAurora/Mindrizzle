@@ -169,6 +169,7 @@ jobs:
           | macOS | Intel (x86_64) | `.app.tar.gz` + `.sig` |
           | Windows | x64 | NSIS 安装程序 + `.sig` |
           | Linux | x64 | AppImage + `.sig`（deb/rpm 无更新签名） |
+          | Linux | Arch x64 | `.pkg.tar.zst`（`pacman -U` 安装，不走内置更新） |
 
           `latest.json` 为自动更新清单。
 
@@ -384,8 +385,85 @@ jobs:
           path: src-tauri/target/**/release/bundle/
           retention-days: 7
 
+  arch-package:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install build deps
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git nodejs rust bun sudo github-cli \
+            webkit2gtk-4.1 gtk3 hicolor-icon-theme shared-mime-info
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+
+      - name: Inject version
+        shell: bash
+        env:
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const V = process.env.V;
+            const targets = [
+              ["package.json", /("version":\s*")[^"]*(")/],
+              ["src-tauri/tauri.conf.json", /^  "version": ".*",$/m],
+              ["src-tauri/Cargo.toml", /^version = ".*"$/m],
+              // 锁文件里的版本不跟着改，cargo --locked 会直接判为过期
+              ["Cargo.lock", /(name = "Mindrizzle"\nversion = ")[^"]*(")/],
+            ];
+            for (const [file, pattern] of targets) {
+              const text = fs.readFileSync(file, "utf8");
+              if (!pattern.test(text)) throw new Error(`未匹配到版本字段: ${file}`);
+              fs.writeFileSync(file, text.replace(pattern, `$1${V}$2`));
+            }
+            console.log("Injected version:", V);
+          '
+
+      - name: Build Arch package
+        shell: bash
+        env:
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          chown -R builder "$GITHUB_WORKSPACE"
+          sudo -u builder env \
+            PKGVER="$V" \
+            PKG_OUTPUT_DIR="$GITHUB_WORKSPACE/target/arch" \
+            bash "$GITHUB_WORKSPACE/packaging/arch/build-local.sh"
+
+      - name: Verify package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh "$GITHUB_WORKSPACE"/target/arch/*.pkg.tar.zst
+          pacman -Qip "$GITHUB_WORKSPACE"/target/arch/*.pkg.tar.zst
+
+      - name: Upload Arch package to draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: gh release upload "$TAG" "$GITHUB_WORKSPACE"/target/arch/*.pkg.tar.zst --clobber
+
+      - name: Backup artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundles-arch-x64
+          path: target/arch/*.pkg.tar.zst
+          retention-days: 7
+
   summary:
-    needs: [build, matrix-build]
+    needs: [build, matrix-build, arch-package]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -403,7 +481,7 @@ jobs:
           echo "## 本次操作：构建草稿（手动发布由你完成）" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "${{ needs.build.result }}" != "success" || "${{ needs.matrix-build.result }}" != "success" ]]; then
+          if [[ "${{ needs.build.result }}" != "success" || "${{ needs.matrix-build.result }}" != "success" || "${{ needs.arch-package.result }}" != "success" ]]; then
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           ## ❌ 草稿构建失败
 
@@ -411,6 +489,7 @@ jobs:
 
           - \`build\` 失败 → version 格式 / 防重 / tag 解析 / git-cliff
           - \`matrix-build\` 失败 → 平台构建或 updater 签名
+          - \`arch-package\` 失败 → Arch 容器内依赖安装、makepkg 或资产上传
 
           丢弃草稿（如需）：
 
@@ -443,6 +522,7 @@ jobs:
 
           - [ ] \`latest.json\` 含 4 个平台键：\`darwin-aarch64\` / \`darwin-x86_64\` / \`linux-x86_64\` / \`windows-x86_64\`
           - [ ] 每个平台有安装包 + 对应 \`.sig\`
+          - [ ] Arch 包 \`mindrizzle-*.pkg.tar.zst\` 已上传（pkgver 里的 \`-\` 写成 \`.\`，例 \`0.0.1.alpha.5\`）
           - [ ] 版本号与 \`$VER\` 一致
 
           \`\`\`bash

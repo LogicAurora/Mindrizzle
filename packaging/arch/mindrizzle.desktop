@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Mindrizzle
+Comment=Catch your mind drizzle.
+Comment[zh_CN]=把笔记放上无限画布
+Exec=mindrizzle %F
+Icon=mindrizzle
+Terminal=false
+Type=Application
+Categories=Office;
+MimeType=application/x-mindrizzle-mdrf;
+StartupWMClass=mindrizzle
